@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ title or "ArcHub CMS" }}</title>
+  {% if meta_description %}<meta name="description" content="{{ meta_description }}">{% endif %}
+  {% if robots_meta %}<meta name="robots" content="{{ robots_meta }}">{% endif %}
+  {% if canonical_url %}<link rel="canonical" href="{{ canonical_url }}">{% endif %}
+  {% if og_title %}<meta property="og:title" content="{{ og_title }}">{% endif %}
+  {% if og_description %}<meta property="og:description" content="{{ og_description }}">{% endif %}
+  {% if og_image %}<meta property="og:image" content="{{ og_image }}">{% endif %}
+  {% if canonical_url %}<meta property="og:url" content="{{ canonical_url }}">{% endif %}
+  {% if og_title %}<meta property="og:type" content="website">{% endif %}
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1 class="brand">ArcHub CMS</h1>
+    <nav class="nav">
+      <a class="nav__link" href="/admin/archub">Backoffice</a>
+      <a class="nav__link" href="/cms">Published site</a>
+      <a class="nav__link" href="/api/docs">API</a>
+      <a class="nav__link" href="/cms/api/tree">Headless tree</a>
+    </nav>
+  </header>
+  <main class="{% block main_class %}grid{% endblock %}">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="footer">
+    <span class="muted">ArcHub CMS standalone demo release</span>
+  </footer>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

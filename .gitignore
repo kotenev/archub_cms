@@ -1,0 +1,10 @@
+.DS_Store
+.idea/
+.pytest_cache/
+.ruff_cache/
+build/
+data/
+dist/
+site/
+*.egg-info/
+__pycache__/

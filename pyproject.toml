@@ -1,0 +1,81 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "archub-cms"
+version = "0.1.0"
+description = "ArcHub headless CMS and content builder product package"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [
+    { name = "ArcHub contributors" }
+]
+keywords = [
+    "cms",
+    "headless-cms",
+    "content-builder",
+    "fastapi",
+    "umbraco-inspired",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+]
+dependencies = [
+    "fastapi>=0.110",
+    "jinja2>=3.1",
+    "pydantic>=2",
+    "python-multipart>=0.0.9",
+]
+
+[project.optional-dependencies]
+server = ["uvicorn[standard]>=0.29"]
+yaml = ["pyyaml>=6"]
+docs = ["mkdocs>=1.6", "mkdocs-material>=9.5"]
+
+[project.urls]
+Documentation = "https://github.com/archub-cms/archub-cms"
+Repository = "https://github.com/archub-cms/archub-cms"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+archub_cms = [
+    "py.typed",
+    "templates/*.html",
+    "static/*.css",
+    "static/js/*.js",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP", "B", "C4", "RET", "SIM", "PTH", "RUF"]
+ignore = [
+    "E501",
+    "RUF001",
+    "RUF002",
+    "RUF003",
+    "RUF022",
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-ra"]

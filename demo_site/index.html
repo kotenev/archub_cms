@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ArcHub CMS Demo</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="shell hero">
+    <nav>
+      <strong>ArcHub CMS</strong>
+      <a href="../">Docs</a>
+      <a href="https://github.com/archub-cms/archub_cms">GitHub</a>
+    </nav>
+    <section>
+      <p class="eyebrow">Headless CMS for FastAPI</p>
+      <h1>Structured content, workflow and delivery APIs in one Python package.</h1>
+      <p class="lead">
+        ArcHub CMS combines Umbraco-style content modeling, a block content
+        builder, preview tokens, published delivery and runtime RAG exports.
+      </p>
+      <pre><code>uvicorn archub_cms.app:create_archub_app --factory --port 8088</code></pre>
+    </section>
+  </header>
+  <main class="shell">
+    <section class="grid">
+      <article>
+        <h2>Backoffice</h2>
+        <p>Document types, content tree, drafts, versions, workflow, locks and permissions.</p>
+      </article>
+      <article>
+        <h2>Content Builder</h2>
+        <p>Typed blocks for heroes, feature grids, FAQ, API actions and RAG references.</p>
+      </article>
+      <article>
+        <h2>Headless Delivery</h2>
+        <p>Published JSON, HTML rendering, search, tags, RSS, sitemap and preview tokens.</p>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,514 @@
+{% extends "base.html" %}
+{% block main_class %}page{% endblock %}
+{% block content %}
+<a class="back-link" href="/admin/archub">← ArcHub CMS</a>
+
+<div class="page-head">
+  <div>
+    <h1 class="profile__name">{{ "Редактирование" if node else "Новый контент" }}</h1>
+    <p class="muted">
+      {{ content_type.icon }} {{ content_type.name }}
+      {% if parent %} · parent: {{ parent.name }}{% endif %}
+      {% if node %} · {{ node.route_path }}{% endif %}
+    </p>
+  </div>
+  {% if node and node.is_published %}
+  <a class="btn btn--ghost" href="{{ node.route_path }}" target="_blank">Просмотр</a>
+  {% endif %}
+</div>
+
+{% if error %}<div class="flash flash--err">{{ error }}</div>{% endif %}
+{% if publish_error %}<div class="flash flash--err">{{ publish_error }}</div>{% endif %}
+{% if saved %}<div class="flash flash--ok">Черновик сохранён.</div>{% endif %}
+{% if published %}<div class="flash flash--ok">Контент опубликован.</div>{% endif %}
+
+<div class="archub-edit">
+  <section class="archub-panel">
+    {% if not node and allowed_types|length > 1 %}
+    <label class="auth-form__label">
+      Тип документа
+      <select class="auth-form__input"
+              onchange="window.location.href='/admin/archub/content/new?parent_id={{ parent.node_id if parent else '' }}&content_type=' + encodeURIComponent(this.value)">
+        {% for item in allowed_types %}
+        <option value="{{ item.alias }}" {% if item.alias == content_type.alias %}selected{% endif %}>
+          {{ item.icon }} {{ item.name }}
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+    {% endif %}
+
+    <form class="archub-form" method="post" action="{{ '/admin/archub/content/' ~ node.node_id if node else '/admin/archub/content' }}">
+      {% if not node %}
+      <input type="hidden" name="parent_id" value="{{ parent.node_id if parent else '' }}">
+      <input type="hidden" name="content_type_alias" value="{{ content_type.alias }}">
+      {% endif %}
+
+      <div class="expert-form__grid">
+        <label>
+          Name
+          <input name="name" required value="{{ node.name if node else initial_name }}" placeholder="Visible content name">
+        </label>
+        <label>
+          Slug
+          <input name="slug" value="{{ node.slug if node else initial_slug }}" {% if node and node.is_root %}disabled{% endif %} placeholder="auto-from-name">
+        </label>
+      </div>
+
+      {% if not node and document_blueprints %}
+      <div class="archub-actions archub-actions--inline">
+        <span class="muted">Document blueprints:</span>
+        {% for blueprint in document_blueprints %}
+        <a class="btn btn--xs btn--ghost"
+           href="/admin/archub/content/new?parent_id={{ parent.node_id if parent else '' }}&content_type={{ content_type.alias }}&blueprint_id={{ blueprint.blueprint_id }}">
+          {{ blueprint.name }}
+        </a>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <h2 class="section-title">Fields</h2>
+      <div class="archub-fields">
+        {% for field in content_type.fields %}
+        {% if field.editor != "builder" %}
+        {% set value = draft_payload.get(field.alias, field.default) %}
+        {% set max_length = field.validation.get("max_length") %}
+        {% set pattern = field.validation.get("pattern") %}
+        <label class="archub-field {% if field.editor == 'checkbox' %}checkbox-row{% endif %}">
+          <span>
+            {{ field.name }}
+            {% if field.required %}<strong class="error">*</strong>{% endif %}
+            <small class="muted">
+              {{ field.alias }} · {{ field.editor }}{% if field.data_type_alias %} · {{ field.data_type_alias }}{% endif %}
+            </small>
+          </span>
+          {% if field.editor in ["textarea", "richtext"] %}
+          <textarea name="field_{{ field.alias }}"
+                    rows="{{ field.config.get('rows', 12 if field.editor == 'richtext' else 4) }}"
+                    {% if max_length %}maxlength="{{ max_length }}"{% endif %}>{{ value }}</textarea>
+          {% elif field.editor == "checkbox" %}
+          <input type="checkbox" name="field_{{ field.alias }}" value="1" {% if value %}checked{% endif %}>
+          {% else %}
+          <input name="field_{{ field.alias }}"
+                 value="{{ value }}"
+                 {% if max_length %}maxlength="{{ max_length }}"{% endif %}
+                 {% if pattern %}pattern="{{ pattern }}"{% endif %}>
+          {% endif %}
+          {% if field.help_text %}<small class="muted">{{ field.help_text }}</small>{% endif %}
+        </label>
+        {% endif %}
+        {% endfor %}
+      </div>
+
+      {% if content_builder.enabled %}
+      <section class="archub-builder"
+               data-preview-url="/admin/archub/content-builder/preview">
+        <div class="archub-builder__head">
+          <div>
+            <h2 class="section-title">Конструктор Контента</h2>
+            <p class="muted">
+              Блоки сохраняются как JSON в поле
+              <code>{{ content_builder.field_alias }}</code> и рендерятся отдельным сервисом ArcHub Content Builder.
+            </p>
+          </div>
+          <div class="archub-builder__summary">
+            <span>{{ content_builder.summary.blocks }} blocks</span>
+            <span>{{ content_builder.summary.estimated_words }} words</span>
+            <span>audit {{ content_builder.summary.audit_score }}/100</span>
+          </div>
+        </div>
+
+        {% if content_builder.blueprints %}
+        <div class="archub-builder__templates">
+          <strong>Blueprints</strong>
+          {% for blueprint in content_builder.blueprints %}
+          <button type="button" class="btn btn--xs btn--ghost" data-builder-template="{{ blueprint.alias }}">
+            {{ blueprint.name }}
+          </button>
+          {% endfor %}
+        </div>
+        <script type="application/json" id="archub-builder-blueprints">{{ content_builder.blueprints_json|safe }}</script>
+        {% endif %}
+
+        <div class="archub-builder__palette">
+          {% for block_type in content_builder.block_types %}
+          <button type="button" class="archub-builder__block" data-builder-add="{{ block_type.alias }}">
+            <strong>{{ block_type.icon }}</strong>
+            <span>{{ block_type.name }}</span>
+            <small>{{ block_type.category }}</small>
+          </button>
+          {% endfor %}
+        </div>
+        <script type="application/json" id="archub-builder-block-types">{{ content_builder.block_types_json|safe }}</script>
+
+        <label class="archub-field">
+          <span>
+            Blocks JSON
+            <small class="muted">Drag-free structured editor; use palette buttons to append typed blocks.</small>
+          </span>
+          <textarea id="archub-builder-json"
+                    name="field_{{ content_builder.field_alias }}"
+                    rows="16"
+                    spellcheck="false">{{ content_builder.blocks_json }}</textarea>
+        </label>
+
+        <div class="archub-actions archub-actions--inline">
+          <button class="btn btn--ghost" type="button" id="archub-builder-format">Format JSON</button>
+          <button class="btn btn--ghost" type="button" id="archub-builder-preview-btn">Preview</button>
+          <button class="btn btn--ghost" type="button" id="archub-builder-audit-btn">Audit</button>
+          <span class="muted" id="archub-builder-status">Ready</span>
+        </div>
+
+        <div class="archub-builder__audit" id="archub-builder-audit">
+          {% if content_builder.audit %}
+          {% for issue in content_builder.audit %}
+          <div class="archub-builder__audit-item archub-builder__audit-item--{{ issue.severity }}">
+            <strong>{{ issue.severity }}</strong>
+            <span>{{ issue.message }}</span>
+            <code>{{ issue.block_type }}</code>
+          </div>
+          {% endfor %}
+          {% else %}
+          <p class="muted">Content Builder audit has no issues.</p>
+          {% endif %}
+        </div>
+
+        <div class="archub-builder__preview" id="archub-builder-preview">
+          {{ content_builder.preview_html|safe }}
+        </div>
+      </section>
+      {% endif %}
+
+      <div class="archub-actions">
+        <button class="btn" type="submit">Сохранить черновик</button>
+      </div>
+    </form>
+
+    {% if node %}
+    <div class="archub-actions">
+      <a class="btn btn--ghost" href="/admin/archub/content/{{ node.node_id }}/preview" target="_blank">Preview draft</a>
+      <a class="btn btn--ghost" href="/admin/archub/content/{{ node.node_id }}/references.json" target="_blank">References</a>
+      <form method="post" action="/admin/archub/content/{{ node.node_id }}/publish">
+        <button class="btn" type="submit">Опубликовать</button>
+      </form>
+      {% if node.is_published and not node.is_root %}
+      <form method="post" action="/admin/archub/content/{{ node.node_id }}/unpublish">
+        <button class="btn btn--ghost" type="submit">Снять с публикации</button>
+      </form>
+      {% endif %}
+      {% if not node.is_root %}
+      <form method="post" action="/admin/archub/content/{{ node.node_id }}/duplicate">
+        <button class="btn btn--ghost" type="submit">Дублировать</button>
+      </form>
+      <form method="post" action="/admin/archub/content/{{ node.node_id }}/delete" onsubmit="return confirm('Удалить узел ArcHub?')">
+        <button class="btn btn--danger" type="submit">Удалить</button>
+      </form>
+      {% endif %}
+    </div>
+    {% if validation_errors %}
+    <div class="flash flash--err">
+      <strong>Публикация сейчас не пройдёт:</strong>
+      <ul>
+        {% for item in validation_errors %}
+        <li>{{ item }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+    {% endif %}
+  </section>
+
+  {% if node %}
+  <aside class="archub-panel">
+    <h2 class="section-title">Info</h2>
+    <dl class="kv">
+      <dt>Status</dt><dd>{{ node.status }}</dd>
+      <dt>Route</dt><dd><code>{{ node.route_path }}</code></dd>
+      <dt>Type</dt><dd><code>{{ node.content_type_alias }}</code></dd>
+      <dt>Updated</dt><dd>{{ node.updated_at|datetime }}</dd>
+      <dt>Published</dt><dd>{{ node.published_at|datetime if node.published_at else "—" }}</dd>
+    </dl>
+
+    <h2 class="section-title">Document Blueprint</h2>
+    <form class="archub-form" method="post" action="/admin/archub/content/{{ node.node_id }}/blueprints">
+      <label class="archub-field">
+        <span>Name</span>
+        <input name="name" value="{{ node.name }} starter">
+      </label>
+      <label class="archub-field">
+        <span>Description</span>
+        <input name="description" value="Saved from {{ node.route_path }}">
+      </label>
+      <label class="archub-field">
+        <span>Draft payload JSON</span>
+        <textarea name="payload_json" rows="7">{{ node.draft|tojson }}</textarea>
+      </label>
+      <div class="archub-actions archub-actions--inline">
+        <button class="btn btn--ghost" type="submit">Save as blueprint</button>
+        <a class="btn btn--xs btn--ghost" href="/admin/archub/content-blueprints.json?content_type={{ node.content_type_alias }}" target="_blank">JSON</a>
+      </div>
+    </form>
+
+    <h2 class="section-title">Headless Preview</h2>
+    <form class="archub-form" method="post" action="/admin/archub/content/{{ node.node_id }}/preview-tokens">
+      <label class="archub-field">
+        <span>TTL seconds</span>
+        <input name="ttl_seconds" value="3600">
+      </label>
+      <label class="archub-field">
+        <span>Note</span>
+        <input name="note" value="Share draft JSON with reviewer">
+      </label>
+      <div class="archub-actions archub-actions--inline">
+        <button class="btn btn--ghost" type="submit">Create token</button>
+        <a class="btn btn--xs btn--ghost" href="/admin/archub/content/{{ node.node_id }}/preview-tokens.json" target="_blank">JSON</a>
+      </div>
+    </form>
+    {% if preview_tokens %}
+    <ol class="archub-audit">
+      {% for item in preview_tokens %}
+      <li class="archub-audit__item archub-audit__item--{{ 'info' if item.is_active else 'warning' }}">
+        <strong>{{ item.token_hash[:10] }}</strong>
+        <span>{{ item.note or "draft preview" }} · expires {{ item.expires_at|datetime }}</span>
+        <code>{{ "active" if item.is_active else "inactive" }}</code>
+        {% if item.is_active %}
+        <form method="post" action="/admin/archub/preview-tokens/{{ item.token_hash }}/revoke">
+          <button class="btn btn--xs btn--ghost" type="submit">Revoke</button>
+        </form>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+    {% else %}
+    <p class="muted">No preview tokens for this draft yet. The create action returns the raw token once as JSON.</p>
+    {% endif %}
+
+    <h2 class="section-title">Public Access</h2>
+    {% if access_rule %}
+    <ol class="archub-audit">
+      <li class="archub-audit__item archub-audit__item--warning">
+        <strong>{{ access_rule.policy }}</strong>
+        <span>
+          {{ access_rule.note or "protected delivery" }}
+          {% if access_rule.member_groups %} · {{ access_rule.member_groups|join(", ") }}{% endif %}
+        </span>
+        <a href="/admin/archub/content/{{ node.node_id }}/access.json" target="_blank">JSON</a>
+        <code>{{ "desc" if access_rule.include_descendants else "node" }}</code>
+      </li>
+    </ol>
+    {% else %}
+    <p class="muted">Published delivery is public.</p>
+    {% endif %}
+    <form class="archub-form" method="post" action="/admin/archub/content/{{ node.node_id }}/access">
+      <input type="hidden" name="redirect" value="1">
+      <label class="archub-field">
+        <span>Policy</span>
+        <select name="policy">
+          {% for policy in public_access_policies %}
+          <option value="{{ policy }}" {% if access_rule and access_rule.policy == policy %}selected{% endif %}>{{ policy }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="archub-field">
+        <span>Member groups</span>
+        <input name="member_groups" value="{{ access_rule.member_groups|join(', ') if access_rule else '' }}" placeholder="user:editor, subscribers">
+      </label>
+      <label class="archub-field">
+        <span>Login path</span>
+        <input name="login_path" value="{{ access_rule.login_path if access_rule else '/login' }}">
+      </label>
+      <label class="archub-field">
+        <span>Denied path</span>
+        <input name="denied_path" value="{{ access_rule.denied_path if access_rule else '' }}">
+      </label>
+      <label class="archub-field">
+        <span>Note</span>
+        <input name="note" value="{{ access_rule.note if access_rule else '' }}" placeholder="Access reason">
+      </label>
+      <label class="check"><input type="checkbox" name="include_descendants" value="1" {% if not access_rule or access_rule.include_descendants %}checked{% endif %}> Include descendants</label>
+      <div class="archub-actions archub-actions--inline">
+        <button class="btn btn--ghost" type="submit">Save access</button>
+        <a class="btn btn--xs btn--ghost" href="/admin/archub/content/{{ node.node_id }}/access.json" target="_blank">JSON</a>
+      </div>
+    </form>
+    <form class="archub-form" method="post" action="/admin/archub/content/{{ node.node_id }}/access/delete">
+      <button class="btn btn--ghost" type="submit">Make public</button>
+    </form>
+
+    <h2 class="section-title">Editorial Lock</h2>
+    {% if content_lock %}
+    <ol class="archub-audit">
+      <li class="archub-audit__item archub-audit__item--warning">
+        <strong>{{ content_lock.owner }}</strong>
+        <span>
+          expires {{ content_lock.expires_at|datetime }}
+          {% if content_lock.note %} · {{ content_lock.note }}{% endif %}
+        </span>
+        <a href="/admin/archub/content/{{ node.node_id }}/lock.json" target="_blank">JSON</a>
+        <code>{{ content_lock.token[:8] }}</code>
+      </li>
+    </ol>
+    {% else %}
+    <p class="muted">No active editing lock.</p>
+    {% endif %}
+    <form class="archub-form" method="post" action="/admin/archub/content/{{ node.node_id }}/lock">
+      <input type="hidden" name="redirect" value="1">
+      <label class="archub-field">
+        <span>TTL seconds</span>
+        <input name="ttl_seconds" value="1800">
+      </label>
+      <label class="archub-field">
+        <span>Note</span>
+        <input name="note" value="{{ content_lock.note if content_lock else '' }}" placeholder="Editing reason">
+      </label>
+      <label class="check"><input type="checkbox" name="force" value="1"> Force takeover</label>
+      <div class="archub-actions archub-actions--inline">
+        <button class="btn btn--ghost" type="submit">Lock for editing</button>
+        <a class="btn btn--xs btn--ghost" href="/admin/archub/content/{{ node.node_id }}/lock.json" target="_blank">JSON</a>
+      </div>
+    </form>
+    <form class="archub-form" method="post" action="/admin/archub/content/{{ node.node_id }}/unlock">
+      <input type="hidden" name="redirect" value="1">
+      <label class="check"><input type="checkbox" name="force" value="1"> Force release</label>
+      <button class="btn btn--ghost" type="submit">Release lock</button>
+    </form>
+
+    <h2 class="section-title">Workflow</h2>
+    <form class="archub-form" method="post" action="/admin/archub/content/{{ node.node_id }}/workflow">
+      <label class="archub-field">
+        <span>State</span>
+        <select name="state">
+          {% for state in workflow_states %}
+          <option value="{{ state }}" {% if workflow and workflow.state == state %}selected{% endif %}>{{ state }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="archub-field">
+        <span>Assigned to</span>
+        <input name="assigned_to" value="{{ workflow.assigned_to if workflow else '' }}" placeholder="editor username">
+      </label>
+      <label class="archub-field">
+        <span>Scheduled publish</span>
+        <input type="datetime-local" name="scheduled_publish_at" value="{{ workflow_publish_value }}">
+      </label>
+      <label class="archub-field">
+        <span>Scheduled unpublish</span>
+        <input type="datetime-local" name="scheduled_unpublish_at" value="{{ workflow_unpublish_value }}">
+      </label>
+      <label class="archub-field">
+        <span>Note</span>
+        <textarea name="note" rows="3">{{ workflow.note if workflow else '' }}</textarea>
+      </label>
+      <div class="archub-actions archub-actions--inline">
+        <button class="btn btn--ghost" type="submit">Save workflow</button>
+        <a class="btn btn--xs btn--ghost" href="/admin/archub/content/{{ node.node_id }}/workflow.json" target="_blank">JSON</a>
+      </div>
+    </form>
+
+    <h2 class="section-title">Culture Variants</h2>
+    <div class="archub-actions archub-actions--inline">
+      <a class="btn btn--xs btn--ghost" href="/admin/archub/content/{{ node.node_id }}/variants.json" target="_blank">JSON</a>
+    </div>
+    <form class="archub-form" method="post" action="/admin/archub/content/{{ node.node_id }}/variants">
+      <label class="archub-field">
+        <span>Culture</span>
+        <input name="culture" placeholder="en, ru, en-us">
+      </label>
+      <label class="archub-field">
+        <span>Variant payload JSON</span>
+        <textarea name="payload_json" rows="7">{{ node.draft|tojson }}</textarea>
+      </label>
+      <label class="check"><input type="checkbox" name="publish" value="1"> Publish immediately</label>
+      <button class="btn btn--ghost" type="submit">Save variant</button>
+    </form>
+    {% if variants %}
+    <ol class="archub-audit">
+      {% for item in variants %}
+      <li class="archub-audit__item archub-audit__item--{{ 'info' if item.status == 'published' else 'warning' }}">
+        <strong>{{ item.culture }}</strong>
+        <span>{{ item.status }} · {{ item.updated_by }}</span>
+        <a href="{{ node.route_path }}?culture={{ item.culture }}" target="_blank">preview</a>
+        <code>{{ item.updated_at|datetime }}</code>
+      </li>
+      {% endfor %}
+    </ol>
+    {% else %}
+    <p class="muted">No localized variants yet.</p>
+    {% endif %}
+
+    <h2 class="section-title">Segments</h2>
+    <div class="archub-actions archub-actions--inline">
+      <a class="btn btn--xs btn--ghost" href="/admin/archub/content/{{ node.node_id }}/segments.json" target="_blank">JSON</a>
+    </div>
+    <form class="archub-form" method="post" action="/admin/archub/content/{{ node.node_id }}/segments">
+      <label class="archub-field">
+        <span>Segment alias</span>
+        <input name="segment" placeholder="vip, returning-users, newsletter">
+      </label>
+      <label class="archub-field">
+        <span>Segment override JSON</span>
+        <textarea name="payload_json" rows="7">{{ {"title": node.draft.get("title", node.name)}|tojson }}</textarea>
+      </label>
+      <label class="check"><input type="checkbox" name="publish" value="1"> Publish immediately</label>
+      <button class="btn btn--ghost" type="submit">Save segment</button>
+    </form>
+    {% if segments %}
+    <ol class="archub-audit">
+      {% for item in segments %}
+      <li class="archub-audit__item archub-audit__item--{{ 'info' if item.status == 'published' else 'warning' }}">
+        <strong>{{ item.segment }}</strong>
+        <span>{{ item.status }} · {{ item.updated_by }}</span>
+        <a href="{{ node.route_path }}?segment={{ item.segment }}" target="_blank">preview</a>
+        <code>{{ item.updated_at|datetime }}</code>
+      </li>
+      {% endfor %}
+    </ol>
+    {% else %}
+    <p class="muted">No personalized segment overlays yet.</p>
+    {% endif %}
+
+    <h2 class="section-title">Activity</h2>
+    <div class="archub-actions archub-actions--inline">
+      <a class="btn btn--xs btn--ghost" href="/admin/archub/content/{{ node.node_id }}/activity.json" target="_blank">JSON</a>
+    </div>
+    {% if activity %}
+    <ol class="archub-audit">
+      {% for item in activity[:6] %}
+      <li class="archub-audit__item archub-audit__item--info">
+        <strong>{{ item.action }}</strong>
+        <span>{{ item.summary }}{% if item.actor %} · {{ item.actor }}{% endif %}</span>
+        <code>{{ item.created_at|datetime }}</code>
+      </li>
+      {% endfor %}
+    </ol>
+    {% else %}
+    <p class="muted">No activity events yet.</p>
+    {% endif %}
+
+    <h2 class="section-title">Versions</h2>
+    <table class="table">
+      <thead><tr><th class="num">#</th><th>Status</th><th>By</th><th>When</th><th></th></tr></thead>
+      <tbody>
+        {% for v in versions %}
+        <tr>
+          <td class="num">{{ v.version_no }}</td>
+          <td>{{ v.status }}</td>
+          <td>{{ v.created_by }}</td>
+          <td>{{ v.created_at|datetime }}</td>
+          <td>
+            <a class="btn btn--xs btn--ghost" href="/admin/archub/content/{{ node.node_id }}/versions/{{ v.version_no }}/json" target="_blank">JSON</a>
+            <form method="post" action="/admin/archub/content/{{ node.node_id }}/versions/{{ v.version_no }}/restore">
+              <button class="btn btn--xs btn--ghost" type="submit">Restore</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </aside>
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/archub_builder.js"></script>
+{% endblock %}

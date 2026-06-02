@@ -1,0 +1,43 @@
+site_name: ArcHub CMS
+site_description: Standalone headless CMS, content builder and delivery API.
+site_url: https://archub-cms.github.io/archub_cms/
+repo_url: https://github.com/archub-cms/archub_cms
+repo_name: archub-cms/archub_cms
+copyright: Copyright &copy; 2026 ArcHub contributors
+
+theme:
+  name: material
+  language: en
+  palette:
+    - scheme: default
+      primary: teal
+      accent: amber
+    - scheme: slate
+      primary: teal
+      accent: amber
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.tabs
+    - navigation.top
+    - content.code.copy
+
+nav:
+  - Overview: index.md
+  - Getting Started: getting-started.md
+  - Architecture: architecture.md
+  - Content Builder: content-builder.md
+  - Delivery API: delivery-api.md
+  - GitHub Demo: demo-site.md
+  - Release Notes: release-notes.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.superfences

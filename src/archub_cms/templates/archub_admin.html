@@ -1,0 +1,866 @@
+{% extends "base.html" %}
+{% block main_class %}page{% endblock %}
+{% block content %}
+<a class="back-link" href="/admin">← Админ-панель</a>
+<div class="page-head">
+  <div>
+    <h1 class="profile__name">ArcHub CMS</h1>
+    <p class="muted">Backoffice для контента, страниц экспертов и базы знаний.</p>
+  </div>
+  <span>
+    <a class="btn btn--ghost" href="/cms" target="_blank">Открыть сайт</a>
+    <a class="btn" href="/admin/archub/content/new?parent_id=root">Создать</a>
+  </span>
+</div>
+
+<div class="stat-cards">
+  <div class="stat-card"><span class="stat-card__num">{{ stats.nodes }}</span><span class="muted">узлов контента</span></div>
+  <div class="stat-card"><span class="stat-card__num">{{ stats.published }}</span><span class="muted">опубликовано</span></div>
+  <div class="stat-card"><span class="stat-card__num">{{ stats.draft }}</span><span class="muted">черновиков</span></div>
+  <div class="stat-card"><span class="stat-card__num">{{ stats.trashed }}</span><span class="muted">recycle bin</span></div>
+  <div class="stat-card"><span class="stat-card__num">{{ stats.versions }}</span><span class="muted">версий</span></div>
+  <div class="stat-card"><span class="stat-card__num">{{ stats.preview_tokens }}</span><span class="muted">preview tokens</span></div>
+  <div class="stat-card"><span class="stat-card__num">{{ stats.segments }}</span><span class="muted">segments</span></div>
+  <div class="stat-card"><span class="stat-card__num">{{ stats.data_types }}</span><span class="muted">data types</span></div>
+  <div class="stat-card"><span class="stat-card__num">{{ stats.templates }}</span><span class="muted">templates</span></div>
+  <div class="stat-card"><span class="stat-card__num">{{ stats.content_types }}</span><span class="muted">типов документов</span></div>
+  <div class="stat-card"><span class="stat-card__num">{{ stats.compositions }}</span><span class="muted">compositions</span></div>
+  <div class="stat-card"><span class="stat-card__num">{{ stats.blueprints }}</span><span class="muted">document blueprints</span></div>
+  <div class="stat-card"><span class="stat-card__num">{{ stats.media }}</span><span class="muted">media references</span></div>
+  <div class="stat-card"><span class="stat-card__num">{{ stats.redirects }}</span><span class="muted">redirect rules</span></div>
+  <div class="stat-card"><span class="stat-card__num">{{ workflow_report.due }}</span><span class="muted">workflow due</span></div>
+  <div class="stat-card"><span class="stat-card__num">{{ stats.locks }}</span><span class="muted">active locks</span></div>
+  <div class="stat-card"><span class="stat-card__num">{{ stats.permission_rules }}</span><span class="muted">permission rules</span></div>
+  <div class="stat-card"><span class="stat-card__num">{{ stats.access_rules }}</span><span class="muted">protected nodes</span></div>
+  <div class="stat-card"><span class="stat-card__num">{{ stats.domains }}</span><span class="muted">domains</span></div>
+  <div class="stat-card"><span class="stat-card__num">{{ stats.activity }}</span><span class="muted">activity events</span></div>
+  <div class="stat-card"><span class="stat-card__num">{{ stats.webhooks }}</span><span class="muted">webhooks</span></div>
+  <div class="stat-card"><span class="stat-card__num">{{ stats.webhook_pending }}</span><span class="muted">webhook queue</span></div>
+</div>
+
+{% if runtime_exported %}<div class="flash flash--ok">Runtime snapshot обновлён.</div>{% endif %}
+{% if runtime_synced %}<div class="flash flash--ok">Существующие ресурсы бота, AI-эксперты и RAG-корпусы синхронизированы с ArcHub.</div>{% endif %}
+{% if runtime_rebuilt %}<div class="flash flash--ok">RAG-индексы пересобраны из опубликованного ArcHub snapshot.</div>{% endif %}
+{% if runtime_error %}<div class="flash flash--err">Runtime operation failed: {{ runtime_error }}</div>{% endif %}
+
+{% if current_user.is_admin %}
+<section class="archub-panel">
+  <div class="archub-panel__head">
+    <div>
+      <h2 class="section-title">Content Health</h2>
+      <p class="muted">
+        {{ content_health.published }}/{{ content_health.nodes }} published
+        · {{ content_health.error_count }} errors
+        · {{ content_health.warning_count }} warnings
+        · {{ content_health.info_count }} info
+      </p>
+    </div>
+    <span class="archub-actions archub-actions--inline">
+      <a class="btn btn--ghost" href="/admin/archub/content/health.json" target="_blank">Health JSON</a>
+      <a class="btn btn--ghost" href="/admin/archub/delivery-cache.json" target="_blank">Delivery Cache JSON</a>
+      <a class="btn btn--ghost" href="/admin/archub/preview-tokens.json" target="_blank">Preview Tokens JSON</a>
+      <a class="btn btn--ghost" href="/admin/archub/data-types.json" target="_blank">Data Types JSON</a>
+      <a class="btn btn--ghost" href="/admin/archub/templates.json" target="_blank">Templates JSON</a>
+      <a class="btn btn--ghost" href="/admin/archub/content-model.json" target="_blank">Content Model JSON</a>
+      <a class="btn btn--ghost" href="/admin/archub/content-blueprints.json" target="_blank">Document Blueprints JSON</a>
+      <a class="btn btn--ghost" href="/cms/api/tree" target="_blank">Headless tree</a>
+      <a class="btn btn--ghost" href="/cms/api/search" target="_blank">Search API</a>
+      <a class="btn btn--ghost" href="/cms/api/tags" target="_blank">Tags API</a>
+      <a class="btn btn--ghost" href="/cms/feed.xml" target="_blank">RSS</a>
+      <a class="btn btn--ghost" href="/admin/archub/redirects.json" target="_blank">Redirects JSON</a>
+      <a class="btn btn--ghost" href="/admin/archub/content/references.json" target="_blank">References JSON</a>
+      <a class="btn btn--ghost" href="/admin/archub/workflow.json" target="_blank">Workflow JSON</a>
+      <a class="btn btn--ghost" href="/admin/archub/activity.json" target="_blank">Activity JSON</a>
+      <a class="btn btn--ghost" href="/admin/archub/trash.json" target="_blank">Trash JSON</a>
+      <a class="btn btn--ghost" href="/admin/archub/locks.json" target="_blank">Locks JSON</a>
+      <a class="btn btn--ghost" href="/admin/archub/permissions.json" target="_blank">Permissions JSON</a>
+      <a class="btn btn--ghost" href="/admin/archub/access.json" target="_blank">Public Access JSON</a>
+      <a class="btn btn--ghost" href="/admin/archub/domains.json" target="_blank">Domains JSON</a>
+      <a class="btn btn--ghost" href="/admin/archub/webhooks.json" target="_blank">Webhooks JSON</a>
+      <a class="btn btn--ghost" href="/admin/archub/webhooks/deliveries.json" target="_blank">Webhook deliveries</a>
+      <a class="btn btn--ghost" href="/sitemap.xml" target="_blank">Sitemap</a>
+      <a class="btn btn--ghost" href="/robots.txt" target="_blank">Robots</a>
+    </span>
+  </div>
+  {% if content_health.issues %}
+  <ol class="archub-audit">
+    {% for issue in content_health.issues[:8] %}
+    <li class="archub-audit__item archub-audit__item--{{ issue.severity }}">
+      <strong>{{ issue.severity }}</strong>
+      <span>{{ issue.message }}</span>
+      {% if issue.node_id != "runtime" %}
+      <a href="/admin/archub/content/{{ issue.node_id }}">{{ issue.route_path }}</a>
+      {% else %}
+      <span class="muted">{{ issue.route_path }}</span>
+      {% endif %}
+      <code>{{ issue.content_type_alias }}</code>
+    </li>
+    {% endfor %}
+  </ol>
+  {% else %}
+  <p class="muted">Content tree has no health findings.</p>
+{% endif %}
+</section>
+
+<section class="archub-panel">
+  <div class="archub-panel__head">
+    <div>
+      <h2 class="section-title">Culture & Hostnames</h2>
+      <p class="muted">
+        {{ domain_report.total }} domain bindings{% if domain_report.default %} · default {{ domain_report.default }}{% endif %}
+        {% if domain_report.cultures %} · cultures {{ domain_report.cultures|join(", ") }}{% endif %}.
+      </p>
+    </div>
+    <a class="btn btn--ghost" href="/admin/archub/domains.json" target="_blank">Domains JSON</a>
+  </div>
+  <div class="archub-runtime-grid">
+    <form class="archub-form" method="post" action="/admin/archub/domains">
+      <h3>Domain Binding</h3>
+      <label class="archub-field"><span>Hostname</span><input name="hostname" placeholder="example.com or *.example.com"></label>
+      <label class="archub-field"><span>Root node ID</span><input name="root_node_id" value="root"></label>
+      <label class="archub-field"><span>Default culture</span><input name="culture" placeholder="en, ru, en-us"></label>
+      <div class="expert-form__grid">
+        <label>Sort order<input name="sort_order" value="0"></label>
+        <label class="check"><input type="checkbox" name="is_default" value="1"> Default</label>
+      </div>
+      <label class="check"><input type="checkbox" name="secure" value="1"> HTTPS canonical</label>
+      <button class="btn btn--ghost" type="submit">Save domain</button>
+    </form>
+    <div>
+      {% if domain_report["items"] %}
+      <ol class="archub-audit">
+        {% for item in domain_report["items"][:8] %}
+        <li class="archub-audit__item archub-audit__item--info">
+          <strong>{{ item.hostname }}</strong>
+          <span>{{ item.root_name or item.root_node_id }}{% if item.culture %} · {{ item.culture }}{% endif %}</span>
+          <a href="{{ item.root_route_path or '/cms' }}" target="_blank">{{ item.root_route_path or "/cms" }}</a>
+          <code>{{ "default" if item.is_default else item.sort_order }}</code>
+          <form method="post" action="/admin/archub/domains/{{ item.domain_id }}/delete" onsubmit="return confirm('Delete ArcHub domain binding?')">
+            <button class="btn btn--xs btn--danger" type="submit">Delete</button>
+          </form>
+        </li>
+        {% endfor %}
+      </ol>
+      {% else %}
+      <p class="muted">No domain bindings yet. Without a match, delivery uses `/cms` root and explicit culture query parameters.</p>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<section class="archub-panel">
+  <div class="archub-panel__head">
+    <div>
+      <h2 class="section-title">Headless Preview</h2>
+      <p class="muted">
+        {{ preview_tokens.active }} active token links expose draft JSON through no-store headless delivery before publishing.
+      </p>
+    </div>
+    <a class="btn btn--ghost" href="/admin/archub/preview-tokens.json" target="_blank">Preview Tokens JSON</a>
+  </div>
+  {% if preview_tokens["items"] %}
+  <ol class="archub-audit">
+    {% for item in preview_tokens["items"][:8] %}
+    <li class="archub-audit__item archub-audit__item--{{ 'info' if item.active else 'warning' }}">
+      <strong>{{ item.node_name or item.node_id }}</strong>
+      <span>{{ item.note or "draft preview" }} · expires {{ item.expires_at|datetime }}</span>
+      <a href="/admin/archub/content/{{ item.node_id }}">{{ item.route_path }}</a>
+      <code>{{ item.token_hash[:10] }}</code>
+      {% if item.active %}
+      <form method="post" action="/admin/archub/preview-tokens/{{ item.token_hash }}/revoke">
+        <button class="btn btn--xs btn--ghost" type="submit">Revoke</button>
+      </form>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+  {% else %}
+  <p class="muted">No preview tokens yet. Create one from a content edit screen.</p>
+  {% endif %}
+</section>
+
+<section class="archub-panel">
+  <div class="archub-panel__head">
+    <div>
+      <h2 class="section-title">Delivery Cache</h2>
+      <p class="muted">
+        {{ delivery_cache.published_nodes }} published nodes use ETag, Last-Modified, Cache-Control and conditional 304 responses.
+      </p>
+    </div>
+    <a class="btn btn--ghost" href="/admin/archub/delivery-cache.json" target="_blank">Delivery Cache JSON</a>
+  </div>
+  <div class="archub-types">
+    {% for item in delivery_cache["items"][:6] %}
+    <a class="archub-type" href="/admin/archub/content/{{ item.node_id }}">
+      <div class="archub-type__head"><strong>{{ item.route_path }}</strong><code>{{ item.content_type_alias }}</code></div>
+      <p class="muted">updated {{ item.updated_at|datetime }}{% if item.published_at %} · published {{ item.published_at|datetime }}{% endif %}</p>
+    </a>
+    {% endfor %}
+  </div>
+  <p class="muted">
+    Public anonymous delivery is cacheable; authenticated/member delivery is private and still supports revalidation.
+  </p>
+</section>
+
+<section class="archub-panel">
+  <div class="archub-panel__head">
+    <div>
+      <h2 class="section-title">Public Access</h2>
+      <p class="muted">
+        {{ access_report.protected }} protected published nodes. Protected delivery stays published but requires login.
+      </p>
+    </div>
+    <a class="btn btn--ghost" href="/admin/archub/access.json" target="_blank">Public Access JSON</a>
+  </div>
+  {% if access_report["items"] %}
+  <ol class="archub-audit">
+    {% for item in access_report["items"][:8] %}
+    <li class="archub-audit__item archub-audit__item--warning">
+      <strong>{{ item.policy }}</strong>
+      <span>{{ item.node_name }} · {{ item.note or "no note" }}</span>
+      <a href="/admin/archub/content/{{ item.node_id }}">{{ item.route_path }}</a>
+      <code>{{ "desc" if item.include_descendants else "node" }}</code>
+    </li>
+    {% endfor %}
+  </ol>
+  {% else %}
+  <p class="muted">All published ArcHub content is public.</p>
+  {% endif %}
+</section>
+
+<section class="archub-panel">
+  <div class="archub-panel__head">
+    <div>
+      <h2 class="section-title">Editorial Locks</h2>
+      <p class="muted">{{ stats.locks }} active editing locks prevent concurrent draft overwrites.</p>
+    </div>
+    <a class="btn btn--ghost" href="/admin/archub/locks.json" target="_blank">Locks JSON</a>
+  </div>
+  {% if locks %}
+  <ol class="archub-audit">
+    {% for item in locks %}
+    <li class="archub-audit__item archub-audit__item--warning">
+      <strong>{{ item.owner }}</strong>
+      <span>{{ item.node_name }} · expires {{ item.expires_at|datetime }}</span>
+      <a href="/admin/archub/content/{{ item.node_id }}">{{ item.route_path }}</a>
+      <code>{{ item.content_type_alias }}</code>
+    </li>
+    {% endfor %}
+  </ol>
+  {% else %}
+  <p class="muted">No active editing locks.</p>
+  {% endif %}
+</section>
+
+<section class="archub-panel">
+  <div class="archub-panel__head">
+    <div>
+      <h2 class="section-title">Permissions</h2>
+      <p class="muted">
+        Tree-scoped user grants for browse, create, update, publish, delete and workflow operations.
+      </p>
+    </div>
+    <a class="btn btn--ghost" href="/admin/archub/permissions.json" target="_blank">Permissions JSON</a>
+  </div>
+  <form class="archub-filter" method="post" action="/admin/archub/permissions">
+    <input name="subject" placeholder="user:editor">
+    <input name="scope_node_id" placeholder="node id or empty for whole tree">
+    <input name="actions" placeholder="browse, update, publish">
+    <input name="note" placeholder="Reason">
+    <label class="check"><input type="checkbox" name="include_descendants" value="1" checked> Include descendants</label>
+    <button class="btn btn--ghost" type="submit">Grant</button>
+  </form>
+  {% if permissions_report["items"] %}
+  <ol class="archub-audit">
+    {% for item in permissions_report["items"][:8] %}
+    <li class="archub-audit__item archub-audit__item--info">
+      <strong>{{ item.subject }}</strong>
+      <span>{{ item.actions|join(", ") }} · {{ item.note or "no note" }}</span>
+      <a href="{{ '/admin/archub/content/' ~ item.scope_node_id if item.scope_node_id else '/admin/archub' }}">
+        {{ item.route_path or "whole tree" }}
+      </a>
+      <code>{{ "desc" if item.include_descendants else "node" }}</code>
+      <form method="post" action="/admin/archub/permissions/{{ item.rule_id }}/delete">
+        <button class="btn btn--xs btn--danger" type="submit">Revoke</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ol>
+  {% else %}
+  <p class="muted">No explicit permission grants. Admin users keep full access.</p>
+  {% endif %}
+</section>
+
+<section class="archub-panel">
+  <div class="archub-panel__head">
+    <div>
+      <h2 class="section-title">Packages & Deployment</h2>
+      <p class="muted">
+        Portable ArcHub packages export document types, content, variants, domains, dictionary, media,
+        redirects, public access rules and workflow records for promotion between environments.
+      </p>
+    </div>
+    <a class="btn btn--ghost" href="/admin/archub/packages/export.json" target="_blank">Export full package</a>
+  </div>
+  <div class="archub-runtime-grid">
+    <form class="archub-form" method="get" action="/admin/archub/packages/export.json" target="_blank">
+      <h3>Export</h3>
+      <label class="archub-field"><span>Package name</span><input name="name" value="ArcHub package"></label>
+      <label class="archub-field"><span>Node IDs</span><input name="node_ids" placeholder="empty exports the full content tree"></label>
+      <label class="check"><input type="checkbox" name="include_descendants" value="true" checked> Include descendants</label>
+      <button class="btn btn--ghost" type="submit">Export package JSON</button>
+    </form>
+    <form class="archub-form" method="post" action="/admin/archub/packages/inspect" target="_blank">
+      <h3>Inspect</h3>
+      <label class="archub-field">
+        <span>Package JSON</span>
+        <textarea name="package_json" rows="8" placeholder='{"schema_version":"archub.package.v1","content":{"nodes":[]}}'></textarea>
+      </label>
+      <button class="btn btn--ghost" type="submit">Inspect package</button>
+    </form>
+    <form class="archub-form" method="post" action="/admin/archub/packages/plan" target="_blank">
+      <h3>Plan</h3>
+      <label class="archub-field">
+        <span>Package JSON</span>
+        <textarea name="package_json" rows="8" placeholder='{"schema_version":"archub.package.v1","content":{"nodes":[]}}'></textarea>
+      </label>
+      <label class="check"><input type="checkbox" name="overwrite" value="1"> Plan overwrite updates</label>
+      <button class="btn btn--ghost" type="submit">Dry-run import</button>
+    </form>
+    <form class="archub-form" method="post" action="/admin/archub/packages/import" target="_blank">
+      <h3>Import</h3>
+      <label class="archub-field">
+        <span>Package JSON</span>
+        <textarea name="package_json" rows="8" placeholder='{"schema_version":"archub.package.v1","content":{"nodes":[]}}'></textarea>
+      </label>
+      <label class="check"><input type="checkbox" name="overwrite" value="1"> Overwrite existing matching nodes</label>
+      <button class="btn btn--ghost" type="submit">Import package</button>
+    </form>
+  </div>
+</section>
+{% endif %}
+
+<section class="archub-panel">
+  <div class="archub-panel__head">
+    <div>
+      <h2 class="section-title">Recycle Bin</h2>
+      <p class="muted">{{ stats.trashed }} trashed nodes. Restore returns content as draft and keeps versions/activity.</p>
+    </div>
+    <a class="btn btn--ghost" href="/admin/archub/trash.json" target="_blank">Trash JSON</a>
+  </div>
+  {% if trash %}
+  <ol class="archub-audit">
+    {% for item in trash %}
+    <li class="archub-audit__item archub-audit__item--warning">
+      <strong>{{ item.name }}</strong>
+      <span>{{ item.route_path }} · {{ item.trashed_by }}</span>
+      <code>{{ item.trashed_at|datetime }}</code>
+      <form method="post" action="/admin/archub/content/{{ item.node_id }}/restore-from-trash">
+        <button class="btn btn--xs btn--ghost" type="submit">Restore</button>
+      </form>
+      <form method="post" action="/admin/archub/content/{{ item.node_id }}/purge" onsubmit="return confirm('Permanently purge ArcHub content?')">
+        <button class="btn btn--xs btn--danger" type="submit">Purge</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ol>
+  {% else %}
+  <p class="muted">Recycle bin is empty.</p>
+  {% endif %}
+</section>
+
+<section class="archub-panel">
+  <div class="archub-panel__head">
+    <div>
+      <h2 class="section-title">Content Model</h2>
+      <p class="muted">
+        {{ content_model.data_type_total }} data types ·
+        {{ content_model.template_total }} templates ·
+        {{ content_model.content_type_total }} document types ·
+        {{ content_model.composition_total }} reusable compositions ·
+        {{ content_model.blueprint_total }} document blueprints ·
+        {{ content_model.composed_content_types }} composed types.
+      </p>
+    </div>
+    <span class="archub-actions archub-actions--inline">
+      <a class="btn btn--ghost" href="/admin/archub/data-types.json" target="_blank">Data Types JSON</a>
+      <a class="btn btn--ghost" href="/admin/archub/templates.json" target="_blank">Templates JSON</a>
+      <a class="btn btn--ghost" href="/admin/archub/content-model.json" target="_blank">Content Model JSON</a>
+    </span>
+  </div>
+  <div class="archub-runtime-grid">
+    <form class="archub-form" method="post" action="/admin/archub/content-model/templates">
+      <h3>Template</h3>
+      <label class="archub-field"><span>Alias</span><input name="alias" placeholder="campaign_template"></label>
+      <label class="archub-field"><span>Name</span><input name="name" placeholder="Campaign template"></label>
+      <label class="archub-field"><span>View</span><input name="view" value="archub_public.html"></label>
+      <label class="archub-field"><span>Description</span><input name="description" placeholder="Reusable rendering contract"></label>
+      <label class="archub-field"><span>Allowed document types</span><input name="allowed_content_type_aliases" placeholder="campaign_page, page"></label>
+      <label class="archub-field">
+        <span>Config JSON</span>
+        <textarea name="config_json" rows="4">{"cache_seconds":60,"layout":"page"}</textarea>
+      </label>
+      <button class="btn btn--ghost" type="submit">Save template</button>
+    </form>
+    <form class="archub-form" method="post" action="/admin/archub/content-model/data-types">
+      <h3>Data Type</h3>
+      <label class="archub-field"><span>Alias</span><input name="alias" placeholder="seo_title_text"></label>
+      <label class="archub-field"><span>Name</span><input name="name" placeholder="SEO title text"></label>
+      <label class="archub-field"><span>Editor</span><input name="editor" value="text" placeholder="text, textarea, richtext, checkbox, builder"></label>
+      <label class="archub-field"><span>Description</span><input name="description" placeholder="Reusable property editor configuration"></label>
+      <label class="archub-field">
+        <span>Config JSON</span>
+        <textarea name="config_json" rows="4">{"rows":1}</textarea>
+      </label>
+      <label class="archub-field">
+        <span>Validation JSON</span>
+        <textarea name="validation_json" rows="4">{"max_length":120}</textarea>
+      </label>
+      <button class="btn btn--ghost" type="submit">Save data type</button>
+    </form>
+    <form class="archub-form" method="post" action="/admin/archub/content-model/compositions">
+      <h3>Reusable Composition</h3>
+      <label class="archub-field"><span>Alias</span><input name="alias" placeholder="seo_pack"></label>
+      <label class="archub-field"><span>Name</span><input name="name" placeholder="SEO pack"></label>
+      <label class="archub-field"><span>Description</span><input name="description" placeholder="Shared SEO fields"></label>
+      <label class="archub-field">
+        <span>Fields JSON</span>
+        <textarea name="fields_json" rows="7">[{"alias":"meta_title","name":"Meta title","data_type_alias":"short_text","required":false},{"alias":"meta_description","name":"Meta description","data_type_alias":"long_text","required":false}]</textarea>
+      </label>
+      <button class="btn btn--ghost" type="submit">Save composition</button>
+    </form>
+    <form class="archub-form" method="post" action="/admin/archub/content-model/types">
+      <h3>Document Type</h3>
+      <label class="archub-field"><span>Alias</span><input name="alias" placeholder="campaign_page"></label>
+      <label class="archub-field"><span>Name</span><input name="name" placeholder="Campaign page"></label>
+      <div class="expert-form__grid">
+        <label>Icon<input name="icon" value="□"></label>
+        <label>Template<input name="template" value="page"></label>
+      </div>
+      <label class="archub-field"><span>Compositions</span><input name="composition_aliases" placeholder="seo_metadata, taxonomy"></label>
+      <label class="archub-field"><span>Allowed child aliases</span><input name="allowed_child_aliases" placeholder="knowledge_article"></label>
+      <label class="archub-field">
+        <span>Fields JSON</span>
+        <textarea name="fields_json" rows="7">[{"alias":"title","name":"Title","data_type_alias":"short_text","required":true},{"alias":"body","name":"Body","data_type_alias":"rich_text","required":true}]</textarea>
+      </label>
+      <label class="check"><input type="checkbox" name="allow_at_root" value="1"> Allow at root</label>
+      <label class="check"><input type="checkbox" name="is_element" value="1"> Element type</label>
+      <button class="btn btn--ghost" type="submit">Save document type</button>
+    </form>
+  </div>
+  <div class="archub-types">
+    {% for item in content_model.compositions[:6] %}
+    <div class="archub-type">
+      <div class="archub-type__head"><strong>{{ item.name }}</strong><code>{{ item.alias }}</code></div>
+      <p class="muted">{{ item.description }}</p>
+      <div class="archub-type__fields">
+        {% for field in item.fields %}
+        <span class="tag">{{ field.alias }} · {{ field.editor }}</span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+    {% for item in content_model.templates[:6] %}
+    <div class="archub-type">
+      <div class="archub-type__head"><strong>{{ item.name }}</strong><code>{{ item.alias }}</code></div>
+      <p class="muted">{{ item.view }} · {{ item.description }}</p>
+      <div class="archub-type__fields">
+        {% for alias in item.allowed_content_type_aliases %}
+        <span class="tag">{{ alias }}</span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+    {% for item in content_model.data_types[:6] %}
+    <div class="archub-type">
+      <div class="archub-type__head"><strong>{{ item.name }}</strong><code>{{ item.alias }}</code></div>
+      <p class="muted">{{ item.editor }} · {{ item.description }}</p>
+      <div class="archub-type__fields">
+        {% for key, value in item.validation.items() %}
+        <span class="tag">{{ key }}={{ value }}</span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="archub-panel">
+  <div class="archub-panel__head">
+    <div>
+      <h2 class="section-title">Document Blueprints</h2>
+      <p class="muted">
+        Starter documents for editors: reusable draft payloads bound to a document type, independent from Content Builder block blueprints.
+      </p>
+    </div>
+    <a class="btn btn--ghost" href="/admin/archub/content-blueprints.json" target="_blank">Document Blueprints JSON</a>
+  </div>
+  <div class="archub-runtime-grid">
+    <form class="archub-form" method="post" action="/admin/archub/content-blueprints">
+      <h3>Create Blueprint</h3>
+      <label class="archub-field">
+        <span>Document type</span>
+        <select name="content_type_alias">
+          {% for item in content_model.content_types %}
+          <option value="{{ item.alias }}">{{ item.icon }} {{ item.name }} · {{ item.alias }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="archub-field"><span>Name</span><input name="name" placeholder="Landing starter"></label>
+      <label class="archub-field"><span>Description</span><input name="description" placeholder="Editorial starter content"></label>
+      <label class="archub-field">
+        <span>Payload JSON</span>
+        <textarea name="payload_json" rows="7">{"title":"Starter title","summary":"","body":"<p>Starter body</p>","builder_blocks":[]}</textarea>
+      </label>
+      <button class="btn btn--ghost" type="submit">Save blueprint</button>
+    </form>
+    <div>
+      {% if document_blueprints %}
+      <ol class="archub-audit">
+        {% for item in document_blueprints %}
+        <li class="archub-audit__item archub-audit__item--info">
+          <strong>{{ item.name }}</strong>
+          <span>{{ item.description or "starter draft" }}</span>
+          <a href="/admin/archub/content/new?parent_id=root&content_type={{ item.content_type_alias }}&blueprint_id={{ item.blueprint_id }}">
+            New {{ item.content_type_alias }}
+          </a>
+          <code>{{ item.updated_at|datetime }}</code>
+          <form method="post" action="/admin/archub/content-blueprints/{{ item.blueprint_id }}/delete" onsubmit="return confirm('Delete ArcHub document blueprint?')">
+            <button class="btn btn--xs btn--danger" type="submit">Delete</button>
+          </form>
+        </li>
+        {% endfor %}
+      </ol>
+      {% else %}
+      <p class="muted">No document blueprints yet. Save a reusable draft from the form or from an existing content node.</p>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<section class="archub-panel">
+  <div class="archub-panel__head">
+    <div>
+      <h2 class="section-title">Activity</h2>
+      <p class="muted">Latest editorial and runtime operations across ArcHub.</p>
+    </div>
+    <a class="btn btn--ghost" href="/admin/archub/activity.json" target="_blank">Activity JSON</a>
+  </div>
+  {% if activity %}
+  <ol class="archub-audit">
+    {% for item in activity[:8] %}
+    <li class="archub-audit__item archub-audit__item--info">
+      <strong>{{ item.action }}</strong>
+      <span>{{ item.summary }}{% if item.actor %} · {{ item.actor }}{% endif %}</span>
+      {% if item.node_id %}
+      <a href="/admin/archub/content/{{ item.node_id }}">{{ item.route_path or item.node_id }}</a>
+      {% else %}
+      <span class="muted">{{ item.route_path or "system" }}</span>
+      {% endif %}
+      <code>{{ item.created_at|datetime }}</code>
+    </li>
+    {% endfor %}
+  </ol>
+  {% else %}
+  <p class="muted">No activity events yet.</p>
+  {% endif %}
+</section>
+
+<section class="archub-panel">
+  <div class="archub-panel__head">
+    <div>
+      <h2 class="section-title">Webhooks & Outbox</h2>
+      <p class="muted">
+        {{ webhook_report.active }}/{{ webhook_report.total }} active ·
+        {{ webhook_report.pending }} pending/retry · {{ webhook_report.failed }} failed.
+      </p>
+    </div>
+    <span class="archub-actions archub-actions--inline">
+      <form method="post" action="/admin/archub/webhooks/dispatch">
+        <button class="btn btn--ghost" type="submit">Dispatch due</button>
+      </form>
+      <a class="btn btn--ghost" href="/admin/archub/webhooks.json" target="_blank">Webhooks JSON</a>
+      <a class="btn btn--ghost" href="/admin/archub/webhooks/deliveries.json" target="_blank">Deliveries JSON</a>
+    </span>
+  </div>
+  <form class="archub-filter" method="post" action="/admin/archub/webhooks">
+    <input name="name" placeholder="Name">
+    <input name="target_url" placeholder="https://example.com/cms-hook">
+    <input name="events" placeholder="content.*, workflow.updated">
+    <input name="secret" placeholder="Secret (optional)">
+    <input name="timeout_seconds" value="5" placeholder="Timeout">
+    <input name="max_attempts" value="5" placeholder="Attempts">
+    <label class="check"><input type="checkbox" name="active" value="1" checked> Active</label>
+    <button class="btn btn--ghost" type="submit">Save webhook</button>
+  </form>
+  {% if webhook_report.webhooks %}
+  <ol class="archub-audit">
+    {% for item in webhook_report.webhooks[:6] %}
+    <li class="archub-audit__item archub-audit__item--{{ 'info' if item.active else 'warning' }}">
+      <strong>{{ "active" if item.active else "disabled" }}</strong>
+      <span>{{ item.name }}</span>
+      <span class="muted">{{ item.target_url }}</span>
+      <code>{{ item.events|join(", ") }}</code>
+    </li>
+    {% endfor %}
+  </ol>
+  {% else %}
+  <p class="muted">No webhooks configured yet.</p>
+  {% endif %}
+  {% if webhook_report.deliveries %}
+  <p class="muted">Latest deliveries:</p>
+  <ol class="archub-audit">
+    {% for item in webhook_report.deliveries[:5] %}
+    <li class="archub-audit__item archub-audit__item--{{ 'info' if item.status == 'delivered' else 'warning' if item.status in ['pending', 'retry'] else 'error' }}">
+      <strong>{{ item.status }}</strong>
+      <span>{{ item.event_type }} · {{ item.webhook_name }}</span>
+      <span class="muted">{{ item.last_error or item.aggregate_id }}</span>
+      <code>{{ item.attempts }} attempts</code>
+    </li>
+    {% endfor %}
+  </ol>
+  {% endif %}
+</section>
+
+<section class="archub-panel">
+  <div class="archub-panel__head">
+    <div>
+      <h2 class="section-title">Workflow</h2>
+      <p class="muted">
+        {{ workflow_report.total }} workflow records · {{ workflow_report.due }} due scheduled actions.
+      </p>
+    </div>
+    <span class="archub-actions archub-actions--inline">
+      <form method="post" action="/admin/archub/workflow/apply-due">
+        <button class="btn btn--ghost" type="submit">Apply due schedules</button>
+      </form>
+      <a class="btn btn--ghost" href="/admin/archub/workflow.json" target="_blank">Workflow JSON</a>
+    </span>
+  </div>
+  {% if workflow_report["items"] %}
+  <ol class="archub-audit">
+    {% for item in workflow_report["items"][:8] %}
+    <li class="archub-audit__item archub-audit__item--{{ 'warning' if item.publish_due or item.unpublish_due else 'info' }}">
+      <strong>{{ item.state }}</strong>
+      <span>{{ item.name }}{% if item.assigned_to %} · {{ item.assigned_to }}{% endif %}</span>
+      <a href="/admin/archub/content/{{ item.node_id }}">{{ item.route_path }}</a>
+      <code>{{ item.content_status }}</code>
+    </li>
+    {% endfor %}
+  </ol>
+  {% else %}
+  <p class="muted">No workflow records yet.</p>
+  {% endif %}
+</section>
+
+<section class="archub-panel">
+  <div class="archub-panel__head">
+    <div>
+      <h2 class="section-title">Content Builder Service</h2>
+      <p class="muted">Отдельный сервис ArcHub для структурных блоков, preview и публичного рендера страниц.</p>
+    </div>
+    <span class="archub-actions archub-actions--inline">
+      <a class="btn btn--ghost" href="/admin/archub/content-builder/blocks.json" target="_blank">Block registry JSON</a>
+      <a class="btn btn--ghost" href="/admin/archub/content-builder/blueprints.json" target="_blank">Blueprints JSON</a>
+      <a class="btn btn--ghost" href="/admin/archub/media.json" target="_blank">Media JSON</a>
+      <a class="btn btn--ghost" href="/admin/archub/dictionary.json" target="_blank">Dictionary JSON</a>
+      <a class="btn" href="/admin/archub/content/new?parent_id=root&content_type=bot_landing">Create landing</a>
+    </span>
+  </div>
+  <div class="archub-builder__palette">
+    {% for block_type in content_builder.block_types[:12] %}
+    <div class="archub-builder__block">
+      <strong>{{ block_type.icon }}</strong>
+      <span>{{ block_type.name }}</span>
+      <small>{{ block_type.category }} · {{ block_type.alias }}</small>
+    </div>
+    {% endfor %}
+  </div>
+  <p class="muted">
+    {{ content_builder.total }} block types and {{ content_builder.blueprint_total }} blueprints:
+    layout, content, media, commerce, runtime API/RAG, analytics and embeds.
+  </p>
+</section>
+
+<section class="archub-panel">
+  <div class="archub-panel__head">
+    <div>
+      <h2 class="section-title">Runtime Content</h2>
+      <p class="muted">Опубликованные записи используются web-интерфейсом, консультациями и RAG.</p>
+      <p class="muted">
+        Snapshot:
+        <code>{{ runtime_export.export_dir }}</code>
+        {% if runtime_export.exists %}
+        · {{ runtime_export.counts.ai_experts|default(0) }} experts
+        · {{ runtime_export.counts.rag_materials|default(0) }} RAG
+        · {{ runtime_export.counts.bot_resources|default(0) }} resources
+        {% else %}
+        · ещё не создан
+        {% endif %}
+        {% if runtime_export.needs_export %}
+        · <strong class="error">требуется export</strong>
+        {% endif %}
+      </p>
+    </div>
+    <span class="archub-actions archub-actions--inline">
+      <form method="post" action="/admin/archub/runtime/sync">
+        <button class="btn" type="submit">Sync existing runtime content</button>
+      </form>
+      <form method="post" action="/admin/archub/runtime/export">
+        <button class="btn btn--ghost" type="submit">Export snapshot</button>
+      </form>
+      <form method="post" action="/admin/archub/runtime/rebuild-rag">
+        <input type="hidden" name="corpus_key" value="">
+        <button class="btn btn--ghost" type="submit">Rebuild RAG indexes</button>
+      </form>
+      <a class="btn btn--ghost" href="/admin/archub/runtime/audit.json" target="_blank">Audit JSON</a>
+    </span>
+  </div>
+  <div class="archub-types">
+    <a class="archub-type" href="/admin/archub/content/new?parent_id=root&content_type=ai_expert">
+      <div class="archub-type__head"><span class="archub-tree__icon">☉</span><strong>AI experts</strong><code>{{ managed_counts.ai_expert }}</code></div>
+      <p class="muted">Персоны, школы, цены в токенах, system prompt и привязка к корпусам.</p>
+    </a>
+    <a class="archub-type" href="/admin/archub/content/new?parent_id=root&content_type=rag_material">
+      <div class="archub-type__head"><span class="archub-tree__icon">※</span><strong>RAG materials</strong><code>{{ managed_counts.rag_material }}</code></div>
+      <p class="muted">Редактируемые опубликованные материалы корпусов разных ИИ-экспертов.</p>
+    </a>
+    <a class="archub-type" href="/admin/archub/content/new?parent_id=root&content_type=bot_resource">
+      <div class="archub-type__head"><span class="archub-tree__icon">▤</span><strong>Bot resources</strong><code>{{ managed_counts.bot_resource }}</code></div>
+      <p class="muted">Help, learning, domain и persona ресурсы, импортированные из данных бота.</p>
+    </a>
+  </div>
+  <div class="archub-runtime-grid">
+    <div>
+      <h3>RAG corpora</h3>
+      <div class="archub-types">
+        {% for corpus in runtime_catalog.corpora %}
+        <a class="archub-type" href="/admin/archub?content_type=rag_material&q={{ corpus.key }}">
+          <div class="archub-type__head">
+            <strong>{{ corpus.title }}</strong>
+            <code>{{ corpus.published_active }}/{{ corpus.nodes_total }}</code>
+          </div>
+          <p class="muted">
+            key=<code>{{ corpus.key }}</code>
+            · files={{ corpus.files_total }}
+            · missing={{ corpus.missing_sources|length }}
+          </p>
+          {% if corpus.index_dir %}<p class="muted"><code>{{ corpus.index_dir }}</code></p>{% endif %}
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+    <div>
+      <h3>Bot resource groups</h3>
+      <div class="archub-types">
+        {% for group in runtime_catalog.bot_resource_groups %}
+        <a class="archub-type" href="/admin/archub?content_type=bot_resource&q={{ group.group }}">
+          <div class="archub-type__head">
+            <strong>{{ group.group }}</strong>
+            <code>{{ group.published_active }}/{{ group.nodes_total }}</code>
+          </div>
+          <p class="muted">
+            files={{ group.files_total }}
+            · missing={{ group.missing_sources|length }}
+          </p>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="archub-panel">
+  <div class="archub-panel__head">
+    <h2 class="section-title">Runtime Audit</h2>
+    <span class="badge badge--{{ 'user' if runtime_audit.ok else 'warn' }}">
+      {{ runtime_audit.error_count }} errors · {{ runtime_audit.warning_count }} warnings
+    </span>
+  </div>
+  {% if runtime_audit.issues %}
+  <ol class="archub-audit">
+    {% for issue in runtime_audit.issues[:12] %}
+    <li class="archub-audit__item archub-audit__item--{{ issue.severity }}">
+      <strong>{{ issue.severity }}</strong>
+      <span>{{ issue.message }}</span>
+      {% if issue.node_id != "runtime" %}
+      <a href="/admin/archub/content/{{ issue.node_id }}">{{ issue.route_path }}</a>
+      {% else %}
+      <span class="muted">{{ issue.route_path }}</span>
+      {% endif %}
+      <code>{{ issue.content_type_alias }}</code>
+    </li>
+    {% endfor %}
+  </ol>
+  {% if runtime_audit.issues|length > 12 %}
+  <p class="muted">Показаны первые 12 из {{ runtime_audit.issues|length }}. Полный список доступен в Audit JSON.</p>
+  {% endif %}
+  {% else %}
+  <p class="muted">Опубликованный runtime-контент проходит проверки.</p>
+  {% endif %}
+</section>
+
+<div class="archub-layout">
+  <section class="archub-panel">
+    <div class="archub-panel__head">
+      <h2 class="section-title">Content Tree</h2>
+      <a class="btn btn--xs btn--ghost" href="/admin/archub/content/new?parent_id=root">+ root child</a>
+    </div>
+    <form class="archub-filter" method="get" action="/admin/archub">
+      <input name="q" value="{{ filters.q }}" placeholder="Search name, route, fields">
+      <select name="content_type">
+        <option value="">All types</option>
+        {% for ct in content_types %}
+        <option value="{{ ct.alias }}" {% if filters.content_type == ct.alias %}selected{% endif %}>{{ ct.icon }} {{ ct.name }}</option>
+        {% endfor %}
+      </select>
+      <select name="status">
+        <option value="">All statuses</option>
+        {% for item in ["published", "draft", "unpublished"] %}
+        <option value="{{ item }}" {% if filters.status == item %}selected{% endif %}>{{ item }}</option>
+        {% endfor %}
+      </select>
+      <button class="btn btn--ghost" type="submit">Filter</button>
+    </form>
+    <ol class="archub-tree">
+      {% if not tree %}
+      <li class="muted">Ничего не найдено.</li>
+      {% endif %}
+      {% for node in tree %}
+      {% set ct = types_by_alias.get(node.content_type_alias) %}
+      <li class="archub-tree__item archub-tree__item--{{ node.status }}">
+        <span class="archub-tree__indent" style="width: {{ node.level * 1.1 }}rem"></span>
+        <span class="archub-tree__icon">{{ ct.icon if ct else "□" }}</span>
+        <a class="archub-tree__link" href="/admin/archub/content/{{ node.node_id }}">{{ node.name }}</a>
+        <span class="badge badge--{{ 'user' if node.status == 'published' else 'warn' }}">{{ node.status }}</span>
+        <span class="muted">{{ node.route_path }}</span>
+        {% if ct and ct.allowed_child_aliases %}
+        <a class="btn btn--xs btn--ghost" href="/admin/archub/content/new?parent_id={{ node.node_id }}">+</a>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+  </section>
+
+  <aside class="archub-panel">
+    <h2 class="section-title">Document Types</h2>
+    <div class="archub-types">
+      {% for ct in content_types %}
+      <div class="archub-type">
+        <div class="archub-type__head">
+          <span class="archub-tree__icon">{{ ct.icon }}</span>
+          <strong>{{ ct.name }}</strong>
+          <code>{{ ct.alias }}</code>
+        </div>
+        <p class="muted">{{ ct.description }}</p>
+        <div class="archub-type__fields">
+          {% for field in ct.fields %}
+          <span class="tag">{{ field.alias }} · {{ field.editor }}</span>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </aside>
+</div>
+{% endblock %}

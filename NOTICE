@@ -1,0 +1,6 @@
+ArcHub CMS
+Copyright 2026 ArcHub contributors.
+
+ArcHub CMS originated as the headless CMS subsystem of the Vedic Jyotish bot web
+platform. The product package under products/archub_cms defines the intended
+independent repository boundary and compatibility imports used during extraction.
