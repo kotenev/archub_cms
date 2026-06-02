@@ -1,0 +1,35 @@
+name: ArcHub CMS CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .[server,yaml]
+          python -m pip install ruff pytest
+
+      - name: Lint
+        run: ruff check src tests
+
+      - name: Syntax check
+        run: python -m compileall -q src
+
+      - name: Test
+        run: pytest -q

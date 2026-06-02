@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block main_class %}page archub-public{% endblock %}
+{% block content %}
+{% if current_user and current_user.is_admin %}
+<a class="back-link" href="/admin/archub/content/{{ node.node_id }}">← Редактировать в ArcHub</a>
+{% endif %}
+{% if preview %}
+<div class="flash flash--warn">Draft preview: this page is rendered from unpublished CMS draft data.</div>
+{% endif %}
+
+{% if content_type.template == "landing" %}
+<section class="hero archub-hero">
+  <div>
+    <h1 class="hero__title">{{ payload.hero_title or payload.title or node.name }}</h1>
+    {% if payload.hero_text %}<p class="hero__subtitle">{{ payload.hero_text }}</p>{% endif %}
+    {% if payload.cta_label and payload.cta_url %}
+    <p><a class="btn btn--lg" href="{{ payload.cta_url }}">{{ payload.cta_label }}</a></p>
+    {% endif %}
+  </div>
+</section>
+{% else %}
+<header class="archub-public__head">
+  <span class="badge">{{ content_type.name }}</span>
+  <h1>{{ payload.title or node.name }}</h1>
+  {% if payload.summary or payload.excerpt or payload.headline %}
+  <p class="muted">{{ payload.summary or payload.excerpt or payload.headline }}</p>
+  {% endif %}
+</header>
+{% endif %}
+
+{% if payload.body %}
+<article class="archub-body">
+  {{ payload.body|safe }}
+</article>
+{% endif %}
+
+{% if rendered_blocks %}
+{{ rendered_blocks|safe }}
+{% endif %}
+
+{% if children %}
+<section>
+  <h2 class="section-title">Разделы</h2>
+  <div class="expert-grid">
+    {% for child in children %}
+    <a class="expert-card" href="{{ child.route_path }}">
+      <strong>{{ child.published.title or child.name }}</strong>
+      {% if child.published.summary or child.published.excerpt or child.published.headline %}
+      <span class="muted">{{ child.published.summary or child.published.excerpt or child.published.headline }}</span>
+      {% endif %}
+      <span class="expert-card__cta">Открыть →</span>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+{% endblock %}
