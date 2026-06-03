@@ -1,0 +1,26 @@
+@startuml
+title ArcHub CMS - Version Cleanup Flow
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+participant "Admin route /\nmaintenance host" as Host
+participant "ArcHubVersioningService" as Versioning
+participant "ArcHubCMSService" as CMS
+database "SQLite" as DB
+participant "Domain event consumer\n(future)" as Consumer
+
+Host -> Versioning : cleanup(node_id, keep_latest,\nolder_than_seconds, actor)
+Versioning -> CMS : cleanup_content_versions()
+CMS -> DB : select version groups\nby node_id
+loop each node
+  CMS -> CMS : keep newest N versions
+  CMS -> CMS : apply age cutoff\nwhen configured
+  CMS -> DB : delete selected old rows
+end
+alt rows deleted
+  CMS -> DB : insert activity\ncontent.versions.cleaned
+end
+CMS --> Versioning : cleanup report
+Versioning -> Consumer : content.versions.cleaned\nreturned event
+Versioning --> Host : deleted_count,\nexamined_nodes,\npolicy echo
+@enduml

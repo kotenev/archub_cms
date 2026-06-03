@@ -1,0 +1,36 @@
+@startuml
+title ArcHub CMS - Container View
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+actor "Content editor" as Editor
+actor "Public visitor" as Visitor
+actor "Host app" as Host
+
+package "archub_cms" {
+  component "create_archub_app()\napp.py" as App
+  component "FastAPI router\nweb.routes" as Routes
+  component "CMS service\nservices.cms" as CMS
+  component "Content Builder\nservices.content_builder" as Builder
+  component "Runtime helpers\nservices.runtime" as Runtime
+  component "RAG registry\nintegrations.rag" as RAG
+  component "Host ports\nports.py" as Ports
+  artifact "Jinja templates\nand static assets" as Assets
+}
+
+database "SQLite\ncontent database" as DB
+folder "Runtime export\nsnapshot directory" as Files
+
+Editor --> Routes : admin forms and JSON APIs
+Visitor --> Routes : public delivery
+Host --> Ports : auth, templates, sources,\naudit, cache invalidation
+App --> Routes : includes router
+Routes --> CMS : content, workflow,\npermissions, delivery
+Routes --> Builder : block catalog,\npreview, audit, render
+Routes --> Runtime : sync/export/rebuild
+Runtime --> RAG : corpus specs and index hook
+Routes --> Assets : render admin/public HTML
+CMS --> DB : SQLite transactions
+CMS --> Files : export runtime content
+@enduml

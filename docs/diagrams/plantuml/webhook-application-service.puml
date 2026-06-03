@@ -1,0 +1,24 @@
+@startuml
+title ArcHub CMS - Webhook Application Service
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+actor "Editor / admin UI" as Editor
+component "Webhook admin routes" as Routes
+component "ArcHubMaintenanceService" as Maintenance
+component "ArcHubWebhookService\napplication.webhooks" as Webhooks
+component "ArcHubDomainEvent" as Event
+component "ArcHubCMSService\ncompatibility API" as CMS
+database "SQLite CMS store" as DB
+cloud "External webhook receiver" as Receiver
+
+Editor --> Routes : manage subscriptions\ninspect deliveries\ndispatch manually
+Routes --> Webhooks : subscriptions / upsert\ndeliveries / dispatch_pending
+Maintenance --> Webhooks : scheduled dispatch_pending
+Webhooks --> CMS : list/upsert/dispatch methods
+CMS --> DB : subscriptions\ndelivery queue\nattempt log
+CMS --> Receiver : signed HTTP request
+Webhooks --> Event : subscription.upserted\ndispatch.completed
+Webhooks --> Routes : compatible JSON payload
+@enduml

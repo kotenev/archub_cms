@@ -1,0 +1,27 @@
+@startuml
+title ArcHub CMS - Domain Events Flow
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+component "Application service" as App
+component "ArcHubDomainEvent" as Event
+component "Audit handler" as Audit
+component "Webhook handler" as Webhook
+component "Cache invalidation handler" as Cache
+component "Runtime export handler" as Runtime
+component "Search/index handler" as Search
+database "Activity log" as Activity
+queue "Webhook deliveries" as Queue
+folder "Runtime snapshots" as Files
+
+App --> Event : return explicit events
+Event ..> Audit : future adapter
+Event ..> Webhook : future adapter
+Event ..> Cache : future adapter
+Event ..> Runtime : future adapter
+Event ..> Search : future adapter
+Audit --> Activity
+Webhook --> Queue
+Runtime --> Files
+@enduml

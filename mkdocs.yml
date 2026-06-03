@@ -28,8 +28,20 @@ nav:
   - Overview: index.md
   - Getting Started: getting-started.md
   - Architecture: architecture.md
+  - Advanced CMS Refactor: architecture/advanced-cms-refactor.md
+  - CMS Capability Matrix: architecture/capability-matrix.md
+  - Content Modeling: architecture/content-modeling.md
+  - Versioning & Cleanup: architecture/versioning-cleanup.md
+  - Publishing & Workflow: architecture/publishing-workflow.md
+  - Media & DAM: architecture/media-dam.md
+  - Package Promotion: architecture/package-promotion.md
+  - Webhook Integrations: architecture/webhook-integrations.md
+  - Governance & Access: architecture/governance-access.md
+  - Runtime & Data: architecture/runtime-and-data.md
+  - Diagrams & Models: architecture/diagrams.md
   - Content Builder: content-builder.md
   - Delivery API: delivery-api.md
+  - Delivery Contracts: architecture/delivery-contracts.md
   - GitHub Demo: demo-site.md
   - Release Notes: release-notes.md
 
@@ -40,4 +52,8 @@ markdown_extensions:
   - tables
   - pymdownx.details
   - pymdownx.highlight
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format

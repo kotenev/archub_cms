@@ -3275,6 +3275,7 @@ class ArcHubCMSService:
                 conn.close()
 
     def list_versions(self, node_id: str, limit: int = 20) -> list[ContentVersion]:
+        limit = max(1, min(int(limit or 20), 500))
         with self._lock:
             conn = self._connect()
             try:
@@ -3302,6 +3303,92 @@ class ArcHubCMSService:
                 ]
             finally:
                 conn.close()
+
+    def cleanup_content_versions(
+        self,
+        *,
+        node_id: str = "",
+        keep_latest: int = 20,
+        older_than_seconds: float | None = 60.0 * 60.0 * 24.0 * 90.0,
+        actor: str = "system",
+    ) -> dict[str, Any]:
+        clean_node_id = node_id.strip()
+        keep_count = max(1, min(int(keep_latest or 20), 500))
+        retention_seconds = (
+            None if older_than_seconds is None else max(0.0, float(older_than_seconds))
+        )
+        cutoff = None if retention_seconds is None else _now() - retention_seconds
+        deleted_versions: list[dict[str, Any]] = []
+        examined_nodes = 0
+        with self._lock:
+            conn = self._connect()
+            try:
+                if clean_node_id:
+                    row = self._get_node_row(conn, clean_node_id)
+                    node_rows = [{"node_id": str(row["node_id"])}]
+                else:
+                    node_rows = conn.execute(
+                        "SELECT DISTINCT node_id FROM archub_content_versions"
+                    ).fetchall()
+                for node_row in node_rows:
+                    current_node_id = str(node_row["node_id"])
+                    examined_nodes += 1
+                    versions = conn.execute(
+                        """
+                        SELECT version_id, node_id, version_no, status, created_at,
+                               created_by, note
+                        FROM archub_content_versions
+                        WHERE node_id = ?
+                        ORDER BY version_no DESC
+                        """,
+                        (current_node_id,),
+                    ).fetchall()
+                    for version in versions[keep_count:]:
+                        created_at = float(version["created_at"] or 0.0)
+                        if cutoff is not None and created_at > cutoff:
+                            continue
+                        deleted_versions.append(
+                            {
+                                "version_id": int(version["version_id"]),
+                                "node_id": str(version["node_id"]),
+                                "version_no": int(version["version_no"]),
+                                "status": str(version["status"]),
+                                "created_at": created_at,
+                                "created_by": str(version["created_by"] or ""),
+                                "note": str(version["note"] or ""),
+                            }
+                        )
+                if deleted_versions:
+                    conn.executemany(
+                        "DELETE FROM archub_content_versions WHERE version_id = ?",
+                        [(item["version_id"],) for item in deleted_versions],
+                    )
+                    self._record_activity(
+                        conn,
+                        node_id=clean_node_id,
+                        action="content.versions.cleaned",
+                        actor=actor,
+                        summary=f"Cleaned {len(deleted_versions)} content versions",
+                        metadata={
+                            "node_id": clean_node_id,
+                            "keep_latest": keep_count,
+                            "older_than_seconds": retention_seconds,
+                            "deleted_count": len(deleted_versions),
+                            "examined_nodes": examined_nodes,
+                        },
+                    )
+                conn.commit()
+            finally:
+                conn.close()
+        return {
+            "ok": True,
+            "node_id": clean_node_id,
+            "keep_latest": keep_count,
+            "older_than_seconds": retention_seconds,
+            "deleted_count": len(deleted_versions),
+            "deleted_versions": deleted_versions[:100],
+            "examined_nodes": examined_nodes,
+        }
 
     def list_content_variants(self, node_id: str) -> list[ContentVariant]:
         if self.get_node(node_id) is None:

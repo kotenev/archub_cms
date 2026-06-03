@@ -1,0 +1,22 @@
+@startuml
+title ArcHub CMS - Schema Update Flow
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+actor "Model editor" as Editor
+participant "Admin route" as Route
+participant "ArcHubModelingService" as Modeling
+participant "ArcHubCMSService" as CMS
+database "SQLite" as DB
+participant "Future handlers" as Handlers
+
+Editor -> Route : POST content-model/types
+Route -> Modeling : upsert_content_type()
+Modeling -> CMS : validate aliases,\nfield data types,\ncompositions,\ntemplate
+CMS -> DB : upsert schema row\nrecord activity
+DB --> CMS : hydrated content type
+CMS --> Modeling : ContentType
+Modeling -> Handlers : content_model.type.upserted\n(future audit/cache/package/search)
+Modeling --> Route : compatible result
+Route --> Editor : redirect or JSON
+@enduml

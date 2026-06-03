@@ -1,0 +1,25 @@
+@startuml
+title ArcHub CMS - Webhook Delivery and Retry Flow
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+participant "Publishing command" as Publishing
+participant "ArcHubCMSService" as CMS
+database "SQLite" as DB
+participant "ArcHubWebhookService" as Webhooks
+participant "Receiver" as Receiver
+
+Publishing -> CMS : publish_node()
+CMS -> DB : enqueue matching webhook deliveries
+
+Webhooks -> CMS : dispatch_pending(limit)
+CMS -> DB : select pending/retry due rows
+CMS -> Receiver : POST payload + ArcHub headers
+alt 2xx response
+    CMS -> DB : mark delivered\nset delivered_at
+else error or non-2xx
+    CMS -> DB : increment attempts\nretry with backoff\nor mark failed
+end
+CMS --> Webhooks : processed, delivered,\nretry, failed counts
+Webhooks --> Webhooks : emit webhook.dispatch.completed
+@enduml

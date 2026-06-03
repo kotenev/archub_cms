@@ -28,3 +28,10 @@ ArcHub separates draft editing from published delivery.
 
 Preview responses use `Cache-Control: private, no-store`; published delivery
 uses deterministic `ETag` and `Last-Modified` headers.
+
+## Advanced query contract
+
+The JSON delivery endpoints are now routed through
+`archub_cms.application.delivery.ArcHubDeliveryService`. Use
+[Delivery Contracts](architecture/delivery-contracts.md) for `fields`, `expand`,
+`Start-Item`, culture, segment, and projection details.

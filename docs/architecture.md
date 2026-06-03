@@ -1,31 +1,105 @@
 # Architecture
 
-ArcHub CMS is organized around a clean product boundary.
+ArcHub CMS is a standalone FastAPI package that provides a backoffice, content
+modeling, public delivery, and runtime-content export surface for host
+applications. The package is intentionally self-contained: hosts embed the
+router and connect authentication, templates, runtime sources, audit, and cache
+invalidation through ports.
 
-## Layers
+## System Context
 
-| Layer | Package | Responsibility |
+```mermaid
+flowchart LR
+    editor[Content editor] -->|Backoffice HTTP| routes[ArcHub FastAPI routes]
+    visitor[Public visitor] -->|Published HTML/API| routes
+    host[FastAPI host app] -->|include_router and ports| routes
+    routes --> cms[ArcHubCMSService]
+    routes --> builder[Content Builder service]
+    cms --> sqlite[(SQLite CMS store)]
+    cms --> runtime[Runtime snapshot files]
+    rag[RAG/indexing process] -->|consume or rebuild| runtime
+```
+
+## Internal Modules
+
+| Module | Responsibility | Key files |
 |---|---|---|
-| Storage and content model | `archub_cms.services.cms` | Content types, tree, versions, workflow, delivery payloads |
-| Content Builder | `archub_cms.services.content_builder` | Block registry, normalization, audit and rendering |
-| Runtime exports | `archub_cms.services.runtime` | Export published bot/RAG material snapshots |
-| Web routes | `archub_cms.web.routes` | Backoffice, public delivery and headless API |
-| Integration ports | `archub_cms.ports` | Auth, templates, runtime sources, audit and cache invalidation |
-| RAG registry | `archub_cms.integrations.rag` | Corpus specs and external indexer hook |
+| Web routes | Admin UI, JSON management APIs, preview, public HTML, feed, sitemap, and delivery APIs. | `src/archub_cms/web/routes.py`, `_common.py` |
+| CMS service | Content types, data types, templates, tree state, versions, permissions, locks, workflow, redirects, domains, webhooks, delivery payloads, packages, runtime exports. | `src/archub_cms/services/cms.py` |
+| Content Builder | Block registry, blueprint catalog, JSON normalization, previews, audit, and public HTML rendering. | `src/archub_cms/services/content_builder.py` |
+| Runtime helpers | Imports host runtime materials and exports published snapshots. | `src/archub_cms/services/runtime.py` |
+| Integration ports | Stable host extension contracts. | `src/archub_cms/ports.py` |
+| RAG integration | Corpus registry and external-indexer hook. | `src/archub_cms/integrations/rag.py` |
 
-## Host integration
+## Request Surfaces
 
-The standalone release ships with local defaults. Production hosts should replace
-or wrap:
+The admin surface starts at `/admin/archub` and includes model, content,
+workflow, package, preview-token, access, lock, media, dictionary, webhook, and
+runtime actions. The delivery surface starts at `/cms` and exposes HTML pages,
+`/cms/api/tree`, `/cms/api/content`, `/cms/api/search`, tags, RSS, sitemap, and
+preview-token resolution.
 
-- `AuthPort` for editor identity;
-- `TemplatePort` for host-specific layout integration;
-- `RuntimeSourcePort` for domain-specific resources;
-- `CacheInvalidationPort` for process caches;
-- `AuditSink` for structured audit events.
+## Related Architecture Pages
 
-## Persistence
+- [Advanced CMS Refactor](architecture/advanced-cms-refactor.md) documents the
+  Umbraco-inspired target architecture and refactoring strategy.
+- [CMS Capability Matrix](architecture/capability-matrix.md) maps ArcHub
+  capabilities to Umbraco, Strapi, Contentful, and Sanity patterns.
+- [Content Modeling](architecture/content-modeling.md) documents schema-driven
+  data types, templates, document types, compositions, and blueprints.
+- [Versioning & Cleanup](architecture/versioning-cleanup.md) documents content
+  history, rollback, and retention cleanup commands.
+- [Publishing & Workflow](architecture/publishing-workflow.md) documents
+  lifecycle commands, domain events, and runtime export side effects.
+- [Media & DAM](architecture/media-dam.md) documents media policy, folder
+  reports, duplicate detection, usage reports, and orphaned assets.
+- [Package Promotion](architecture/package-promotion.md) documents package
+  export, inspection, dry-run import plans, and promotion events.
+- [Webhook Integrations](architecture/webhook-integrations.md) documents
+  webhook subscriptions, delivery logs, signed dispatch, and retry handling.
+- [Governance & Access](architecture/governance-access.md) documents editor
+  permissions, public access policies, member gating, and route guards.
+- [Runtime & Data](architecture/runtime-and-data.md) documents SQLite state,
+  runtime snapshots, delivery caching, and operational flows.
+- [Diagrams & Models](architecture/diagrams.md) documents Mermaid, PlantUML,
+  Archi/ArchiMate, and Structurizr source files.
 
-The initial release uses SQLite for portability. The service layer keeps the
-storage boundary centralized, so a future PostgreSQL adapter can be added without
-changing public delivery routes.
+## Content Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> Draft
+    Draft --> InReview: workflow submit
+    InReview --> Approved: approve
+    Approved --> Scheduled: schedule publish
+    Approved --> Published: publish now
+    Scheduled --> Published: due workflow job
+    Published --> Unpublished: unpublish
+    Draft --> Trashed: delete
+    Unpublished --> Draft: edit
+    Trashed --> Draft: restore
+    Trashed --> [*]: purge
+```
+
+Publishing validates draft payloads against the content type schema, writes
+published JSON, appends a version, records activity, enqueues matching webhooks,
+and refreshes runtime exports when runtime-managed content changes.
+
+## Extension Boundary
+
+Production hosts should keep domain behavior outside this package. Implement
+`AuthPort` for editor/member identity, `TemplatePort` for host layouts,
+`RuntimeSourcePort` for domain resources, `CacheInvalidationPort` for process
+caches, and `AuditSink` for structured audit events. The package must not import
+host applications such as bot runtime packages directly.
+
+## Quality Attributes
+
+- **Embeddability:** FastAPI hosts can include `archub_cms.web.routes.router` or
+  create the standalone app with `create_archub_app()`.
+- **Portability:** SQLite and local filesystem exports keep demos and tests
+  simple; storage logic is centralized in `ArcHubCMSService`.
+- **Delivery performance:** Public JSON responses use stable ETags,
+  `Last-Modified`, and cache-control headers.
+- **Governance:** Permissions, public access rules, locks, workflow, previews,
+  versions, audit activity, and webhooks are part of the core service.

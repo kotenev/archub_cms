@@ -1,0 +1,22 @@
+@startuml
+title ArcHub CMS - Package Promotion Application Service
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+actor "Editor / release manager" as Editor
+component "Package admin routes\n/export /inspect /plan /import" as Routes
+component "ArcHubPackageService\napplication.packages" as Packages
+component "ArcHubDomainEvent" as Event
+component "ArcHubCMSService\ncompatibility API" as CMS
+database "SQLite CMS store" as DB
+component "Future promotion handlers\nsigning, audit, rollback,\nexternal environments" as Handlers
+
+Editor --> Routes : package request
+Routes --> Packages : export / inspect\nplan_import / import_package
+Packages --> CMS : existing package methods
+CMS --> DB : content model, nodes,\nmedia, domains, workflows
+Packages --> Event : package.exported\npackage.import.planned\npackage.imported
+Event ..> Handlers : future integration boundary
+Packages --> Routes : compatible JSON payload
+@enduml

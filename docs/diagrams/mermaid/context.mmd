@@ -1,0 +1,9 @@
+flowchart LR
+    editor[Content editor] -->|Backoffice HTTP| routes[ArcHub FastAPI routes]
+    visitor[Public visitor] -->|Published HTML/API| routes
+    host[FastAPI host app] -->|include_router and ports| routes
+    routes --> cms[ArcHubCMSService]
+    routes --> builder[Content Builder service]
+    cms --> sqlite[(SQLite CMS store)]
+    cms --> runtime[Runtime snapshot files]
+    rag[RAG/indexing process] -->|consume or rebuild| runtime

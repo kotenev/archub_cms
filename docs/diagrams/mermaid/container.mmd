@@ -1,0 +1,21 @@
+flowchart TB
+    subgraph Package[archub_cms package]
+        App[create_archub_app]
+        Routes[web.routes]
+        CMS[services.cms]
+        Builder[services.content_builder]
+        Runtime[services.runtime]
+        Ports[ports.py]
+        RAG[integrations.rag]
+    end
+
+    Editor[Content editor] --> Routes
+    Visitor[Public visitor] --> Routes
+    Host[Host FastAPI app] --> Ports
+    App --> Routes
+    Routes --> CMS
+    Routes --> Builder
+    Routes --> Runtime
+    Runtime --> RAG
+    CMS --> DB[(SQLite)]
+    CMS --> Files[Runtime export files]

@@ -486,6 +486,18 @@
     {% endif %}
 
     <h2 class="section-title">Versions</h2>
+    <form class="archub-actions archub-actions--inline" method="post" action="/admin/archub/content/{{ node.node_id }}/versions/cleanup">
+      <input type="hidden" name="redirect" value="1">
+      <label>
+        Keep latest
+        <input name="keep_latest" type="number" min="1" max="500" value="20">
+      </label>
+      <label>
+        Older than seconds
+        <input name="older_than_seconds" type="number" min="0" value="7776000">
+      </label>
+      <button class="btn btn--xs btn--ghost" type="submit">Cleanup</button>
+    </form>
     <table class="table">
       <thead><tr><th class="num">#</th><th>Status</th><th>By</th><th>When</th><th></th></tr></thead>
       <tbody>

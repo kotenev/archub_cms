@@ -1,0 +1,29 @@
+@startuml
+title ArcHub CMS - Package Dry-Run and Import Flow
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+actor "Release manager" as Manager
+participant "Package route" as Route
+participant "ArcHubPackageService" as Packages
+participant "ArcHubCMSService" as CMS
+database "SQLite" as DB
+
+Manager -> Route : POST /packages/plan
+Route -> Packages : plan_import(package, overwrite)
+Packages -> CMS : inspect_content_package()
+CMS -> DB : read current model and tree
+CMS --> Packages : inspection report
+Packages -> CMS : plan_content_package_import()
+CMS --> Packages : create/update/skip/conflict actions
+Packages --> Route : plan payload + package.import.planned event
+Route --> Manager : dry-run JSON
+
+Manager -> Route : POST /packages/import
+Route -> Packages : import_package(package, overwrite)
+Packages -> CMS : import_content_package()
+CMS -> DB : upsert model, nodes,\nmedia, domains, redirects,\naccess, workflows
+CMS --> Packages : import result
+Packages --> Route : result + package.imported\nor package.import.rejected
+Route --> Manager : import JSON
+@enduml

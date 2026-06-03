@@ -1,0 +1,35 @@
+@startuml
+!include <archimate/Archimate>
+title ArcHub CMS - ArchiMate Layer View
+
+Business_Actor(editor, "Content editor")
+Business_Actor(visitor, "Public visitor")
+Business_Actor(runtimeConsumer, "Runtime/RAG consumer")
+
+Application_Service(adminService, "Backoffice service")
+Application_Service(deliveryService, "Published delivery service")
+Application_Component(routes, "FastAPI routes")
+Application_Component(cms, "CMS service")
+Application_Component(builder, "Content Builder service")
+Application_Component(runtime, "Runtime export service")
+Application_Interface(ports, "Host integration ports")
+
+Technology_Node(process, "FastAPI process")
+Artifact(templates, "Templates and static assets")
+Data_Object(store, "SQLite CMS store")
+Data_Object(snapshot, "Runtime snapshot files")
+
+Rel_UsedBy(adminService, editor)
+Rel_UsedBy(deliveryService, visitor)
+Rel_Serving(routes, adminService)
+Rel_Serving(routes, deliveryService)
+Rel_Composition(process, routes)
+Rel_Composition(routes, cms)
+Rel_Composition(routes, builder)
+Rel_Composition(routes, runtime)
+Rel_Serving(ports, routes)
+Rel_Access(cms, store)
+Rel_Access(routes, templates)
+Rel_Access(runtime, snapshot)
+Rel_UsedBy(snapshot, runtimeConsumer)
+@enduml

@@ -1,0 +1,26 @@
+@startuml
+title ArcHub CMS - Governance Application Service
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+actor "Editor / admin user" as Editor
+actor "Public member" as Member
+component "Route guards\n_guard / _can" as Guards
+component "Admin permission\nand access routes" as Routes
+component "Public delivery routes" as Delivery
+component "ArcHubGovernanceService\napplication.governance" as Governance
+component "ArcHubDomainEvent" as Event
+component "ArcHubCMSService\ncompatibility API" as CMS
+database "SQLite CMS store" as DB
+
+Editor --> Guards : backoffice request
+Guards --> Governance : can_user_perform()
+Editor --> Routes : grant/revoke/update access
+Routes --> Governance : permission and access use cases
+Member --> Delivery : read protected content
+Delivery --> Governance : can_access_public_content()
+Governance --> CMS : existing permission/access methods
+CMS --> DB : permission rules\npublic access rules\nactivity
+Governance --> Event : governance.permission.*\ngovernance.public_access.*
+@enduml

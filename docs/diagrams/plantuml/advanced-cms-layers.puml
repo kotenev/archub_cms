@@ -1,0 +1,60 @@
+@startuml
+title ArcHub CMS - Target Advanced CMS Layers
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+package "Adapters" {
+  component "FastAPI routes\nweb.routes" as Routes
+  component "Jinja templates\nstatic UI" as UI
+  component "Host ports\nports.py" as Ports
+}
+
+package "Application" {
+  component "Publishing use cases" as Publishing
+  component "Delivery read models" as Delivery
+  component "Package import/export" as Packages
+  component "Media management" as Media
+  component "Webhook orchestration" as Webhooks
+  component "Maintenance jobs" as Jobs
+}
+
+package "Domain" {
+  component "Content model\nnodes/types/fields" as Content
+  component "Workflow and permissions" as Governance
+  component "Published content facade" as Published
+  component "Domain events" as Events
+}
+
+package "Infrastructure" {
+  database "SQLite store" as SQLite
+  folder "Runtime snapshot files" as RuntimeFiles
+  component "Webhook transport" as Transport
+  component "RAG index hook" as Rag
+}
+
+Routes --> Publishing
+Routes --> Delivery
+Routes --> Packages
+Routes --> Media
+Routes --> Jobs
+Routes --> UI
+Routes --> Ports
+Publishing --> Content
+Publishing --> Governance
+Publishing --> Events
+Delivery --> Published
+Delivery --> Content
+Packages --> Content
+Media --> Content
+Webhooks --> Events
+Jobs --> Publishing
+Jobs --> Webhooks
+Jobs --> Delivery
+Content --> SQLite
+Governance --> SQLite
+Published --> SQLite
+Events --> Transport
+Events --> RuntimeFiles
+RuntimeFiles --> Rag
+@enduml
