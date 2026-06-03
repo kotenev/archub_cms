@@ -10,7 +10,7 @@ import the model into their preferred tool.
 | Format | Files | Use |
 |---|---|---|
 | Mermaid | `docs/diagrams/mermaid/*.mmd` | Quick rendered diagrams in MkDocs and GitHub previews. |
-| PlantUML | `docs/diagrams/plantuml/*.puml` | System context, container, publishing, target modularization, helper, and maintenance diagrams. |
+| PlantUML | `docs/diagrams/plantuml/*.puml` | System context, container, publishing, delivery, media, package, helper, and maintenance diagrams. |
 | Archi/ArchiMate | `docs/diagrams/archi/*` | ArchiMate layer view and CSV import model for Archi users. |
 | Structurizr | `docs/diagrams/structurizr/workspace.dsl` | C4-style model for system context and container views. |
 
@@ -94,3 +94,9 @@ point, or render the ArchiMate PlantUML source directly.
   publish, workflow, trash, and runtime side effects.
 - `domain-events-flow.puml`: future event-handler direction for audit,
   webhooks, cache invalidation, indexing, and runtime export.
+- `media-library-service.puml`: media policy and report application boundary.
+- `media-usage-report.puml`: usage, duplicate, folder, and orphaned asset
+  report generation.
+- `package-promotion-service.puml`: package export/import application service
+  boundary and event flow.
+- `package-import-plan.puml`: package dry-run planning and import sequence.

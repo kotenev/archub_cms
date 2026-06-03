@@ -17,6 +17,8 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 
 from archub_cms.application.delivery import DeliveryQuery, get_archub_delivery_service
+from archub_cms.application.media import get_archub_media_service
+from archub_cms.application.packages import get_archub_package_service
 from archub_cms.application.publishing import get_archub_publishing_service
 from archub_cms.services.cms import (
     ContentNode,
@@ -705,13 +707,13 @@ async def export_content_package_json(
         return RedirectResponse("/login", status_code=302)
     if not _can(user, "settings"):
         return _permission_denied("settings")
-    package = get_archub_cms_service().export_content_package(
+    package = get_archub_package_service().export(
         name=name,
         node_ids=_split_aliases(node_ids),
         include_descendants=include_descendants,
         exported_by=user.username,
     )
-    return JSONResponse(package)
+    return JSONResponse(package.payload)
 
 
 @router.post("/admin/archub/packages/inspect")
@@ -726,7 +728,8 @@ async def inspect_content_package(request: Request):
         package = _parse_json_object(form.get("package_json", "{}"))
     except (json.JSONDecodeError, ValueError) as exc:
         return JSONResponse({"error": str(exc)}, status_code=400)
-    return JSONResponse(get_archub_cms_service().inspect_content_package(package))
+    result = get_archub_package_service().inspect(package, actor=user.username)
+    return JSONResponse(result.payload, status_code=result.status_code)
 
 
 @router.post("/admin/archub/packages/plan")
@@ -741,12 +744,12 @@ async def plan_content_package_import(request: Request):
         package = _parse_json_object(form.get("package_json", "{}"))
     except (json.JSONDecodeError, ValueError) as exc:
         return JSONResponse({"error": str(exc)}, status_code=400)
-    return JSONResponse(
-        get_archub_cms_service().plan_content_package_import(
-            package,
-            overwrite=form.get("overwrite", "").lower() in {"1", "true", "yes", "on"},
-        )
+    result = get_archub_package_service().plan_import(
+        package,
+        overwrite=form.get("overwrite", "").lower() in {"1", "true", "yes", "on"},
+        actor=user.username,
     )
+    return JSONResponse(result.payload, status_code=result.status_code)
 
 
 @router.post("/admin/archub/packages/import")
@@ -759,14 +762,14 @@ async def import_content_package(request: Request):
     form = await parse_form(request)
     try:
         package = _parse_json_object(form.get("package_json", "{}"))
-        result = get_archub_cms_service().import_content_package(
+        result = get_archub_package_service().import_package(
             package,
             imported_by=user.username,
             overwrite=form.get("overwrite", "").lower() in {"1", "true", "yes", "on"},
         )
     except (json.JSONDecodeError, ValueError) as exc:
         return JSONResponse({"error": str(exc)}, status_code=400)
-    return JSONResponse(result, status_code=200 if result.get("ok") else 400)
+    return JSONResponse(result.payload, status_code=result.status_code)
 
 
 @router.get("/admin/archub/media.json")
@@ -776,27 +779,8 @@ async def media_library_json(request: Request, folder: str = "", limit: int = 10
         return RedirectResponse("/login", status_code=302)
     if not _can(user, "media"):
         return _permission_denied("media")
-    assets = get_archub_cms_service().list_media_assets(folder=folder, limit=limit)
     return JSONResponse(
-        {
-            "assets": [
-                {
-                    "asset_id": item.asset_id,
-                    "filename": item.filename,
-                    "original_name": item.original_name,
-                    "content_type": item.content_type,
-                    "url": item.url,
-                    "folder": item.folder,
-                    "alt_text": item.alt_text,
-                    "tags": list(item.tags),
-                    "metadata": item.metadata,
-                    "created_at": item.created_at,
-                    "created_by": item.created_by,
-                }
-                for item in assets
-            ],
-            "total": len(assets),
-        }
+        get_archub_media_service().library_report(folder=folder, limit=limit).as_dict()
     )
 
 

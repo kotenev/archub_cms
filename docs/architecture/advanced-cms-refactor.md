@@ -4,7 +4,8 @@ This refactor aligns ArcHub CMS with proven ideas from Umbraco and modern
 headless CMS platforms while preserving the package's FastAPI-first public API.
 The implemented refactoring introduces stable architectural seams:
 `ArcHubDeliveryService`, `ArcHubPublishingService`, `ArcHubDomainEvent`,
-`ArcHubContentHelper`, `PublishedContent`, and `ArcHubMaintenanceService`.
+`ArcHubMediaService`, `ArcHubPackageService`, `ArcHubContentHelper`,
+`PublishedContent`, and `ArcHubMaintenanceService`.
 
 ## Design Inputs
 
@@ -93,6 +94,35 @@ triggered directly from route handlers:
 This is the current boundary for future event handlers: audit, webhooks, cache
 invalidation, runtime exports, search indexing, and external host integrations.
 
+### Media/DAM Application Service
+
+`ArcHubMediaService` owns media-library policy and reports:
+
+- allowed content type policy via `ARCHUB_ALLOWED_MEDIA_CONTENT_TYPES`;
+- required alt text for image references;
+- folder summary reports;
+- duplicate detection by metadata hash or original filename/content type;
+- usage reports by scanning draft and published content payloads;
+- orphaned asset detection for cleanup workflows.
+
+This follows Umbraco media-library guidance and common DAM patterns from
+Strapi, Contentful, and Sanity while keeping file storage provider concerns
+outside the standalone package.
+
+### Package Promotion Application Service
+
+`ArcHubPackageService` owns package promotion use cases:
+
+- export packages and emit `package.exported`;
+- inspect package schema and section counts;
+- create dry-run import plans and emit `package.import.planned`;
+- import or reject packages with explicit result events;
+- keep admin route payloads compatible while service callers can consume
+  domain events.
+
+This aligns ArcHub with Umbraco package concepts and environment-promotion
+patterns from Contentful, Strapi, and Sanity.
+
 ### Maintenance Service
 
 `ArcHubMaintenanceService.run_once()` centralizes operational work:
@@ -110,7 +140,7 @@ FastAPI lifespan worker controlled by `ARCHUB_BACKGROUND_JOBS=1`.
 
 The large CMS service should be split only behind compatibility tests:
 
-| Future module | Extract from current service | Responsibility |
+| Module seam | Extract from current service | Responsibility |
 |---|---|---|
 | `domain/content.py` | dataclasses and validation helpers | Content node/type/value objects and invariants. |
 | `application/publishing.py` | publish/unpublish/workflow methods | Publish use cases, domain events, cache/runtime side effects. |
@@ -132,6 +162,10 @@ Primary source files:
 - `docs/diagrams/plantuml/delivery-projection-flow.puml`
 - `docs/diagrams/plantuml/publishing-application-service.puml`
 - `docs/diagrams/plantuml/domain-events-flow.puml`
+- `docs/diagrams/plantuml/media-library-service.puml`
+- `docs/diagrams/plantuml/media-usage-report.puml`
+- `docs/diagrams/plantuml/package-promotion-service.puml`
+- `docs/diagrams/plantuml/package-import-plan.puml`
 
 Render them with:
 
@@ -155,9 +189,9 @@ plantuml -tsvg docs/diagrams/plantuml/*.puml
 - Delivery API uses `ArcHubDeliveryService` for controlled property
   expansion/limiting and start-item context for multi-site trees.
 - Media has usage reports, duplicate detection, allowed type policy, and access
-  checks.
-- Package import/export can promote content models and content between
-  environments with preview plans.
+  checks through `ArcHubMediaService`.
+- Package import/export runs through `ArcHubPackageService` with inspection,
+  dry-run planning, and promotion events.
 - Architecture diagrams are updated with each extracted module.
 
 ## References
@@ -167,5 +201,12 @@ plantuml -tsvg docs/diagrams/plantuml/*.puml
 - [Strapi REST API parameters](https://docs.strapi.io/cms/api/rest/parameters)
 - [Contentful environments](https://www.contentful.com/help/environments/)
 - [Contentful webhooks](https://www.contentful.com/developers/docs/concepts/webhooks/)
+- [Contentful media](https://www.contentful.com/help/media/)
+- [Umbraco Packages](https://docs.umbraco.com/umbraco-cms/extending/packages)
+- [Umbraco Media Management](https://docs.umbraco.com/umbraco-cms/tutorials/editors-manual/media-management)
+- [Strapi Media Library](https://docs.strapi.io/cms/features/media-library)
+- [Strapi Data Management](https://docs.strapi.io/cms/features/data-management)
+- [Sanity assets](https://www.sanity.io/docs/content-lake/assets)
+- [Sanity datasets](https://www.sanity.io/docs/content-lake/datasets)
 - [Sanity roles](https://www.sanity.io/docs/user-guides/roles)
 - [Sanity schemas](https://www.sanity.io/docs/schemas-and-forms)

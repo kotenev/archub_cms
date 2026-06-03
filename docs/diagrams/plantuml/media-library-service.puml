@@ -1,0 +1,22 @@
+@startuml
+title ArcHub CMS - Media/DAM Application Service
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+actor "Editor / admin UI" as Editor
+component "Admin media route\n/admin/archub/media.json" as Route
+component "ArcHubMediaService\napplication.media" as Media
+component "MediaPolicy" as Policy
+component "ArcHubCMSService\ncompatibility API" as CMS
+database "SQLite CMS store" as DB
+component "Host storage/CDN\nexternal provider" as Storage
+
+Editor --> Route : list media report
+Route --> Media : library_report()
+Media --> Policy : allowed types\nalt text rules
+Media --> CMS : list_media_assets()\nlist_tree()
+CMS --> DB : media metadata\ncontent payloads
+Media ..> Storage : references URLs only\nno storage coupling
+Media --> Route : assets, folders,\nduplicates, usage,\norphaned assets
+@enduml

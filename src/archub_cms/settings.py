@@ -20,6 +20,19 @@ class ArcHubSettings:
     background_jobs_enabled: bool = False
     background_job_interval_seconds: int = 60
     webhook_dispatch_limit: int = 50
+    allowed_media_content_types: tuple[str, ...] = (
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+        "image/svg+xml",
+        "video/mp4",
+        "audio/mpeg",
+        "application/pdf",
+        "text/plain",
+        "text/markdown",
+        "application/json",
+    )
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> ArcHubSettings:
@@ -42,6 +55,10 @@ class ArcHubSettings:
                 60,
             ),
             webhook_dispatch_limit=_positive_int(source.get("ARCHUB_WEBHOOK_DISPATCH_LIMIT"), 50),
+            allowed_media_content_types=_csv_tuple(
+                source.get("ARCHUB_ALLOWED_MEDIA_CONTENT_TYPES"),
+                cls.allowed_media_content_types,
+            ),
         )
 
 
@@ -59,6 +76,13 @@ def _truthy(value: str | None) -> bool:
     if value is None:
         return False
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _csv_tuple(value: str | None, default: tuple[str, ...]) -> tuple[str, ...]:
+    if value is None:
+        return default
+    items = tuple(item.strip() for item in value.split(",") if item.strip())
+    return items or default
 
 
 def _public_root(value: str) -> str:

@@ -25,10 +25,11 @@ refactoring seam added in this change, and future extraction work.
 | Published content helper | Added | `ArcHubContentHelper` and `PublishedContent` provide Umbraco-style helper APIs. |
 | Dictionary/localization helper | Added | Helper resolves dictionary values with culture fallback. |
 | Media helper | Added | Helper resolves registered media by ID or URL. |
-| Environments/promotions | Partial | Package export/import exists; target architecture should add environment metadata and migration scripts. |
+| Media/DAM reports | Added | `ArcHubMediaService` adds allowed-type policy, folder summaries, duplicate groups, usage reports, and orphaned asset detection. |
+| Environments/promotions | Partial + refactored | `ArcHubPackageService` wraps export, inspection, dry-run plans, import, and promotion events; target architecture should add environment metadata and migration scripts. |
 | Property expansion/limiting | Added | `fields`, `expand=properties[...]`, and `Start-Item` are handled by `application.delivery`. |
 | Content version cleanup | Future | Add scheduled cleanup policy with per-content-type override. |
-| Media cleanup/duplicate checks | Future | Add media usage graph, duplicate detector, allowed type policy, and orphan cleanup. |
+| Media cleanup/duplicate checks | Added | Duplicate/orphan reports are exposed as computed read models; destructive cleanup remains a future explicit command. |
 | Realtime collaboration | Future | Track editor presence, optimistic concurrency, and conflict resolution. |
 | GraphQL/OData delivery | Future | REST is present; optional query endpoint can be added after permission and expansion rules are formalized. |
 | Audit/event bus | Partial + refactored | Activity exists; lifecycle commands now return `ArcHubDomainEvent` objects as the integration boundary. |
@@ -42,19 +43,19 @@ refactoring seam added in this change, and future extraction work.
 | Published-content read model | Umbraco `IPublishedContent` and helper APIs | Use `PublishedContent` and `ArcHubContentHelper` in templates and host integrations. |
 | Operational background jobs | Umbraco scheduled publishing and cleanup jobs | Use `ArcHubMaintenanceService` as the host-neutral job boundary. |
 | Composable integrations | Umbraco composers, modern headless webhooks/apps | Keep host ports and add explicit event handlers behind publishing/package/runtime actions. |
-| Environment promotion | Contentful environments, package migration flows | Evolve package import/export into environment-aware migrations and dry-run plans. |
+| Environment promotion | Umbraco packages, Contentful environments, Strapi transfers, Sanity datasets | Route package operations through `ArcHubPackageService`; add environment metadata, signatures, and rollback plans later. |
 | Fine-grained roles | Umbraco user groups, Sanity roles, Strapi RBAC | Keep permission rules; add reusable role templates and section-level policies. |
 
 ## Next Engineering Slices
 
 1. Extend `application/delivery.py` with media-reference expansion and
    collection pagination metadata.
-2. Extend publishing events with validation and package migration events:
-   `content.publishing.validated`, `package.import.planned`,
-   `runtime.export.requested`.
+2. Extend publishing and package events with validation, signing, rollback, and
+   runtime export intent metadata.
 3. Replace remaining route-level side effects with event handlers for audit, webhooks,
    runtime export, and cache invalidation.
-4. Add media policy enforcement and usage reports.
+4. Add explicit media cleanup commands, thumbnail metadata, and external storage
+   provider ports.
 5. Add GraphQL/OData-style query adapters only after REST projection limits are
    covered by compatibility tests.
 
@@ -65,5 +66,12 @@ refactoring seam added in this change, and future extraction work.
 - [Strapi REST API parameters](https://docs.strapi.io/cms/api/rest/parameters)
 - [Contentful API overview](https://www.contentful.com/api/)
 - [Contentful environments](https://www.contentful.com/help/environments/)
+- [Contentful media](https://www.contentful.com/help/media/)
+- [Umbraco Packages](https://docs.umbraco.com/umbraco-cms/extending/packages)
+- [Umbraco Media Management](https://docs.umbraco.com/umbraco-cms/tutorials/editors-manual/media-management)
+- [Strapi Media Library](https://docs.strapi.io/cms/features/media-library)
+- [Strapi Data Management](https://docs.strapi.io/cms/features/data-management)
+- [Sanity assets](https://www.sanity.io/docs/content-lake/assets)
+- [Sanity datasets](https://www.sanity.io/docs/content-lake/datasets)
 - [Sanity roles](https://www.sanity.io/docs/user-guides/roles)
 - [Sanity schemas and forms](https://www.sanity.io/docs/schemas-and-forms)

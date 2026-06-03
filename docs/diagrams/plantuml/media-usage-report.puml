@@ -1,0 +1,23 @@
+@startuml
+title ArcHub CMS - Media Usage Report
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+participant "ArcHubMediaService" as Media
+participant "ArcHubCMSService" as CMS
+database "SQLite" as DB
+
+Media -> CMS : list_media_assets(limit=500)
+CMS -> DB : SELECT archub_media_assets
+DB --> CMS : media rows
+CMS --> Media : MediaAsset[]
+Media -> CMS : list_tree(include_trashed=True)
+CMS -> DB : SELECT content nodes
+DB --> CMS : draft and published payloads
+CMS --> Media : ContentNode[]
+Media -> Media : scan asset_id, url,\nfilename in payload JSON
+Media -> Media : group folders
+Media -> Media : group duplicates by hash\nor original_name/content_type
+Media -> Media : mark orphaned assets
+Media --> Media : MediaLibraryReport
+@enduml

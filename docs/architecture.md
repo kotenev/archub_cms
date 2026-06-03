@@ -47,6 +47,10 @@ preview-token resolution.
   capabilities to Umbraco, Strapi, Contentful, and Sanity patterns.
 - [Publishing & Workflow](architecture/publishing-workflow.md) documents
   lifecycle commands, domain events, and runtime export side effects.
+- [Media & DAM](architecture/media-dam.md) documents media policy, folder
+  reports, duplicate detection, usage reports, and orphaned assets.
+- [Package Promotion](architecture/package-promotion.md) documents package
+  export, inspection, dry-run import plans, and promotion events.
 - [Runtime & Data](architecture/runtime-and-data.md) documents SQLite state,
   runtime snapshots, delivery caching, and operational flows.
 - [Diagrams & Models](architecture/diagrams.md) documents Mermaid, PlantUML,
