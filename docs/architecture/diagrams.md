@@ -10,7 +10,7 @@ import the model into their preferred tool.
 | Format | Files | Use |
 |---|---|---|
 | Mermaid | `docs/diagrams/mermaid/*.mmd` | Quick rendered diagrams in MkDocs and GitHub previews. |
-| PlantUML | `docs/diagrams/plantuml/*.puml` | System context, container, and publishing sequence diagrams. |
+| PlantUML | `docs/diagrams/plantuml/*.puml` | System context, container, publishing, target modularization, helper, and maintenance diagrams. |
 | Archi/ArchiMate | `docs/diagrams/archi/*` | ArchiMate layer view and CSV import model for Archi users. |
 | Structurizr | `docs/diagrams/structurizr/workspace.dsl` | C4-style model for system context and container views. |
 
@@ -74,3 +74,15 @@ The ArchiMate model describes three layers:
 Use `docs/diagrams/archi/elements.csv` and
 `docs/diagrams/archi/relationships.csv` as a compact Archi import starting
 point, or render the ArchiMate PlantUML source directly.
+
+## PlantUML Source Set
+
+- `system-context.puml`: external actors and ArcHub CMS boundary.
+- `container.puml`: package-level components and data stores.
+- `publish-flow.puml`: editor publish command through validation, versioning,
+  webhooks, and runtime export.
+- `advanced-cms-layers.puml`: target clean architecture layers.
+- `target-modularization.puml`: gradual breakup of the monolithic CMS service.
+- `published-helper.puml`: `ArcHubContentHelper` and `PublishedContent` facade.
+- `maintenance-jobs.puml`: scheduled publishing, webhook dispatch, runtime
+  export, and health reporting.

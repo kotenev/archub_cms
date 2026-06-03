@@ -1,0 +1,39 @@
+@startuml
+title ArcHub CMS - Incremental Modularization of ArcHubCMSService
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+component "Current\nArcHubCMSService" as Monolith
+
+package "Extraction targets" {
+  component "domain.content\nentities and validation" as Domain
+  component "application.publishing\npublish/unpublish/workflow" as Publish
+  component "application.delivery\npublished tree/search/feed" as Delivery
+  component "application.media\nasset metadata and reports" as Media
+  component "application.packages\nenvironment promotion" as Packages
+  component "application.webhooks\nqueue and retry" as Webhooks
+  component "infrastructure.sqlite_store\nschema, migrations, hydration" as Store
+}
+
+component "Compatibility API\nexisting service methods" as API
+component "FastAPI routes" as Routes
+component "PublishedContent helper" as Helper
+component "Maintenance service" as Jobs
+
+Routes --> API
+Helper --> API
+Jobs --> API
+API --> Publish
+API --> Delivery
+API --> Media
+API --> Packages
+API --> Webhooks
+Publish --> Domain
+Delivery --> Domain
+Media --> Domain
+Packages --> Domain
+Webhooks --> Domain
+Domain --> Store
+Monolith ..> API : preserve during extraction
+@enduml

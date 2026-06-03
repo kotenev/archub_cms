@@ -1,0 +1,20 @@
+@startuml
+title ArcHub CMS - Published Content Helper
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+actor "Template or host integration" as Caller
+component "ArcHubContentHelper" as Helper
+component "PublishedContent" as Published
+component "ArcHubCMSService" as CMS
+component "Content Builder Service" as Builder
+database "SQLite" as DB
+
+Caller --> Helper : content(path/id)\nquery()\ndictionary_value()\nmedia()\nrender_content_blocks()
+Helper --> CMS : published lookup\nsearch\ndictionary\nmedia
+Helper --> Builder : parse/render blocks
+Helper --> Published : create facade
+Published --> CMS : children()\ndescendants_or_self()\ndelivery payload
+CMS --> DB : published nodes\nmedia\ndictionary
+@enduml

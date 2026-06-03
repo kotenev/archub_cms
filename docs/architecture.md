@@ -41,6 +41,10 @@ preview-token resolution.
 
 ## Related Architecture Pages
 
+- [Advanced CMS Refactor](architecture/advanced-cms-refactor.md) documents the
+  Umbraco-inspired target architecture and refactoring strategy.
+- [CMS Capability Matrix](architecture/capability-matrix.md) maps ArcHub
+  capabilities to Umbraco, Strapi, Contentful, and Sanity patterns.
 - [Runtime & Data](architecture/runtime-and-data.md) documents SQLite state,
   runtime snapshots, delivery caching, and operational flows.
 - [Diagrams & Models](architecture/diagrams.md) documents Mermaid, PlantUML,

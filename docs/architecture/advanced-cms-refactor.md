@@ -1,0 +1,135 @@
+# Advanced CMS Refactor
+
+This refactor aligns ArcHub CMS with proven ideas from Umbraco and modern
+headless CMS platforms while preserving the package's FastAPI-first public API.
+The immediate code change introduces stable architectural seams:
+`ArcHubContentHelper`, `PublishedContent`, and `ArcHubMaintenanceService`.
+
+## Design Inputs
+
+The local `books/umbraco_cms.pdf` chapters on Umbraco emphasize a CMS composed
+from backoffice, website rendering, delivery API, extension composers, database
+bootstrapping, background jobs, document types, culture variants, media,
+permissions, content version cleanup, helpers for published content, and
+template rendering. Current official Umbraco Delivery API documentation also
+highlights published-content JSON, route/start-item context, culture handling,
+protected content, and property expansion/limiting. Strapi, Contentful, and
+Sanity reinforce common headless patterns: content models, draft/publish,
+preview, i18n, roles, webhooks, environments/datasets, API-first delivery, and
+structured schema-driven editing.
+
+## Refactoring Principles
+
+- Keep existing routes and service methods stable until callers are migrated.
+- Move developer-facing reads through published-content facades instead of raw
+  dictionaries.
+- Treat long-running CMS behavior as operational jobs, not request-only logic.
+- Keep domain-specific runtime/RAG behavior behind ports and integration hooks.
+- Prefer thin application services over direct route-to-storage coupling.
+- Add documentation and diagrams with every architectural seam.
+
+## Target Layers
+
+```text
+web/                  FastAPI route adapters and templates
+application/          use cases: publish, preview, package import, export
+domain/               content, media, workflow, permissions, events
+infrastructure/       SQLite repositories, files, webhook transport
+published.py          helper facade for delivery/template consumers
+services/jobs.py      maintenance orchestration for scheduled CMS work
+ports.py              host-provided auth, templates, runtime, audit, cache
+```
+
+Today, `services/cms.py` still owns much of application, domain, and
+infrastructure behavior. New code should depend on the facades first, then
+incrementally extract cohesive modules behind the existing API.
+
+## Implemented Architectural Seams
+
+### Published Content Facade
+
+`PublishedContent` wraps a published node, localized payload, route metadata,
+tree traversal, and typed value access. `ArcHubContentHelper` adds Umbraco-style
+helper operations:
+
+- `content("/cms/demo")` or `content(node_id)`
+- `query(content_type_alias="page", tag="docs")`
+- `dictionary_value("WelcomeText", culture="fr-FR")`
+- `media(asset_id)` and `media_by_url(url)`
+- `render_content_blocks(content)`
+
+This gives templates and host integrations a stable published-content API while
+the storage internals evolve.
+
+### Maintenance Service
+
+`ArcHubMaintenanceService.run_once()` centralizes operational work:
+
+- apply due scheduled publish/unpublish workflow rows;
+- refresh runtime exports when published runtime content is newer than the
+  manifest;
+- dispatch pending webhook deliveries;
+- return content health counters.
+
+Hosts can run it from cron, a worker process, or the optional in-process
+FastAPI lifespan worker controlled by `ARCHUB_BACKGROUND_JOBS=1`.
+
+## Target Modularization
+
+The large CMS service should be split only behind compatibility tests:
+
+| Future module | Extract from current service | Responsibility |
+|---|---|---|
+| `domain/content.py` | dataclasses and validation helpers | Content node/type/value objects and invariants. |
+| `application/publishing.py` | publish/unpublish/workflow methods | Publish use cases, domain events, cache/runtime side effects. |
+| `application/delivery.py` | published payload/search/tree/feed methods | Read model assembly and API projections. |
+| `infrastructure/sqlite_store.py` | `_connect`, `_ensure_db`, row hydration | Persistence and migrations. |
+| `application/media.py` | media registration/listing | Asset metadata and usage reports. |
+| `application/packages.py` | package export/import methods | Environment promotion and migrations. |
+| `application/webhooks.py` | webhook queue and dispatch | Event subscription and retry policy. |
+
+## PlantUML
+
+Primary source files:
+
+- `docs/diagrams/plantuml/advanced-cms-layers.puml`
+- `docs/diagrams/plantuml/target-modularization.puml`
+- `docs/diagrams/plantuml/published-helper.puml`
+- `docs/diagrams/plantuml/maintenance-jobs.puml`
+
+Render them with:
+
+```bash
+plantuml -tsvg docs/diagrams/plantuml/*.puml
+```
+
+## Environment Settings
+
+| Variable | Purpose |
+|---|---|
+| `ARCHUB_BACKGROUND_JOBS` | Enables the optional in-process maintenance worker when set to `1`, `true`, `yes`, or `on`. |
+| `ARCHUB_BACKGROUND_JOB_INTERVAL` | Maintenance interval in seconds. Default: `60`. |
+| `ARCHUB_WEBHOOK_DISPATCH_LIMIT` | Maximum webhook deliveries per maintenance pass. Default: `50`. |
+
+## Refactor Completion Criteria
+
+- Routes depend on application services or helpers, not storage details.
+- Publishing emits explicit domain events consumed by cache, webhook, runtime,
+  and audit handlers.
+- Delivery API supports controlled property expansion/limiting and start-item
+  context for multi-site trees.
+- Media has usage reports, duplicate detection, allowed type policy, and access
+  checks.
+- Package import/export can promote content models and content between
+  environments with preview plans.
+- Architecture diagrams are updated with each extracted module.
+
+## References
+
+- Local source: `books/umbraco_cms.pdf`, chapters 13-14.
+- [Umbraco Content Delivery API](https://docs.umbraco.com/umbraco-cms/reference/content-delivery-api)
+- [Strapi 5 documentation](https://docs.strapi.io/)
+- [Contentful environments](https://www.contentful.com/help/environments/)
+- [Contentful webhooks](https://www.contentful.com/developers/docs/concepts/webhooks/)
+- [Sanity roles](https://www.sanity.io/docs/user-guides/roles)
+- [Sanity schemas](https://www.sanity.io/docs/schemas-and-forms)

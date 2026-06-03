@@ -1,4 +1,5 @@
 """FastAPI composition helpers for ArcHub CMS."""
+
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
@@ -8,6 +9,8 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from archub_cms.demo import seed_demo_content
+from archub_cms.services.jobs import ArcHubBackgroundWorker, get_archub_maintenance_service
+from archub_cms.settings import ArcHubSettings
 from archub_cms.web.routes import router
 
 __all__ = ["create_archub_app"]
@@ -18,9 +21,21 @@ def create_archub_app(*, seed_demo: bool = True) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
+        settings = ArcHubSettings.from_env()
+        worker = None
         if seed_demo:
             seed_demo_content()
-        yield
+        if settings.background_jobs_enabled:
+            worker = ArcHubBackgroundWorker(
+                get_archub_maintenance_service(settings=settings),
+                interval_seconds=settings.background_job_interval_seconds,
+            )
+            await worker.start()
+        try:
+            yield
+        finally:
+            if worker is not None:
+                await worker.stop()
 
     app = FastAPI(
         title="ArcHub CMS",

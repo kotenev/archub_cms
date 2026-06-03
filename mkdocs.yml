@@ -28,6 +28,8 @@ nav:
   - Overview: index.md
   - Getting Started: getting-started.md
   - Architecture: architecture.md
+  - Advanced CMS Refactor: architecture/advanced-cms-refactor.md
+  - CMS Capability Matrix: architecture/capability-matrix.md
   - Runtime & Data: architecture/runtime-and-data.md
   - Diagrams & Models: architecture/diagrams.md
   - Content Builder: content-builder.md

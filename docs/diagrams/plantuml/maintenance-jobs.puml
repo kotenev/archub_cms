@@ -1,0 +1,32 @@
+@startuml
+title ArcHub CMS - Maintenance Jobs
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+participant "Cron / worker /\nFastAPI lifespan" as Host
+participant "ArcHubMaintenanceService" as Maintenance
+participant "ArcHubCMSService" as CMS
+database "SQLite" as DB
+folder "Runtime export dir" as Runtime
+queue "Webhook endpoints" as Webhooks
+
+Host -> Maintenance : run_once(actor)
+Maintenance -> CMS : apply_due_workflows()
+CMS -> DB : read due workflow rows
+CMS -> DB : publish/unpublish nodes
+CMS -> DB : append versions and activity
+Maintenance -> CMS : runtime_export_status()
+CMS -> DB : latest runtime update
+alt snapshot stale
+  Maintenance -> CMS : export_runtime_content()
+  CMS -> DB : read published runtime nodes
+  CMS -> Runtime : write JSON, markdown, manifest
+end
+Maintenance -> CMS : dispatch_webhook_deliveries()
+CMS -> DB : read pending deliveries
+CMS -> Webhooks : signed HTTP delivery
+CMS -> DB : delivered/retry/failed status
+Maintenance -> CMS : content_health_report()
+CMS -> DB : model and delivery health checks
+Maintenance --> Host : report
+@enduml
