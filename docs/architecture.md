@@ -39,6 +39,13 @@ runtime actions. The delivery surface starts at `/cms` and exposes HTML pages,
 `/cms/api/tree`, `/cms/api/content`, `/cms/api/search`, tags, RSS, sitemap, and
 preview-token resolution.
 
+## Related Architecture Pages
+
+- [Runtime & Data](architecture/runtime-and-data.md) documents SQLite state,
+  runtime snapshots, delivery caching, and operational flows.
+- [Diagrams & Models](architecture/diagrams.md) documents Mermaid, PlantUML,
+  Archi/ArchiMate, and Structurizr source files.
+
 ## Content Lifecycle
 
 ```mermaid

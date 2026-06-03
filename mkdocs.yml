@@ -27,10 +27,9 @@ theme:
 nav:
   - Overview: index.md
   - Getting Started: getting-started.md
-  - Architecture:
-      - Overview: architecture.md
-      - Runtime & Data: architecture/runtime-and-data.md
-      - Diagrams & Models: architecture/diagrams.md
+  - Architecture: architecture.md
+  - Runtime & Data: architecture/runtime-and-data.md
+  - Diagrams & Models: architecture/diagrams.md
   - Content Builder: content-builder.md
   - Delivery API: delivery-api.md
   - GitHub Demo: demo-site.md
