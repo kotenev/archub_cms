@@ -1,0 +1,26 @@
+@startuml
+title ArcHub CMS - Publish Flow
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+actor Editor
+participant "web.routes" as Routes
+participant "ArcHubCMSService" as CMS
+database "SQLite" as DB
+participant "Runtime export" as Runtime
+queue "Webhook deliveries" as Webhooks
+
+Editor -> Routes : POST /admin/archub/content/{node_id}/publish
+Routes -> CMS : can_user_perform("publish", node_id)
+CMS --> Routes : allowed
+Routes -> CMS : publish_node(node_id, published_by)
+CMS -> CMS : validate draft payload
+CMS -> DB : update published_json/status
+CMS -> DB : insert content version
+CMS -> DB : record activity
+CMS -> Webhooks : enqueue content.published events
+Routes -> Runtime : export_runtime_content() when applicable
+Runtime -> DB : read published runtime nodes
+Runtime -> Runtime : write snapshot and manifest
+Routes --> Editor : 303 redirect to editor
+@enduml

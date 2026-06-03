@@ -1,0 +1,18 @@
+sequenceDiagram
+    participant Editor
+    participant Routes as web.routes
+    participant CMS as ArcHubCMSService
+    participant DB as SQLite
+    participant Runtime as Runtime export
+    participant Webhooks
+
+    Editor->>Routes: POST /admin/archub/content/{node_id}/publish
+    Routes->>CMS: publish_node(node_id)
+    CMS->>CMS: validate draft against content type
+    CMS->>DB: write published JSON and version
+    CMS->>DB: record activity
+    CMS->>Webhooks: enqueue matching deliveries
+    Routes->>Runtime: refresh runtime export if needed
+    Runtime->>DB: read published runtime nodes
+    Runtime->>Runtime: write snapshot and manifest
+    Routes-->>Editor: 303 See Other

@@ -1,0 +1,14 @@
+ID,Type,Name,Documentation,Source,Target
+rel-editor-admin,Used By,Uses backoffice,Editors use the backoffice application service.,app-admin-service,business-editor
+rel-visitor-delivery,Used By,Reads delivery,Public visitors use the delivery application service.,app-delivery-service,business-visitor
+rel-routes-admin,Serving,Serves admin,FastAPI routes expose the backoffice service.,app-routes,app-admin-service
+rel-routes-delivery,Serving,Serves delivery,FastAPI routes expose public delivery.,app-routes,app-delivery-service
+rel-process-routes,Composition,Runs routes,The FastAPI process contains the ArcHub router.,tech-process,app-routes
+rel-routes-cms,Composition,Uses CMS service,Routes delegate content operations to the CMS service.,app-routes,app-cms
+rel-routes-builder,Composition,Uses builder,Routes delegate block preview audit and render operations to the builder service.,app-routes,app-builder
+rel-routes-runtime,Composition,Uses runtime helpers,Routes trigger import export and rebuild operations.,app-routes,app-runtime
+rel-ports-routes,Serving,Provides host contracts,Ports provide host adapters for routes and services.,app-ports,app-routes
+rel-cms-store,Access,Persists content,The CMS service reads and writes SQLite state.,app-cms,data-sqlite
+rel-routes-assets,Access,Renders assets,Routes render packaged templates and static assets.,app-routes,data-assets
+rel-runtime-snapshot,Access,Exports snapshots,Runtime helpers write published runtime snapshots.,app-runtime,data-snapshot
+rel-consumer-snapshot,Used By,Consumes snapshots,Runtime consumers use exported files.,data-snapshot,business-runtime-consumer

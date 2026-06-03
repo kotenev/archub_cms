@@ -1,0 +1,25 @@
+@startuml
+title ArcHub CMS - System Context
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+actor "Content editor" as Editor
+actor "Public visitor" as Visitor
+actor "FastAPI host app" as Host
+actor "Runtime/RAG consumer" as RuntimeConsumer
+
+rectangle "ArcHub CMS\nPython package" as ArcHub {
+  rectangle "Backoffice, delivery,\nand management APIs" as Routes
+}
+
+database "SQLite CMS store\nARCHUB_CMS_DB" as SQLite
+folder "Runtime snapshot files\nARCHUB_RUNTIME_EXPORT_DIR" as Export
+
+Editor --> Routes : /admin/archub
+Visitor --> Routes : /cms and /cms/api/*
+Host --> ArcHub : include_router()\nimplement ports
+Routes --> SQLite : read/write editorial state
+Routes --> Export : write published runtime snapshot
+RuntimeConsumer --> Export : consume content\nor rebuild indexes
+@enduml
