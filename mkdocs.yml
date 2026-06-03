@@ -34,6 +34,7 @@ nav:
   - Diagrams & Models: architecture/diagrams.md
   - Content Builder: content-builder.md
   - Delivery API: delivery-api.md
+  - Delivery Contracts: architecture/delivery-contracts.md
   - GitHub Demo: demo-site.md
   - Release Notes: release-notes.md
 

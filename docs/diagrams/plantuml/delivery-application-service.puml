@@ -1,0 +1,23 @@
+@startuml
+title ArcHub CMS - Delivery Application Service
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+actor "Headless client" as Client
+component "FastAPI delivery routes\n/cms/api/*" as Routes
+component "ArcHubDeliveryService\napplication.delivery" as Delivery
+component "DeliveryQuery\nDeliveryProjection" as Query
+component "ArcHubCMSService\ncompatibility API" as CMS
+component "Public access filter" as Access
+database "SQLite CMS store" as DB
+
+Client --> Routes : fields, expand,\nculture, segment,\nStart-Item
+Routes --> Query : parse request contract
+Routes --> Delivery : content/tree/search
+Delivery --> CMS : published read model
+CMS --> DB : published nodes,\nvariants, segments
+Delivery --> Delivery : project fields\nexpand references
+Routes --> Access : remove denied nodes\nor return 401/403
+Routes --> Client : JSON + ETag\nLast-Modified\nCache-Control
+@enduml

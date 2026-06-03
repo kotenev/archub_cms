@@ -86,3 +86,7 @@ point, or render the ArchiMate PlantUML source directly.
 - `published-helper.puml`: `ArcHubContentHelper` and `PublishedContent` facade.
 - `maintenance-jobs.puml`: scheduled publishing, webhook dispatch, runtime
   export, and health reporting.
+- `delivery-application-service.puml`: current route-to-application-service
+  delivery boundary.
+- `delivery-projection-flow.puml`: `fields`, `expand`, culture/segment, and
+  public access request flow.

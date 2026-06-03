@@ -3,7 +3,8 @@
 This refactor aligns ArcHub CMS with proven ideas from Umbraco and modern
 headless CMS platforms while preserving the package's FastAPI-first public API.
 The immediate code change introduces stable architectural seams:
-`ArcHubContentHelper`, `PublishedContent`, and `ArcHubMaintenanceService`.
+`ArcHubDeliveryService`, `ArcHubContentHelper`, `PublishedContent`, and
+`ArcHubMaintenanceService`.
 
 ## Design Inputs
 
@@ -61,6 +62,22 @@ helper operations:
 This gives templates and host integrations a stable published-content API while
 the storage internals evolve.
 
+### Delivery Application Service
+
+`ArcHubDeliveryService` is the first application-layer extraction from the
+large CMS service. It owns delivery query contracts instead of leaving every
+route to assemble payloads directly:
+
+- `fields=title,summary` limits returned content properties;
+- `expand=properties[summary]` expands path-like content references;
+- `expand=properties[$all]` tries expansion for all path-like properties;
+- `Start-Item: /cms/demo` or `start_item=/cms/demo` scopes tree delivery to a
+  published root;
+- culture and segment fallback remain delegated to the CMS read model.
+
+The route URLs stay stable while implementation moves behind the application
+service.
+
 ### Maintenance Service
 
 `ArcHubMaintenanceService.run_once()` centralizes operational work:
@@ -96,6 +113,8 @@ Primary source files:
 - `docs/diagrams/plantuml/target-modularization.puml`
 - `docs/diagrams/plantuml/published-helper.puml`
 - `docs/diagrams/plantuml/maintenance-jobs.puml`
+- `docs/diagrams/plantuml/delivery-application-service.puml`
+- `docs/diagrams/plantuml/delivery-projection-flow.puml`
 
 Render them with:
 
@@ -116,8 +135,8 @@ plantuml -tsvg docs/diagrams/plantuml/*.puml
 - Routes depend on application services or helpers, not storage details.
 - Publishing emits explicit domain events consumed by cache, webhook, runtime,
   and audit handlers.
-- Delivery API supports controlled property expansion/limiting and start-item
-  context for multi-site trees.
+- Delivery API uses `ArcHubDeliveryService` for controlled property
+  expansion/limiting and start-item context for multi-site trees.
 - Media has usage reports, duplicate detection, allowed type policy, and access
   checks.
 - Package import/export can promote content models and content between
@@ -128,7 +147,7 @@ plantuml -tsvg docs/diagrams/plantuml/*.puml
 
 - Local source: `books/umbraco_cms.pdf`, chapters 13-14.
 - [Umbraco Content Delivery API](https://docs.umbraco.com/umbraco-cms/reference/content-delivery-api)
-- [Strapi 5 documentation](https://docs.strapi.io/)
+- [Strapi REST API parameters](https://docs.strapi.io/cms/api/rest/parameters)
 - [Contentful environments](https://www.contentful.com/help/environments/)
 - [Contentful webhooks](https://www.contentful.com/developers/docs/concepts/webhooks/)
 - [Sanity roles](https://www.sanity.io/docs/user-guides/roles)

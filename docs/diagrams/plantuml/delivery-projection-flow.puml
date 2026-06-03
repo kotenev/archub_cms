@@ -1,0 +1,25 @@
+@startuml
+title ArcHub CMS - Delivery Projection Flow
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+participant Client
+participant "FastAPI route" as Route
+participant "DeliveryQuery" as Query
+participant "ArcHubDeliveryService" as Delivery
+participant "ArcHubCMSService" as CMS
+database SQLite
+
+Client -> Route : GET /cms/api/content/demo?fields=title,summary&expand=properties[summary]
+Route -> Query : culture, segment,\nfields, expand
+Route -> Delivery : content("/cms/demo", query)
+Delivery -> CMS : published_content_payload()
+CMS -> SQLite : published node + variants + segments
+SQLite --> CMS : row payloads
+CMS --> Delivery : delivery payload
+Delivery -> Delivery : keep selected fields
+Delivery -> Delivery : expand /cms references\nwith depth limit
+Delivery --> Route : projected payload
+Route -> Route : public access and cache headers
+Route --> Client : JSON response
+@enduml

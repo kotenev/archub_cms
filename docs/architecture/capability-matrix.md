@@ -7,7 +7,7 @@ refactoring seam added in this change, and future extraction work.
 | Capability | ArcHub status | Architecture note |
 |---|---|---|
 | Backoffice | Existing | `/admin/archub` provides editing, modeling, runtime, permissions, workflow, package, media, dictionary, webhook, and health screens. |
-| Published delivery API | Existing | `/cms/api/*`, RSS, sitemap, robots, public HTML, ETag, and private/public cache behavior. |
+| Published delivery API | Existing + refactored | `/cms/api/*`, RSS, sitemap, robots, public HTML, ETag, private/public cache behavior, and `ArcHubDeliveryService` projection contracts. |
 | Document types and fields | Existing | `ContentType`, `ContentField`, data types, templates, compositions, and blueprints. |
 | Element/block content | Existing | `ArcHubContentBuilderService` models reusable block types and blueprints. |
 | Draft and publish | Existing | Nodes keep separate draft and published JSON payloads. |
@@ -26,7 +26,7 @@ refactoring seam added in this change, and future extraction work.
 | Dictionary/localization helper | Added | Helper resolves dictionary values with culture fallback. |
 | Media helper | Added | Helper resolves registered media by ID or URL. |
 | Environments/promotions | Partial | Package export/import exists; target architecture should add environment metadata and migration scripts. |
-| Property expansion/limiting | Future | Delivery API should add explicit include/exclude controls for related content/media and blocks. |
+| Property expansion/limiting | Added | `fields`, `expand=properties[...]`, and `Start-Item` are handled by `application.delivery`. |
 | Content version cleanup | Future | Add scheduled cleanup policy with per-content-type override. |
 | Media cleanup/duplicate checks | Future | Add media usage graph, duplicate detector, allowed type policy, and orphan cleanup. |
 | Realtime collaboration | Future | Track editor presence, optimistic concurrency, and conflict resolution. |
@@ -47,20 +47,21 @@ refactoring seam added in this change, and future extraction work.
 
 ## Next Engineering Slices
 
-1. Extract published delivery read models from `ArcHubCMSService` into
-   `application/delivery.py`.
+1. Extend `application/delivery.py` with media-reference expansion and
+   collection pagination metadata.
 2. Extract publishing commands and emit explicit events:
    `content.publishing.validated`, `content.published`, `runtime.export.requested`.
 3. Replace route-level side effects with event handlers for audit, webhooks,
    runtime export, and cache invalidation.
 4. Add media policy enforcement and usage reports.
-5. Add property expansion/limiting to `/cms/api/content` and `/cms/api/tree`.
+5. Add GraphQL/OData-style query adapters only after REST projection limits are
+   covered by compatibility tests.
 
 ## References
 
 - Local source: `books/umbraco_cms.pdf`, chapters 13-14.
 - [Umbraco Content Delivery API](https://docs.umbraco.com/umbraco-cms/reference/content-delivery-api)
-- [Strapi 5 documentation](https://docs.strapi.io/)
+- [Strapi REST API parameters](https://docs.strapi.io/cms/api/rest/parameters)
 - [Contentful API overview](https://www.contentful.com/api/)
 - [Contentful environments](https://www.contentful.com/help/environments/)
 - [Sanity roles](https://www.sanity.io/docs/user-guides/roles)
