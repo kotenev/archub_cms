@@ -1,0 +1,23 @@
+@startuml
+title ArcHub CMS - Versioning Application Service
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+actor "Content editor" as Editor
+actor "Maintenance worker" as Worker
+component "Admin routes\nweb.routes" as Routes
+component "ArcHubVersioningService\napplication.versioning" as Versioning
+component "ArcHubDomainEvent\ndomain.events" as Events
+component "ArcHubCMSService\ncompatibility API" as CMS
+database "SQLite CMS store" as DB
+
+Editor --> Routes : view history,\nopen JSON,\nrestore version
+Worker --> Versioning : cleanup policy command
+Routes --> Versioning : versions / version /\nrestore / cleanup
+Versioning --> CMS : list_versions()\nrestore_version()\ncleanup_content_versions()
+CMS --> DB : archub_content_versions\narchub_content_nodes\narchub_content_activity
+Versioning --> Events : content.version.restored\ncontent.versions.cleaned
+Versioning --> Routes : VersioningOperationResult
+Routes --> Editor : redirect or JSON payload
+@enduml

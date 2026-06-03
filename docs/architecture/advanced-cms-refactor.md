@@ -4,9 +4,9 @@ This refactor aligns ArcHub CMS with proven ideas from Umbraco and modern
 headless CMS platforms while preserving the package's FastAPI-first public API.
 The implemented refactoring introduces stable architectural seams:
 `ArcHubDeliveryService`, `ArcHubPublishingService`, `ArcHubDomainEvent`,
-`ArcHubMediaService`, `ArcHubPackageService`, `ArcHubWebhookService`,
-`ArcHubGovernanceService`, `ArcHubContentHelper`, `PublishedContent`, and
-`ArcHubMaintenanceService`.
+`ArcHubModelingService`, `ArcHubMediaService`, `ArcHubPackageService`,
+`ArcHubVersioningService`, `ArcHubWebhookService`, `ArcHubGovernanceService`,
+`ArcHubContentHelper`, `PublishedContent`, and `ArcHubMaintenanceService`.
 
 ## Design Inputs
 
@@ -48,6 +48,36 @@ infrastructure behavior. New code should depend on the facades first, then
 incrementally extract cohesive modules behind the existing API.
 
 ## Implemented Architectural Seams
+
+### Content Modeling Application Service
+
+`ArcHubModelingService` owns schema-driven editing use cases:
+
+- data type editor configuration and validation;
+- templates and allowed content type bindings;
+- reusable compositions;
+- document and element content types;
+- reusable content blueprints;
+- model inventory reports for admin UI and package promotion.
+
+This mirrors Umbraco document types, data types, compositions, and templates,
+while aligning with Strapi Content-Type Builder, Contentful content models, and
+Sanity schemas.
+
+### Versioning Application Service
+
+`ArcHubVersioningService` owns content history operations:
+
+- list newest-first version snapshots;
+- expose single-version JSON payloads for comparison tooling;
+- restore a historic payload into the current draft;
+- prune old snapshots with keep-latest and optional age rules;
+- emit `content.version.restored` and `content.versions.cleaned` events.
+
+The first cleanup policy is intentionally smaller than Umbraco's full model: it
+keeps the latest N versions per node and can apply a retention-age cutoff.
+Future work should add per-content-type overrides, published-version
+protection, and "prevent cleanup" flags.
 
 ### Published Content Facade
 
@@ -170,6 +200,8 @@ The large CMS service should be split only behind compatibility tests:
 | Module seam | Extract from current service | Responsibility |
 |---|---|---|
 | `domain/content.py` | dataclasses and validation helpers | Content node/type/value objects and invariants. |
+| `application/modeling.py` | content model methods | Data types, templates, content types, compositions, blueprints. |
+| `application/versioning.py` | version list/restore/cleanup methods | Content history, rollback, and retention cleanup. |
 | `application/publishing.py` | publish/unpublish/workflow methods | Publish use cases, domain events, cache/runtime side effects. |
 | `application/delivery.py` | published payload/search/tree/feed methods | Read model assembly and API projections. |
 | `infrastructure/sqlite_store.py` | `_connect`, `_ensure_db`, row hydration | Persistence and migrations. |
@@ -184,6 +216,10 @@ Primary source files:
 
 - `docs/diagrams/plantuml/advanced-cms-layers.puml`
 - `docs/diagrams/plantuml/target-modularization.puml`
+- `docs/diagrams/plantuml/content-modeling-service.puml`
+- `docs/diagrams/plantuml/content-model-update-flow.puml`
+- `docs/diagrams/plantuml/versioning-service.puml`
+- `docs/diagrams/plantuml/version-cleanup-flow.puml`
 - `docs/diagrams/plantuml/published-helper.puml`
 - `docs/diagrams/plantuml/maintenance-jobs.puml`
 - `docs/diagrams/plantuml/delivery-application-service.puml`
@@ -216,6 +252,10 @@ plantuml -tsvg docs/diagrams/plantuml/*.puml
 ## Refactor Completion Criteria
 
 - Routes depend on application services or helpers, not storage details.
+- Content model changes run through `ArcHubModelingService` with explicit model
+  events.
+- Version history, rollback, and manual retention cleanup run through
+  `ArcHubVersioningService` with explicit version events.
 - Publishing commands emit explicit domain events and return runtime export
   side-effect reports.
 - Delivery API uses `ArcHubDeliveryService` for controlled property
@@ -234,8 +274,13 @@ plantuml -tsvg docs/diagrams/plantuml/*.puml
 
 - Local source: `books/umbraco_cms.pdf`, chapters 13-14.
 - [Umbraco Content Delivery API](https://docs.umbraco.com/umbraco-cms/reference/content-delivery-api)
+- [Umbraco Defining Content](https://docs.umbraco.com/umbraco-cms/fundamentals/data/defining-content)
+- [Umbraco Content Version Cleanup](https://docs.umbraco.com/umbraco-cms/fundamentals/data/content-version-cleanup)
 - [Strapi REST API parameters](https://docs.strapi.io/cms/api/rest/parameters)
+- [Strapi Content-Type Builder](https://docs.strapi.io/cms/features/content-type-builder)
+- [Contentful content models](https://www.contentful.com/help/content-models/)
 - [Contentful environments](https://www.contentful.com/help/environments/)
+- [Contentful Versions](https://www.contentful.com/help/content-and-entries/versions/)
 - [Contentful webhooks](https://www.contentful.com/developers/docs/concepts/webhooks/)
 - [Umbraco Webhooks](https://docs.umbraco.com/umbraco-cms/reference/webhooks)
 - [Strapi Webhooks](https://docs.strapi.io/cms/backend-customization/webhooks)

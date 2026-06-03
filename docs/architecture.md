@@ -45,6 +45,10 @@ preview-token resolution.
   Umbraco-inspired target architecture and refactoring strategy.
 - [CMS Capability Matrix](architecture/capability-matrix.md) maps ArcHub
   capabilities to Umbraco, Strapi, Contentful, and Sanity patterns.
+- [Content Modeling](architecture/content-modeling.md) documents schema-driven
+  data types, templates, document types, compositions, and blueprints.
+- [Versioning & Cleanup](architecture/versioning-cleanup.md) documents content
+  history, rollback, and retention cleanup commands.
 - [Publishing & Workflow](architecture/publishing-workflow.md) documents
   lifecycle commands, domain events, and runtime export side effects.
 - [Media & DAM](architecture/media-dam.md) documents media policy, folder

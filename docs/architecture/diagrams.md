@@ -83,6 +83,13 @@ point, or render the ArchiMate PlantUML source directly.
   webhooks, and runtime export.
 - `advanced-cms-layers.puml`: target clean architecture layers.
 - `target-modularization.puml`: gradual breakup of the monolithic CMS service.
+- `content-modeling-service.puml`: schema-driven modeling boundary for data
+  types, templates, content types, compositions, and blueprints.
+- `content-model-update-flow.puml`: content model update sequence and future
+  event-handler hooks.
+- `versioning-service.puml`: content history, rollback, and retention cleanup
+  application boundary.
+- `version-cleanup-flow.puml`: keep-latest and age-based pruning sequence.
 - `published-helper.puml`: `ArcHubContentHelper` and `PublishedContent` facade.
 - `maintenance-jobs.puml`: scheduled publishing, webhook dispatch, runtime
   export, and health reporting.

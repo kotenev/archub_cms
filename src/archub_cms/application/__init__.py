@@ -2,4 +2,13 @@
 
 from __future__ import annotations
 
-__all__ = ["delivery", "governance", "media", "packages", "publishing", "webhooks"]
+__all__ = [
+    "delivery",
+    "governance",
+    "media",
+    "modeling",
+    "packages",
+    "publishing",
+    "versioning",
+    "webhooks",
+]

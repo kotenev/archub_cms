@@ -6,8 +6,10 @@ from archub_cms.app import create_archub_app
 from archub_cms.application.delivery import DeliveryQuery, get_archub_delivery_service
 from archub_cms.application.governance import get_archub_governance_service
 from archub_cms.application.media import ArcHubMediaService, MediaPolicy, get_archub_media_service
+from archub_cms.application.modeling import get_archub_modeling_service
 from archub_cms.application.packages import get_archub_package_service
 from archub_cms.application.publishing import get_archub_publishing_service
+from archub_cms.application.versioning import get_archub_versioning_service
 from archub_cms.application.webhooks import get_archub_webhook_service
 from archub_cms.demo import seed_demo_content
 from archub_cms.published import ArcHubContentHelper
@@ -403,3 +405,110 @@ def test_governance_service_controls_editor_permissions_and_public_access(
 
     assert removed.events[0].event_type == "governance.public_access.removed"
     assert governance.public_access_rule(node.node_id)["policy"] == "public"
+
+
+def test_modeling_service_manages_schema_compositions_and_blueprints(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("ARCHUB_CMS_DB", str(tmp_path / "archub.db"))
+    get_archub_cms_service.cache_clear()
+    seed_demo_content()
+    cms = get_archub_cms_service()
+    modeling = get_archub_modeling_service(cms)
+
+    data_type = modeling.upsert_data_type(
+        alias="short_text",
+        name="Short text",
+        editor="text",
+        validation={"maxLength": 120},
+        actor="modeler",
+    )
+    composition = modeling.upsert_composition(
+        alias="seo_meta",
+        name="SEO metadata",
+        fields=[
+            {
+                "alias": "seo_title",
+                "name": "SEO title",
+                "editor": "text",
+                "data_type_alias": "short_text",
+            }
+        ],
+        actor="modeler",
+    )
+    content_type = modeling.upsert_content_type(
+        alias="landing_page",
+        name="Landing page",
+        icon="landing",
+        fields=[
+            {
+                "alias": "title",
+                "name": "Title",
+                "editor": "text",
+                "required": True,
+                "data_type_alias": "short_text",
+            }
+        ],
+        composition_aliases=["seo_meta"],
+        allow_at_root=True,
+        template="page",
+        actor="modeler",
+    )
+    blueprint = modeling.upsert_blueprint(
+        content_type_alias="landing_page",
+        name="Campaign landing page",
+        payload={"title": "Campaign", "seo_title": "Campaign SEO"},
+        actor="modeler",
+    )
+    report = modeling.report()
+
+    assert data_type.events[0].event_type == "content_model.data_type.upserted"
+    assert composition.events[0].event_type == "content_model.composition.upserted"
+    assert content_type.events[0].event_type == "content_model.type.upserted"
+    assert blueprint.events[0].event_type == "content_model.blueprint.upserted"
+    assert blueprint.payload["payload"]["seo_title"] == "Campaign SEO"
+    assert report["composed_content_types"] >= 1
+    assert any(item["alias"] == "landing_page" for item in report["content_types"])
+
+
+def test_versioning_service_restores_and_cleans_old_versions(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("ARCHUB_CMS_DB", str(tmp_path / "archub.db"))
+    get_archub_cms_service.cache_clear()
+    seed_demo_content()
+    cms = get_archub_cms_service()
+    versioning = get_archub_versioning_service(cms)
+    node = cms.create_node(
+        parent_id="root",
+        content_type_alias="page",
+        name="Versioned page",
+        slug="versioned-page",
+        payload={"title": "Versioned page", "body": "<p>v1</p>"},
+        created_by="author",
+    )
+    for index in range(2, 6):
+        cms.update_node(
+            node.node_id,
+            name="Versioned page",
+            slug="versioned-page",
+            payload={"title": "Versioned page", "body": f"<p>v{index}</p>"},
+            updated_by="author",
+        )
+
+    versions = versioning.versions(node.node_id, limit=20)
+    oldest = versions["items"][-1]
+    restored = versioning.restore(
+        node.node_id,
+        oldest["version_no"],
+        actor="editor",
+    )
+    after_restore = versioning.versions(node.node_id, limit=20)
+    cleanup = versioning.cleanup(
+        node_id=node.node_id,
+        keep_latest=2,
+        older_than_seconds=None,
+        actor="maintenance",
+    )
+
+    assert restored.events[0].event_type == "content.version.restored"
+    assert cms.get_node(node.node_id).draft["body"] == "<p>v1</p>"
+    assert cleanup.events[0].event_type == "content.versions.cleaned"
+    assert cleanup.payload["deleted_count"] == after_restore["total"] - 2
+    assert versioning.versions(node.node_id, limit=20)["total"] == 2

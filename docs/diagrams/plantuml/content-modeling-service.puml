@@ -1,0 +1,24 @@
+@startuml
+title ArcHub CMS - Content Modeling Application Service
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+actor "Model editor" as Editor
+component "Model admin routes" as Routes
+component "ArcHubModelingService\napplication.modeling" as Modeling
+component "ArcHubDomainEvent" as Event
+component "ArcHubCMSService\ncompatibility API" as CMS
+database "SQLite CMS store" as DB
+component "Package promotion" as Packages
+component "Content editor" as Content
+
+Editor --> Routes : edit data types,\ntemplates, types,\ncompositions, blueprints
+Routes --> Modeling : report / upsert / delete
+Modeling --> CMS : existing model methods
+CMS --> DB : archub_data_types\narchub_templates\narchub_content_types\narchub_content_compositions\narchub_content_blueprints
+Modeling --> Event : content_model.* events
+Packages ..> Modeling : future model import\nand migration boundary
+Content ..> Modeling : blueprint catalog\nand schema reports
+Modeling --> Routes : compatible JSON or redirect result
+@enduml

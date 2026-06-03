@@ -19,8 +19,10 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from archub_cms.application.delivery import DeliveryQuery, get_archub_delivery_service
 from archub_cms.application.governance import get_archub_governance_service
 from archub_cms.application.media import get_archub_media_service
+from archub_cms.application.modeling import get_archub_modeling_service
 from archub_cms.application.packages import get_archub_package_service
 from archub_cms.application.publishing import get_archub_publishing_service
+from archub_cms.application.versioning import get_archub_versioning_service
 from archub_cms.application.webhooks import get_archub_webhook_service
 from archub_cms.services.cms import (
     ContentNode,
@@ -510,10 +512,9 @@ def _edit_context(
         "content_lock": lock,
         "access_rule": access_rule,
         "public_access_policies": get_archub_governance_service().available_public_access_policies(),
-        "document_blueprints": get_archub_cms_service().list_content_blueprints(
-            content_type_alias=content_type.alias,
-            limit=20,
-        ),
+        "document_blueprints": get_archub_modeling_service()
+        .blueprints(content_type_alias=content_type.alias, limit=20)
+        .get("items", []),
         "request": request,
     }
 
@@ -596,8 +597,10 @@ async def archub_dashboard(
             "content_health": cms.content_health_report(),
             "preview_tokens": cms.preview_tokens_report(limit=12),
             "domain_report": cms.content_domain_report(limit=12),
-            "content_model": cms.content_model_report(),
-            "document_blueprints": cms.list_content_blueprints(limit=12),
+            "content_model": get_archub_modeling_service(cms).report(),
+            "document_blueprints": get_archub_modeling_service(cms)
+            .blueprints(limit=12)
+            .get("items", []),
             "workflow_report": cms.workflow_report(),
             "permissions_report": get_archub_governance_service(cms).permissions_report(limit=12),
             "access_report": get_archub_governance_service(cms).public_access_report(limit=12),
@@ -809,7 +812,7 @@ async def content_model_json(request: Request):
         return RedirectResponse("/login", status_code=302)
     if not _can(user, "model"):
         return _permission_denied("model")
-    return JSONResponse(get_archub_cms_service().content_model_report())
+    return JSONResponse(get_archub_modeling_service().report())
 
 
 @router.get("/admin/archub/data-types.json")
@@ -819,8 +822,7 @@ async def data_types_json(request: Request, limit: int = 200):
         return RedirectResponse("/login", status_code=302)
     if not _can(user, "model"):
         return _permission_denied("model")
-    items = get_archub_cms_service().list_data_types(limit=limit)
-    return JSONResponse({"items": [item.__dict__ for item in items], "total": len(items)})
+    return JSONResponse(get_archub_modeling_service().data_types(limit=limit))
 
 
 @router.post("/admin/archub/content-model/data-types")
@@ -832,14 +834,14 @@ async def upsert_data_type(request: Request):
         return _permission_denied("model")
     form = await parse_form(request)
     try:
-        get_archub_cms_service().upsert_data_type(
+        get_archub_modeling_service().upsert_data_type(
             alias=form.get("alias", ""),
             name=form.get("name", ""),
             editor=form.get("editor", "text"),
             description=form.get("description", ""),
             config=_parse_json_object(form.get("config_json", "{}")),
             validation=_parse_json_object(form.get("validation_json", "{}")),
-            updated_by=user.username,
+            actor=user.username,
         )
     except (json.JSONDecodeError, ValueError) as exc:
         return JSONResponse({"error": str(exc)}, status_code=400)
@@ -853,8 +855,7 @@ async def templates_json(request: Request, limit: int = 200):
         return RedirectResponse("/login", status_code=302)
     if not _can(user, "model"):
         return _permission_denied("model")
-    items = get_archub_cms_service().list_templates(limit=limit)
-    return JSONResponse({"items": [item.__dict__ for item in items], "total": len(items)})
+    return JSONResponse(get_archub_modeling_service().templates(limit=limit))
 
 
 @router.post("/admin/archub/content-model/templates")
@@ -866,7 +867,7 @@ async def upsert_template(request: Request):
         return _permission_denied("model")
     form = await parse_form(request)
     try:
-        get_archub_cms_service().upsert_template(
+        get_archub_modeling_service().upsert_template(
             alias=form.get("alias", ""),
             name=form.get("name", ""),
             view=form.get("view", "archub_public.html"),
@@ -875,7 +876,7 @@ async def upsert_template(request: Request):
                 form.get("allowed_content_type_aliases", "")
             ),
             config=_parse_json_object(form.get("config_json", "{}")),
-            updated_by=user.username,
+            actor=user.username,
         )
     except (json.JSONDecodeError, ValueError) as exc:
         return JSONResponse({"error": str(exc)}, status_code=400)
@@ -889,11 +890,12 @@ async def content_blueprints_json(request: Request, content_type: str = "", limi
         return RedirectResponse("/login", status_code=302)
     if not _can(user, "model"):
         return _permission_denied("model")
-    items = get_archub_cms_service().list_content_blueprints(
-        content_type_alias=content_type,
-        limit=limit,
+    return JSONResponse(
+        get_archub_modeling_service().blueprints(
+            content_type_alias=content_type,
+            limit=limit,
+        )
     )
-    return JSONResponse({"items": [item.__dict__ for item in items], "total": len(items)})
 
 
 @router.post("/admin/archub/content-blueprints")
@@ -905,13 +907,13 @@ async def upsert_content_blueprint(request: Request):
         return _permission_denied("model")
     form = await parse_form(request)
     try:
-        get_archub_cms_service().upsert_content_blueprint(
+        get_archub_modeling_service().upsert_blueprint(
             blueprint_id=form.get("blueprint_id", ""),
             content_type_alias=form.get("content_type_alias", ""),
             name=form.get("name", ""),
             description=form.get("description", ""),
             payload=_parse_json_object(form.get("payload_json", "{}")),
-            updated_by=user.username,
+            actor=user.username,
         )
     except (json.JSONDecodeError, ValueError) as exc:
         return JSONResponse({"error": str(exc)}, status_code=400)
@@ -925,7 +927,7 @@ async def delete_content_blueprint(request: Request, blueprint_id: str):
         return RedirectResponse("/login", status_code=302)
     if not _can(user, "model"):
         return _permission_denied("model")
-    get_archub_cms_service().delete_content_blueprint(blueprint_id, deleted_by=user.username)
+    get_archub_modeling_service().delete_blueprint(blueprint_id, actor=user.username)
     return _see_other("/admin/archub")
 
 
@@ -938,12 +940,12 @@ async def upsert_content_composition(request: Request):
         return _permission_denied("model")
     form = await parse_form(request)
     try:
-        get_archub_cms_service().upsert_content_composition(
+        get_archub_modeling_service().upsert_composition(
             alias=form.get("alias", ""),
             name=form.get("name", ""),
             description=form.get("description", ""),
             fields=_parse_schema_fields(form.get("fields_json", "[]")),
-            updated_by=user.username,
+            actor=user.username,
         )
     except (json.JSONDecodeError, ValueError) as exc:
         return JSONResponse({"error": str(exc)}, status_code=400)
@@ -959,7 +961,7 @@ async def upsert_content_type(request: Request):
         return _permission_denied("model")
     form = await parse_form(request)
     try:
-        get_archub_cms_service().upsert_content_type(
+        get_archub_modeling_service().upsert_content_type(
             alias=form.get("alias", ""),
             name=form.get("name", ""),
             icon=form.get("icon", "□"),
@@ -970,7 +972,7 @@ async def upsert_content_type(request: Request):
             allow_at_root=form.get("allow_at_root", "").lower() in {"1", "true", "yes", "on"},
             is_element=form.get("is_element", "").lower() in {"1", "true", "yes", "on"},
             template=form.get("template", "page"),
-            updated_by=user.username,
+            actor=user.username,
         )
     except (json.JSONDecodeError, ValueError) as exc:
         return JSONResponse({"error": str(exc)}, status_code=400)
@@ -1497,7 +1499,7 @@ async def edit_content(request: Request, node_id: str):
                 content_type=content_type,
                 allowed_types=cms.allowed_child_types(node.parent_id),
             ),
-            "versions": cms.list_versions(node_id),
+            "versions": get_archub_versioning_service(cms).versions(node_id)["items"],
             "saved": request.query_params.get("saved") == "1",
             "published": request.query_params.get("published") == "1",
             "publish_error": request.query_params.get("publish_error", ""),
@@ -1896,13 +1898,13 @@ async def save_content_as_blueprint(request: Request, node_id: str):
             if form.get("payload_json", "").strip()
             else dict(node.draft)
         )
-        cms.upsert_content_blueprint(
+        get_archub_modeling_service(cms).upsert_blueprint(
             blueprint_id=form.get("blueprint_id", ""),
             content_type_alias=node.content_type_alias,
             name=form.get("name") or node.name,
             description=form.get("description", ""),
             payload=payload,
-            updated_by=user.username,
+            actor=user.username,
         )
     except (json.JSONDecodeError, ValueError) as exc:
         return JSONResponse({"error": str(exc)}, status_code=400)
@@ -1916,11 +1918,8 @@ async def content_version_json(request: Request, node_id: str, version_no: int):
         return RedirectResponse("/login", status_code=302)
     if not _can(user, "browse", node_id):
         return _permission_denied("browse", node_id)
-    versions = get_archub_cms_service().list_versions(node_id, limit=500)
-    for version in versions:
-        if version.version_no == version_no:
-            return JSONResponse(version.__dict__)
-    return JSONResponse({"error": "Content version not found"}, status_code=404)
+    result = get_archub_versioning_service().version(node_id, version_no, limit=500)
+    return JSONResponse(result.payload, status_code=result.status_code)
 
 
 @router.post("/admin/archub/content/{node_id}", response_class=HTMLResponse)
@@ -1960,7 +1959,7 @@ async def update_content(request: Request, node_id: str):
                     allowed_types=cms.allowed_child_types(node.parent_id),
                     error=str(exc),
                 ),
-                "versions": cms.list_versions(node_id),
+                "versions": get_archub_versioning_service(cms).versions(node_id)["items"],
             },
             status_code=400,
         )
@@ -2045,10 +2044,34 @@ async def restore_content_version(request: Request, node_id: str, version_no: in
         return _permission_denied("update", node_id)
     cms = get_archub_cms_service()
     try:
-        cms.restore_version(node_id, version_no, updated_by=user.username)
+        get_archub_versioning_service(cms).restore(node_id, version_no, actor=user.username)
     except ValueError as exc:
         return _see_other(f"/admin/archub/content/{node_id}?publish_error={quote_plus(str(exc))}")
     return _see_other(f"/admin/archub/content/{node_id}?saved=1")
+
+
+@router.post("/admin/archub/content/{node_id}/versions/cleanup")
+async def cleanup_content_versions(request: Request, node_id: str):
+    user = _guard(request)
+    if user is None:
+        return RedirectResponse("/login", status_code=302)
+    if not _can(user, "update", node_id):
+        return _permission_denied("update", node_id)
+    form = await parse_form(request)
+    try:
+        retention_value = form.get("older_than_seconds", "").strip()
+        older_than_seconds = float(retention_value) if retention_value else None
+        result = get_archub_versioning_service().cleanup(
+            node_id=node_id,
+            keep_latest=int(form.get("keep_latest", "20") or 20),
+            older_than_seconds=older_than_seconds,
+            actor=user.username,
+        )
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+    if form.get("redirect", "").lower() in {"1", "true", "yes", "on"}:
+        return _see_other(f"/admin/archub/content/{node_id}?saved=1")
+    return JSONResponse(result.payload, status_code=result.status_code)
 
 
 @router.post("/admin/archub/content/{node_id}/delete")
