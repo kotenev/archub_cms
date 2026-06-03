@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from archub_cms.app import create_archub_app
 from archub_cms.application.delivery import DeliveryQuery, get_archub_delivery_service
+from archub_cms.application.publishing import get_archub_publishing_service
 from archub_cms.demo import seed_demo_content
 from archub_cms.published import ArcHubContentHelper
 from archub_cms.services.cms import get_archub_cms_service
@@ -110,3 +111,59 @@ def test_delivery_api_supports_fields_expand_and_start_item(tmp_path, monkeypatc
     assert content_response.json()["payload"] == {"title": "ArcHub CMS demo"}
     assert tree_response.status_code == 200
     assert tree_response.json()["route_path"] == "/cms/demo"
+
+
+def test_publishing_service_emits_events_and_refreshes_runtime_export(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setenv("ARCHUB_CMS_DB", str(tmp_path / "archub.db"))
+    get_archub_cms_service.cache_clear()
+    seed_demo_content()
+    cms = get_archub_cms_service()
+    node = cms.create_node(
+        parent_id="root",
+        content_type_alias="page",
+        name="Publishing service page",
+        slug="publishing-service-page",
+        payload={"title": "Publishing service page", "body": "<p>Service test.</p>"},
+        created_by="test",
+    )
+
+    result = get_archub_publishing_service(cms).publish(node.node_id, actor="test")
+
+    assert result.node is not None
+    assert result.node.is_published
+    assert result.events[0].event_type == "content.published"
+    assert result.runtime_exported
+    assert cms.published_content_payload("/cms/publishing-service-page") is not None
+
+
+def test_publishing_service_applies_due_workflow_with_events(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("ARCHUB_CMS_DB", str(tmp_path / "archub.db"))
+    get_archub_cms_service.cache_clear()
+    seed_demo_content()
+    cms = get_archub_cms_service()
+    node = cms.create_node(
+        parent_id="root",
+        content_type_alias="page",
+        name="Scheduled service page",
+        slug="scheduled-service-page",
+        payload={"title": "Scheduled service page", "body": "<p>Scheduled.</p>"},
+        created_by="test",
+    )
+    publishing = get_archub_publishing_service(cms)
+    publishing.update_workflow(
+        node_id=node.node_id,
+        state="scheduled",
+        scheduled_publish_at=1.0,
+        actor="test",
+    )
+
+    result = publishing.apply_due_workflows(actor="test")
+    updated = cms.get_node(node.node_id)
+
+    assert result.report["applied_count"] == 1
+    assert [event.event_type for event in result.events] == ["content.published"]
+    assert result.runtime_exported
+    assert updated is not None
+    assert updated.is_published

@@ -17,6 +17,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 
 from archub_cms.application.delivery import DeliveryQuery, get_archub_delivery_service
+from archub_cms.application.publishing import get_archub_publishing_service
 from archub_cms.services.cms import (
     ContentNode,
     ContentType,
@@ -1279,11 +1280,8 @@ async def apply_due_workflows(request: Request):
         return RedirectResponse("/login", status_code=302)
     if not _can(user, "workflow"):
         return _permission_denied("workflow")
-    cms = get_archub_cms_service()
-    result = cms.apply_due_workflows(updated_by=user.username)
-    if result["applied_count"]:
-        _sync_runtime_export(cms)
-    return JSONResponse(result)
+    result = get_archub_publishing_service().apply_due_workflows(actor=user.username)
+    return JSONResponse(result.report)
 
 
 @router.post("/admin/archub/runtime/export")
@@ -1992,12 +1990,10 @@ async def publish_content(request: Request, node_id: str):
         return RedirectResponse("/login", status_code=302)
     if not _can(user, "publish", node_id):
         return _permission_denied("publish", node_id)
-    cms = get_archub_cms_service()
     try:
-        cms.publish_node(node_id, published_by=user.username)
+        get_archub_publishing_service().publish(node_id, actor=user.username)
     except ValueError as exc:
         return _see_other(f"/admin/archub/content/{node_id}?publish_error={quote_plus(str(exc))}")
-    _sync_runtime_export(cms)
     return _see_other(f"/admin/archub/content/{node_id}?published=1")
 
 
@@ -2008,12 +2004,10 @@ async def unpublish_content(request: Request, node_id: str):
         return RedirectResponse("/login", status_code=302)
     if not _can(user, "publish", node_id):
         return _permission_denied("publish", node_id)
-    cms = get_archub_cms_service()
     try:
-        cms.unpublish_node(node_id, updated_by=user.username)
+        get_archub_publishing_service().unpublish(node_id, actor=user.username)
     except ValueError:
         return _see_other(f"/admin/archub/content/{node_id}")
-    _sync_runtime_export(cms)
     return _see_other(f"/admin/archub/content/{node_id}?saved=1")
 
 
@@ -2044,14 +2038,14 @@ async def update_content_workflow(request: Request, node_id: str):
         return _permission_denied("workflow", node_id)
     form = await parse_form(request)
     try:
-        get_archub_cms_service().upsert_workflow(
+        get_archub_publishing_service().update_workflow(
             node_id=node_id,
             state=form.get("state", "draft"),
             assigned_to=form.get("assigned_to", ""),
             scheduled_publish_at=_parse_datetime_local(form.get("scheduled_publish_at", "")),
             scheduled_unpublish_at=_parse_datetime_local(form.get("scheduled_unpublish_at", "")),
             note=form.get("note", ""),
-            updated_by=user.username,
+            actor=user.username,
         )
     except ValueError as exc:
         return _see_other(f"/admin/archub/content/{node_id}?publish_error={quote_plus(str(exc))}")
@@ -2080,12 +2074,10 @@ async def delete_content(request: Request, node_id: str):
         return RedirectResponse("/login", status_code=302)
     if not _can(user, "delete", node_id):
         return _permission_denied("delete", node_id)
-    cms = get_archub_cms_service()
     try:
-        cms.delete_node(node_id, deleted_by=user.username)
+        get_archub_publishing_service().delete(node_id, actor=user.username)
     except ValueError:
         return _see_other(f"/admin/archub/content/{node_id}")
-    _sync_runtime_export(cms)
     return _see_other("/admin/archub")
 
 
@@ -2096,12 +2088,13 @@ async def restore_content_from_trash(request: Request, node_id: str):
         return RedirectResponse("/login", status_code=302)
     if not _can(user, "delete", node_id):
         return _permission_denied("delete", node_id)
-    cms = get_archub_cms_service()
     try:
-        restored = cms.restore_trashed_node(node_id, restored_by=user.username)
+        result = get_archub_publishing_service().restore_from_trash(node_id, actor=user.username)
     except ValueError as exc:
         return JSONResponse({"error": str(exc)}, status_code=400)
-    _sync_runtime_export(cms)
+    restored = result.node
+    if restored is None:
+        return JSONResponse({"error": "ArcHub content restore failed"}, status_code=500)
     return _see_other(f"/admin/archub/content/{restored.node_id}?saved=1")
 
 
@@ -2112,12 +2105,10 @@ async def purge_content_from_trash(request: Request, node_id: str):
         return RedirectResponse("/login", status_code=302)
     if not _can(user, "delete", node_id):
         return _permission_denied("delete", node_id)
-    cms = get_archub_cms_service()
     try:
-        cms.purge_trashed_node(node_id, purged_by=user.username)
+        get_archub_publishing_service().purge(node_id, actor=user.username)
     except ValueError as exc:
         return JSONResponse({"error": str(exc)}, status_code=400)
-    _sync_runtime_export(cms)
     return _see_other("/admin/archub")
 
 

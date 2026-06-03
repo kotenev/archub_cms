@@ -90,3 +90,7 @@ point, or render the ArchiMate PlantUML source directly.
   delivery boundary.
 - `delivery-projection-flow.puml`: `fields`, `expand`, culture/segment, and
   public access request flow.
+- `publishing-application-service.puml`: lifecycle command boundary for
+  publish, workflow, trash, and runtime side effects.
+- `domain-events-flow.puml`: future event-handler direction for audit,
+  webhooks, cache invalidation, indexing, and runtime export.

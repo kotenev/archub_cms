@@ -30,6 +30,7 @@ nav:
   - Architecture: architecture.md
   - Advanced CMS Refactor: architecture/advanced-cms-refactor.md
   - CMS Capability Matrix: architecture/capability-matrix.md
+  - Publishing & Workflow: architecture/publishing-workflow.md
   - Runtime & Data: architecture/runtime-and-data.md
   - Diagrams & Models: architecture/diagrams.md
   - Content Builder: content-builder.md

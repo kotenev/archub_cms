@@ -2,9 +2,9 @@
 
 This refactor aligns ArcHub CMS with proven ideas from Umbraco and modern
 headless CMS platforms while preserving the package's FastAPI-first public API.
-The immediate code change introduces stable architectural seams:
-`ArcHubDeliveryService`, `ArcHubContentHelper`, `PublishedContent`, and
-`ArcHubMaintenanceService`.
+The implemented refactoring introduces stable architectural seams:
+`ArcHubDeliveryService`, `ArcHubPublishingService`, `ArcHubDomainEvent`,
+`ArcHubContentHelper`, `PublishedContent`, and `ArcHubMaintenanceService`.
 
 ## Design Inputs
 
@@ -78,6 +78,21 @@ route to assemble payloads directly:
 The route URLs stay stable while implementation moves behind the application
 service.
 
+### Publishing Application Service
+
+`ArcHubPublishingService` owns content lifecycle commands that used to be
+triggered directly from route handlers:
+
+- publish and unpublish;
+- update workflow schedule/assignment;
+- apply due workflow transitions;
+- delete, restore from trash, and purge;
+- refresh derived runtime exports as a command side effect;
+- return explicit `ArcHubDomainEvent` instances for integration adapters.
+
+This is the current boundary for future event handlers: audit, webhooks, cache
+invalidation, runtime exports, search indexing, and external host integrations.
+
 ### Maintenance Service
 
 `ArcHubMaintenanceService.run_once()` centralizes operational work:
@@ -115,6 +130,8 @@ Primary source files:
 - `docs/diagrams/plantuml/maintenance-jobs.puml`
 - `docs/diagrams/plantuml/delivery-application-service.puml`
 - `docs/diagrams/plantuml/delivery-projection-flow.puml`
+- `docs/diagrams/plantuml/publishing-application-service.puml`
+- `docs/diagrams/plantuml/domain-events-flow.puml`
 
 Render them with:
 
@@ -133,8 +150,8 @@ plantuml -tsvg docs/diagrams/plantuml/*.puml
 ## Refactor Completion Criteria
 
 - Routes depend on application services or helpers, not storage details.
-- Publishing emits explicit domain events consumed by cache, webhook, runtime,
-  and audit handlers.
+- Publishing commands emit explicit domain events and return runtime export
+  side-effect reports.
 - Delivery API uses `ArcHubDeliveryService` for controlled property
   expansion/limiting and start-item context for multi-site trees.
 - Media has usage reports, duplicate detection, allowed type policy, and access

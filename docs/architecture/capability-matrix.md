@@ -10,7 +10,7 @@ refactoring seam added in this change, and future extraction work.
 | Published delivery API | Existing + refactored | `/cms/api/*`, RSS, sitemap, robots, public HTML, ETag, private/public cache behavior, and `ArcHubDeliveryService` projection contracts. |
 | Document types and fields | Existing | `ContentType`, `ContentField`, data types, templates, compositions, and blueprints. |
 | Element/block content | Existing | `ArcHubContentBuilderService` models reusable block types and blueprints. |
-| Draft and publish | Existing | Nodes keep separate draft and published JSON payloads. |
+| Draft and publish | Existing + refactored | Nodes keep separate draft and published JSON payloads; commands run through `ArcHubPublishingService`. |
 | Version history | Existing | Save/publish creates retrievable versions and restore actions. |
 | Preview | Existing | Tokenized preview route and no-store preview headers. |
 | Multilingual variants | Existing | Culture-specific published variants and delivery fallback. |
@@ -19,7 +19,7 @@ refactoring seam added in this change, and future extraction work.
 | Redirects | Existing | Source-to-target redirect rules with active flags. |
 | Permissions and public access | Existing | Editor permission rules and public access policies. |
 | Locks | Existing | Active edit locks with expiry and force release. |
-| Workflow scheduling | Existing + refactored | `ArcHubMaintenanceService` now gives scheduled work a single operational entrypoint. |
+| Workflow scheduling | Existing + refactored | `ArcHubPublishingService` applies due workflow transitions; `ArcHubMaintenanceService` invokes it operationally. |
 | Webhooks | Existing + refactored | Queue, retry, signing, and dispatch are exposed through the maintenance service. |
 | Runtime/RAG export | Existing + refactored | Runtime snapshot freshness is checked and refreshed by maintenance. |
 | Published content helper | Added | `ArcHubContentHelper` and `PublishedContent` provide Umbraco-style helper APIs. |
@@ -31,7 +31,7 @@ refactoring seam added in this change, and future extraction work.
 | Media cleanup/duplicate checks | Future | Add media usage graph, duplicate detector, allowed type policy, and orphan cleanup. |
 | Realtime collaboration | Future | Track editor presence, optimistic concurrency, and conflict resolution. |
 | GraphQL/OData delivery | Future | REST is present; optional query endpoint can be added after permission and expansion rules are formalized. |
-| Audit/event bus | Partial | Activity exists; target architecture should promote explicit domain events. |
+| Audit/event bus | Partial + refactored | Activity exists; lifecycle commands now return `ArcHubDomainEvent` objects as the integration boundary. |
 
 ## Advanced CMS Pattern Mapping
 
@@ -49,9 +49,10 @@ refactoring seam added in this change, and future extraction work.
 
 1. Extend `application/delivery.py` with media-reference expansion and
    collection pagination metadata.
-2. Extract publishing commands and emit explicit events:
-   `content.publishing.validated`, `content.published`, `runtime.export.requested`.
-3. Replace route-level side effects with event handlers for audit, webhooks,
+2. Extend publishing events with validation and package migration events:
+   `content.publishing.validated`, `package.import.planned`,
+   `runtime.export.requested`.
+3. Replace remaining route-level side effects with event handlers for audit, webhooks,
    runtime export, and cache invalidation.
 4. Add media policy enforcement and usage reports.
 5. Add GraphQL/OData-style query adapters only after REST projection limits are

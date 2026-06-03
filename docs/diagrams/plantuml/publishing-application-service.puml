@@ -1,0 +1,24 @@
+@startuml
+title ArcHub CMS - Publishing Application Service
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+actor "Content editor" as Editor
+component "Admin routes\nweb.routes" as Routes
+component "ArcHubPublishingService\napplication.publishing" as Publishing
+component "ArcHubDomainEvent\ndomain.events" as Events
+component "ArcHubCMSService\ncompatibility API" as CMS
+database "SQLite CMS store" as DB
+folder "Runtime export dir" as Runtime
+
+Editor --> Routes : publish / workflow /\ntrash commands
+Routes --> Publishing : lifecycle command
+Publishing --> CMS : publish_node()\nunpublish_node()\nupsert_workflow()\ntrash operations
+CMS --> DB : drafts, published,\nversions, workflow,\nactivity
+Publishing --> Events : content.published\ncontent.workflow.updated\ncontent.deleted
+Publishing --> CMS : export_runtime_content()
+CMS --> Runtime : JSON, markdown,\nmanifest
+Publishing --> Routes : PublishingCommandResult
+Routes --> Editor : redirect or JSON report
+@enduml

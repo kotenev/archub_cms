@@ -13,6 +13,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
+from archub_cms.application.publishing import get_archub_publishing_service
 from archub_cms.services.cms import ArcHubCMSService, get_archub_cms_service
 from archub_cms.settings import ArcHubSettings
 
@@ -37,7 +38,7 @@ class ArcHubMaintenanceService:
         self._settings = settings or ArcHubSettings.from_env()
 
     def run_once(self, *, actor: str = "system") -> dict[str, Any]:
-        workflow = self._cms.apply_due_workflows(updated_by=actor)
+        workflow_result = get_archub_publishing_service(self._cms).apply_due_workflows(actor=actor)
         runtime_status = self._cms.runtime_export_status()
         runtime_export = None
         if bool(runtime_status.get("needs_export")):
@@ -47,9 +48,11 @@ class ArcHubMaintenanceService:
         )
         health = self._cms.content_health_report()
         return {
-            "workflow": workflow,
+            "workflow": workflow_result.report,
+            "workflow_events": [event.as_dict() for event in workflow_result.events],
             "runtime_status": runtime_status,
-            "runtime_export": runtime_export,
+            "runtime_export": workflow_result.runtime_export or runtime_export,
+            "runtime_export_error": workflow_result.runtime_export_error,
             "webhooks": webhooks,
             "health": {
                 "ok": health.get("ok"),
