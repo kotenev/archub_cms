@@ -51,6 +51,10 @@ preview-token resolution.
   reports, duplicate detection, usage reports, and orphaned assets.
 - [Package Promotion](architecture/package-promotion.md) documents package
   export, inspection, dry-run import plans, and promotion events.
+- [Webhook Integrations](architecture/webhook-integrations.md) documents
+  webhook subscriptions, delivery logs, signed dispatch, and retry handling.
+- [Governance & Access](architecture/governance-access.md) documents editor
+  permissions, public access policies, member gating, and route guards.
 - [Runtime & Data](architecture/runtime-and-data.md) documents SQLite state,
   runtime snapshots, delivery caching, and operational flows.
 - [Diagrams & Models](architecture/diagrams.md) documents Mermaid, PlantUML,

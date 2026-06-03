@@ -100,3 +100,10 @@ point, or render the ArchiMate PlantUML source directly.
 - `package-promotion-service.puml`: package export/import application service
   boundary and event flow.
 - `package-import-plan.puml`: package dry-run planning and import sequence.
+- `webhook-application-service.puml`: webhook management and maintenance
+  dispatch application boundary.
+- `webhook-dispatch-flow.puml`: durable webhook delivery, retry, and failure
+  state transitions.
+- `governance-service.puml`: editor permissions, public access route guards,
+  and governance domain events.
+- `public-access-flow.puml`: member-gated public delivery decision flow.

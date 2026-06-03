@@ -17,10 +17,10 @@ refactoring seam added in this change, and future extraction work.
 | Personalization | Existing | Segment-specific payload overrides and delivery fallback. |
 | Domains and multi-site roots | Existing | Hostname-to-root/culture mapping through content domains. |
 | Redirects | Existing | Source-to-target redirect rules with active flags. |
-| Permissions and public access | Existing | Editor permission rules and public access policies. |
+| Permissions and public access | Existing + refactored | `ArcHubGovernanceService` owns editor authorization, scoped actions, public access policies, and member gating. |
 | Locks | Existing | Active edit locks with expiry and force release. |
 | Workflow scheduling | Existing + refactored | `ArcHubPublishingService` applies due workflow transitions; `ArcHubMaintenanceService` invokes it operationally. |
-| Webhooks | Existing + refactored | Queue, retry, signing, and dispatch are exposed through the maintenance service. |
+| Webhooks | Existing + refactored | `ArcHubWebhookService` owns subscriptions, delivery logs, retry dispatch, signing, and maintenance integration. |
 | Runtime/RAG export | Existing + refactored | Runtime snapshot freshness is checked and refreshed by maintenance. |
 | Published content helper | Added | `ArcHubContentHelper` and `PublishedContent` provide Umbraco-style helper APIs. |
 | Dictionary/localization helper | Added | Helper resolves dictionary values with culture fallback. |
@@ -43,6 +43,8 @@ refactoring seam added in this change, and future extraction work.
 | Published-content read model | Umbraco `IPublishedContent` and helper APIs | Use `PublishedContent` and `ArcHubContentHelper` in templates and host integrations. |
 | Operational background jobs | Umbraco scheduled publishing and cleanup jobs | Use `ArcHubMaintenanceService` as the host-neutral job boundary. |
 | Composable integrations | Umbraco composers, modern headless webhooks/apps | Keep host ports and add explicit event handlers behind publishing/package/runtime actions. |
+| Webhook delivery reliability | Umbraco, Strapi, Contentful, Sanity webhooks | Route subscription and dispatch operations through `ArcHubWebhookService`; keep durable delivery logs and retry state. |
+| Governance and RBAC | Umbraco users/members, Contentful roles, Sanity roles, Strapi permissions | Route editor permissions and public access through `ArcHubGovernanceService`; keep host identity behind ports. |
 | Environment promotion | Umbraco packages, Contentful environments, Strapi transfers, Sanity datasets | Route package operations through `ArcHubPackageService`; add environment metadata, signatures, and rollback plans later. |
 | Fine-grained roles | Umbraco user groups, Sanity roles, Strapi RBAC | Keep permission rules; add reusable role templates and section-level policies. |
 
@@ -52,8 +54,8 @@ refactoring seam added in this change, and future extraction work.
    collection pagination metadata.
 2. Extend publishing and package events with validation, signing, rollback, and
    runtime export intent metadata.
-3. Replace remaining route-level side effects with event handlers for audit, webhooks,
-   runtime export, and cache invalidation.
+3. Replace remaining route-level side effects with event handlers for audit,
+   runtime export, search indexing, and cache invalidation.
 4. Add explicit media cleanup commands, thumbnail metadata, and external storage
    provider ports.
 5. Add GraphQL/OData-style query adapters only after REST projection limits are
@@ -66,8 +68,16 @@ refactoring seam added in this change, and future extraction work.
 - [Strapi REST API parameters](https://docs.strapi.io/cms/api/rest/parameters)
 - [Contentful API overview](https://www.contentful.com/api/)
 - [Contentful environments](https://www.contentful.com/help/environments/)
+- [Contentful webhooks](https://www.contentful.com/developers/docs/webhooks/overview/)
+- [Umbraco Webhooks](https://docs.umbraco.com/umbraco-cms/reference/webhooks)
+- [Strapi Webhooks](https://docs.strapi.io/cms/backend-customization/webhooks)
+- [Sanity webhooks](https://www.sanity.io/docs/content-lake/webhooks)
 - [Contentful media](https://www.contentful.com/help/media/)
+- [Contentful roles](https://www.contentful.com/help/roles/)
+- [Contentful content permissions](https://www.contentful.com/help/content-permissions/)
 - [Umbraco Packages](https://docs.umbraco.com/umbraco-cms/extending/packages)
+- [Umbraco Security](https://docs.umbraco.com/umbraco-cms/reference/security)
+- [Umbraco Members](https://docs.umbraco.com/umbraco-cms/fundamentals/data/members/)
 - [Umbraco Media Management](https://docs.umbraco.com/umbraco-cms/tutorials/editors-manual/media-management)
 - [Strapi Media Library](https://docs.strapi.io/cms/features/media-library)
 - [Strapi Data Management](https://docs.strapi.io/cms/features/data-management)

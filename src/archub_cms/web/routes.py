@@ -17,9 +17,11 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 
 from archub_cms.application.delivery import DeliveryQuery, get_archub_delivery_service
+from archub_cms.application.governance import get_archub_governance_service
 from archub_cms.application.media import get_archub_media_service
 from archub_cms.application.packages import get_archub_package_service
 from archub_cms.application.publishing import get_archub_publishing_service
+from archub_cms.application.webhooks import get_archub_webhook_service
 from archub_cms.services.cms import (
     ContentNode,
     ContentType,
@@ -51,13 +53,15 @@ def _guard(request: Request):
         return None
     if bool(getattr(user, "is_admin", False)):
         return user
-    if get_archub_cms_service().has_any_content_permission(str(getattr(user, "username", ""))):
+    if get_archub_governance_service().has_any_editor_permission(
+        str(getattr(user, "username", ""))
+    ):
         return user
     return None
 
 
 def _can(user, action: str, node_id: str = "") -> bool:
-    return get_archub_cms_service().can_user_perform(
+    return get_archub_governance_service().can_user_perform(
         username=str(getattr(user, "username", "")),
         is_admin=bool(getattr(user, "is_admin", False)),
         action=action,
@@ -95,7 +99,7 @@ def _public_member_context(request: Request) -> tuple[str, bool, tuple[str, ...]
 
 def _can_read_public_content(request: Request, node: ContentNode) -> bool:
     username, authenticated, groups = _public_member_context(request)
-    return get_archub_cms_service().can_access_public_content(
+    return get_archub_governance_service().can_access_public_content(
         node.node_id,
         username=username,
         authenticated=authenticated,
@@ -105,14 +109,14 @@ def _can_read_public_content(request: Request, node: ContentNode) -> bool:
 
 def _public_api_access_denied(request: Request, node: ContentNode) -> JSONResponse:
     _username, authenticated, _groups = _public_member_context(request)
-    rule = get_archub_cms_service().get_public_access_rule(node.node_id)
+    rule = get_archub_governance_service().public_access_rule(node.node_id)
     return JSONResponse(
         {
             "error": "ArcHub content access denied",
             "node_id": node.node_id,
             "route_path": node.route_path,
-            "policy": rule.policy if rule else "public",
-            "login_path": rule.login_path if rule else "/login",
+            "policy": rule.get("policy", "public"),
+            "login_path": rule.get("login_path", "/login"),
         },
         status_code=403 if authenticated else 401,
     )
@@ -120,9 +124,9 @@ def _public_api_access_denied(request: Request, node: ContentNode) -> JSONRespon
 
 def _public_html_access_denied(request: Request, node: ContentNode):
     _username, authenticated, _groups = _public_member_context(request)
-    rule = get_archub_cms_service().get_public_access_rule(node.node_id)
+    rule = get_archub_governance_service().public_access_rule(node.node_id)
     if not authenticated:
-        login_path = rule.login_path if rule else "/login"
+        login_path = str(rule.get("login_path") or "/login")
         return RedirectResponse(
             f"{login_path}?next={quote_plus(str(request.url.path))}",
             status_code=302,
@@ -212,7 +216,10 @@ def _delivery_cache_public(request: Request, node: ContentNode | None = None) ->
         return False
     if node is None:
         return True
-    return get_archub_cms_service().get_public_access_rule(node.node_id) is None
+    return (
+        get_archub_governance_service().public_access_rule(node.node_id).get("policy", "public")
+        == "public"
+    )
 
 
 def _request_content_domain(request: Request):
@@ -444,7 +451,7 @@ def _edit_context(
     )
     variants = get_archub_cms_service().list_content_variants(node.node_id) if node else []
     lock = get_archub_cms_service().get_content_lock(node.node_id) if node else None
-    access_rule = get_archub_cms_service().get_public_access_rule(node.node_id) if node else None
+    access_rule = get_archub_governance_service().public_access_rule(node.node_id) if node else None
     preview_tokens = (
         get_archub_cms_service().list_preview_tokens(
             node_id=node.node_id,
@@ -502,7 +509,7 @@ def _edit_context(
         "preview_tokens": preview_tokens,
         "content_lock": lock,
         "access_rule": access_rule,
-        "public_access_policies": get_archub_cms_service().available_public_access_policies(),
+        "public_access_policies": get_archub_governance_service().available_public_access_policies(),
         "document_blueprints": get_archub_cms_service().list_content_blueprints(
             content_type_alias=content_type.alias,
             limit=20,
@@ -592,9 +599,9 @@ async def archub_dashboard(
             "content_model": cms.content_model_report(),
             "document_blueprints": cms.list_content_blueprints(limit=12),
             "workflow_report": cms.workflow_report(),
-            "permissions_report": cms.content_permissions_report(limit=12),
-            "access_report": cms.public_access_report(limit=12),
-            "webhook_report": cms.webhook_report(limit=12),
+            "permissions_report": get_archub_governance_service(cms).permissions_report(limit=12),
+            "access_report": get_archub_governance_service(cms).public_access_report(limit=12),
+            "webhook_report": get_archub_webhook_service(cms).report(limit=12),
             "trash": cms.list_trashed_nodes(limit=8),
             "locks": cms.list_content_locks(limit=8),
             "activity": cms.list_activity(limit=12),
@@ -1104,16 +1111,9 @@ async def content_permissions_json(request: Request, subject: str = "", limit: i
         return RedirectResponse("/login", status_code=302)
     if not _admin_required(user):
         return _permission_denied("admin")
-    if subject.strip():
-        items = get_archub_cms_service().list_content_permissions(subject=subject, limit=limit)
-        return JSONResponse(
-            {
-                "actions": list(get_archub_cms_service().available_permission_actions()),
-                "items": [item.__dict__ for item in items],
-                "total": len(items),
-            }
-        )
-    return JSONResponse(get_archub_cms_service().content_permissions_report(limit=limit))
+    return JSONResponse(
+        get_archub_governance_service().permissions_report(subject=subject, limit=limit)
+    )
 
 
 @router.post("/admin/archub/permissions")
@@ -1125,14 +1125,14 @@ async def grant_content_permission(request: Request):
         return _permission_denied("admin")
     form = await parse_form(request)
     try:
-        get_archub_cms_service().grant_content_permission(
+        get_archub_governance_service().grant_permission(
             subject=form.get("subject", ""),
             scope_node_id=form.get("scope_node_id", ""),
             actions=_split_aliases(form.get("actions", "")),
             include_descendants=form.get("include_descendants", "").lower()
             in {"1", "true", "yes", "on"},
             note=form.get("note", ""),
-            updated_by=user.username,
+            actor=user.username,
             rule_id=form.get("rule_id", ""),
         )
     except ValueError as exc:
@@ -1147,7 +1147,7 @@ async def revoke_content_permission(request: Request, rule_id: str):
         return RedirectResponse("/login", status_code=302)
     if not _admin_required(user):
         return _permission_denied("admin")
-    get_archub_cms_service().revoke_content_permission(rule_id, revoked_by=user.username)
+    get_archub_governance_service().revoke_permission(rule_id, actor=user.username)
     return _see_other("/admin/archub")
 
 
@@ -1158,7 +1158,7 @@ async def public_access_rules_json(request: Request, limit: int = 100):
         return RedirectResponse("/login", status_code=302)
     if not _can(user, "settings"):
         return _permission_denied("settings")
-    return JSONResponse(get_archub_cms_service().public_access_report(limit=limit))
+    return JSONResponse(get_archub_governance_service().public_access_report(limit=limit))
 
 
 @router.get("/admin/archub/locks.json")
@@ -1179,8 +1179,9 @@ async def webhooks_json(request: Request, active_only: bool = False, limit: int 
         return RedirectResponse("/login", status_code=302)
     if not _can(user, "settings"):
         return _permission_denied("settings")
-    webhooks = get_archub_cms_service().list_webhooks(active_only=active_only, limit=limit)
-    return JSONResponse({"items": [item.__dict__ for item in webhooks], "total": len(webhooks)})
+    return JSONResponse(
+        get_archub_webhook_service().subscriptions(active_only=active_only, limit=limit)
+    )
 
 
 @router.post("/admin/archub/webhooks")
@@ -1191,9 +1192,8 @@ async def upsert_webhook(request: Request):
     if not _can(user, "settings"):
         return _permission_denied("settings")
     form = await parse_form(request)
-    cms = get_archub_cms_service()
     try:
-        cms.upsert_webhook(
+        get_archub_webhook_service().upsert(
             webhook_id=form.get("webhook_id", ""),
             name=form.get("name", ""),
             target_url=form.get("target_url", ""),
@@ -1202,7 +1202,7 @@ async def upsert_webhook(request: Request):
             active=form.get("active", "").lower() in {"1", "true", "yes", "on"},
             timeout_seconds=float(form.get("timeout_seconds", "5") or 5),
             max_attempts=int(form.get("max_attempts", "5") or 5),
-            updated_by=user.username,
+            actor=user.username,
         )
     except (TypeError, ValueError) as exc:
         return JSONResponse({"error": str(exc)}, status_code=400)
@@ -1222,17 +1222,13 @@ async def webhook_deliveries_json(
         return RedirectResponse("/login", status_code=302)
     if not _can(user, "settings"):
         return _permission_denied("settings")
-    deliveries = get_archub_cms_service().list_webhook_deliveries(
-        status=status,
-        webhook_id=webhook_id,
-        event_type=event_type,
-        limit=limit,
-    )
     return JSONResponse(
-        {
-            "items": [item.__dict__ for item in deliveries],
-            "total": len(deliveries),
-        }
+        get_archub_webhook_service().deliveries(
+            status=status,
+            webhook_id=webhook_id,
+            event_type=event_type,
+            limit=limit,
+        )
     )
 
 
@@ -1243,8 +1239,8 @@ async def dispatch_webhook_deliveries(request: Request):
         return RedirectResponse("/login", status_code=302)
     if not _can(user, "settings"):
         return _permission_denied("settings")
-    result = get_archub_cms_service().dispatch_webhook_deliveries()
-    return JSONResponse(result)
+    result = get_archub_webhook_service().dispatch_pending(actor=user.username)
+    return JSONResponse(result.payload, status_code=result.status_code)
 
 
 @router.get("/admin/archub/workflow.json")
@@ -1665,10 +1661,13 @@ async def content_public_access_json(request: Request, node_id: str, inherited: 
     if not _can(user, "browse", node_id):
         return _permission_denied("browse", node_id)
     try:
-        rule = get_archub_cms_service().get_public_access_rule(node_id, inherited=inherited)
+        rule = get_archub_governance_service().public_access_rule(
+            node_id,
+            inherited=inherited,
+        )
     except ValueError:
         return JSONResponse({"error": "Content node not found"}, status_code=404)
-    return JSONResponse(rule.__dict__ if rule is not None else {"policy": "public"})
+    return JSONResponse(rule)
 
 
 @router.post("/admin/archub/content/{node_id}/access")
@@ -1680,7 +1679,7 @@ async def update_content_public_access(request: Request, node_id: str):
         return _permission_denied("settings", node_id)
     form = await parse_form(request)
     try:
-        get_archub_cms_service().set_public_access_rule(
+        get_archub_governance_service().set_public_access_rule(
             node_id,
             policy=form.get("policy", "public"),
             member_groups=_split_aliases(form.get("member_groups", "")),
@@ -1689,14 +1688,15 @@ async def update_content_public_access(request: Request, node_id: str):
             login_path=form.get("login_path", "/login"),
             denied_path=form.get("denied_path", ""),
             note=form.get("note", ""),
-            updated_by=user.username,
+            actor=user.username,
         )
     except ValueError as exc:
         return JSONResponse({"error": str(exc)}, status_code=400)
     if form.get("redirect", "").lower() in {"1", "true", "yes", "on"}:
         return _see_other(f"/admin/archub/content/{node_id}?saved=1")
-    rule = get_archub_cms_service().get_public_access_rule(node_id, inherited=False)
-    return JSONResponse(rule.__dict__ if rule is not None else {"policy": "public"})
+    return JSONResponse(
+        get_archub_governance_service().public_access_rule(node_id, inherited=False)
+    )
 
 
 @router.post("/admin/archub/content/{node_id}/access/delete")
@@ -1706,7 +1706,7 @@ async def remove_content_public_access(request: Request, node_id: str):
         return RedirectResponse("/login", status_code=302)
     if not _can(user, "settings", node_id):
         return _permission_denied("settings", node_id)
-    get_archub_cms_service().remove_public_access_rule(node_id, updated_by=user.username)
+    get_archub_governance_service().remove_public_access_rule(node_id, actor=user.username)
     return _see_other(f"/admin/archub/content/{node_id}?saved=1")
 
 

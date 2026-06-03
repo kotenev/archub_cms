@@ -4,9 +4,11 @@ from fastapi.testclient import TestClient
 
 from archub_cms.app import create_archub_app
 from archub_cms.application.delivery import DeliveryQuery, get_archub_delivery_service
+from archub_cms.application.governance import get_archub_governance_service
 from archub_cms.application.media import ArcHubMediaService, MediaPolicy, get_archub_media_service
 from archub_cms.application.packages import get_archub_package_service
 from archub_cms.application.publishing import get_archub_publishing_service
+from archub_cms.application.webhooks import get_archub_webhook_service
 from archub_cms.demo import seed_demo_content
 from archub_cms.published import ArcHubContentHelper
 from archub_cms.services.cms import get_archub_cms_service
@@ -291,3 +293,113 @@ def test_package_service_exports_plans_and_imports_with_domain_events(
     assert export_result.payload["summary"]["ok"]
     assert plan_result.payload["inspection"]["ok"]
     assert import_result.payload["ok"]
+
+
+def test_webhook_service_manages_subscriptions_and_dispatches_signed_deliveries(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setenv("ARCHUB_CMS_DB", str(tmp_path / "archub.db"))
+    get_archub_cms_service.cache_clear()
+    seed_demo_content()
+    cms = get_archub_cms_service()
+    webhooks = get_archub_webhook_service(cms)
+
+    subscription = webhooks.upsert(
+        name="Published content hook",
+        target_url="https://example.test/archub-webhook",
+        events=["content.published"],
+        secret="test-secret",
+        actor="test",
+    )
+    node = cms.create_node(
+        parent_id="root",
+        content_type_alias="page",
+        name="Webhook service page",
+        slug="webhook-service-page",
+        payload={"title": "Webhook service page", "body": "<p>Webhook.</p>"},
+        created_by="test",
+    )
+
+    get_archub_publishing_service(cms).publish(node.node_id, actor="test")
+    pending = webhooks.deliveries(status="pending")
+    sent: list[dict[str, object]] = []
+
+    def sender(
+        target_url: str,
+        payload: dict[str, object],
+        headers: dict[str, str],
+        timeout: float,
+    ) -> int:
+        sent.append(
+            {
+                "target_url": target_url,
+                "payload": payload,
+                "headers": headers,
+                "timeout": timeout,
+            }
+        )
+        return 202
+
+    dispatch = webhooks.dispatch_pending(actor="worker", sender=sender)
+
+    assert subscription.events[0].event_type == "webhook.subscription.upserted"
+    assert pending["total"] == 1
+    assert dispatch.payload["processed_count"] == 1
+    assert len(dispatch.payload["delivered"]) == 1
+    assert dispatch.events[0].event_type == "webhook.dispatch.completed"
+    assert sent[0]["target_url"] == "https://example.test/archub-webhook"
+    assert sent[0]["headers"]["X-ArcHub-Event"] == "content.published"
+    assert str(sent[0]["headers"]["X-ArcHub-Signature"]).startswith("sha256=")
+
+
+def test_governance_service_controls_editor_permissions_and_public_access(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setenv("ARCHUB_CMS_DB", str(tmp_path / "archub.db"))
+    get_archub_cms_service.cache_clear()
+    seed_demo_content()
+    cms = get_archub_cms_service()
+    governance = get_archub_governance_service(cms)
+    node = cms.create_node(
+        parent_id="root",
+        content_type_alias="page",
+        name="Governance service page",
+        slug="governance-service-page",
+        payload={"title": "Governance service page", "body": "<p>Governed.</p>"},
+        created_by="test",
+    )
+
+    grant = governance.grant_permission(
+        subject="editor@example.test",
+        scope_node_id=node.node_id,
+        actions=["browse", "update"],
+        include_descendants=True,
+        actor="admin",
+    )
+    access = governance.set_public_access_rule(
+        node.node_id,
+        policy="members",
+        member_groups=["premium"],
+        login_path="/login",
+        actor="admin",
+    )
+
+    assert grant.events[0].event_type == "governance.permission.granted"
+    assert governance.can_user_perform(
+        username="editor@example.test",
+        is_admin=False,
+        action="update",
+        node_id=node.node_id,
+    )
+    assert access.payload["policy"] == "members"
+    assert not governance.can_access_public_content(node.node_id, authenticated=False)
+    assert governance.can_access_public_content(
+        node.node_id,
+        username="member@example.test",
+        authenticated=True,
+        member_groups=["premium"],
+    )
+    removed = governance.remove_public_access_rule(node.node_id, actor="admin")
+
+    assert removed.events[0].event_type == "governance.public_access.removed"
+    assert governance.public_access_rule(node.node_id)["policy"] == "public"

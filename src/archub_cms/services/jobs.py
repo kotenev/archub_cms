@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from archub_cms.application.publishing import get_archub_publishing_service
+from archub_cms.application.webhooks import get_archub_webhook_service
 from archub_cms.services.cms import ArcHubCMSService, get_archub_cms_service
 from archub_cms.settings import ArcHubSettings
 
@@ -43,8 +44,9 @@ class ArcHubMaintenanceService:
         runtime_export = None
         if bool(runtime_status.get("needs_export")):
             runtime_export = self._cms.export_runtime_content(exported_by=actor)
-        webhooks = self._cms.dispatch_webhook_deliveries(
+        webhook_result = get_archub_webhook_service(self._cms).dispatch_pending(
             limit=self._settings.webhook_dispatch_limit,
+            actor=actor,
         )
         health = self._cms.content_health_report()
         return {
@@ -53,7 +55,8 @@ class ArcHubMaintenanceService:
             "runtime_status": runtime_status,
             "runtime_export": workflow_result.runtime_export or runtime_export,
             "runtime_export_error": workflow_result.runtime_export_error,
-            "webhooks": webhooks,
+            "webhooks": webhook_result.payload,
+            "webhook_events": [event.as_dict() for event in webhook_result.events],
             "health": {
                 "ok": health.get("ok"),
                 "issue_count": health.get("issue_count"),

@@ -1,0 +1,29 @@
+@startuml
+title ArcHub CMS - Public Access Decision Flow
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+actor Visitor
+participant "Public route" as Route
+participant "ArcHubGovernanceService" as Governance
+participant "ArcHubCMSService" as CMS
+database "SQLite" as DB
+
+Visitor -> Route : GET /cms/{path}
+Route -> Governance : public_access_rule(node_id)
+Governance -> CMS : get_public_access_rule(inherited=true)
+CMS -> DB : lookup node and inherited rule
+DB --> CMS : rule or none
+CMS --> Governance : policy
+Route -> Governance : can_access_public_content()
+alt public
+    Governance --> Route : allow
+    Route --> Visitor : content
+else authenticated required and no member
+    Governance --> Route : deny
+    Route --> Visitor : 302 login or 401 JSON
+else members required but group missing
+    Governance --> Route : deny
+    Route --> Visitor : 403
+end
+@enduml

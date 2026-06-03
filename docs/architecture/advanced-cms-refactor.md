@@ -4,8 +4,9 @@ This refactor aligns ArcHub CMS with proven ideas from Umbraco and modern
 headless CMS platforms while preserving the package's FastAPI-first public API.
 The implemented refactoring introduces stable architectural seams:
 `ArcHubDeliveryService`, `ArcHubPublishingService`, `ArcHubDomainEvent`,
-`ArcHubMediaService`, `ArcHubPackageService`, `ArcHubContentHelper`,
-`PublishedContent`, and `ArcHubMaintenanceService`.
+`ArcHubMediaService`, `ArcHubPackageService`, `ArcHubWebhookService`,
+`ArcHubGovernanceService`, `ArcHubContentHelper`, `PublishedContent`, and
+`ArcHubMaintenanceService`.
 
 ## Design Inputs
 
@@ -123,6 +124,32 @@ outside the standalone package.
 This aligns ArcHub with Umbraco package concepts and environment-promotion
 patterns from Contentful, Strapi, and Sanity.
 
+### Webhook Integration Application Service
+
+`ArcHubWebhookService` owns webhook integration operations:
+
+- list and upsert subscriptions;
+- expose durable delivery attempts;
+- dispatch due `pending` and `retry` deliveries;
+- keep HMAC signing and ArcHub headers behind the compatibility API;
+- emit `webhook.subscription.upserted` and `webhook.dispatch.completed`.
+
+`ArcHubMaintenanceService` now dispatches through this boundary, matching
+Umbraco, Strapi, Contentful, and Sanity webhook reliability patterns.
+
+### Governance Application Service
+
+`ArcHubGovernanceService` owns editor permissions and public access decisions:
+
+- route guards use `can_user_perform()`;
+- permission routes use grant/revoke/report use cases;
+- public delivery uses `can_access_public_content()`;
+- member-gated access stays small and host-auth compatible;
+- permission and access updates emit governance domain events.
+
+This follows Umbraco user/member separation and modern CMS role concepts from
+Contentful, Sanity, and Strapi without embedding a full identity provider.
+
 ### Maintenance Service
 
 `ArcHubMaintenanceService.run_once()` centralizes operational work:
@@ -149,6 +176,7 @@ The large CMS service should be split only behind compatibility tests:
 | `application/media.py` | media registration/listing | Asset metadata and usage reports. |
 | `application/packages.py` | package export/import methods | Environment promotion and migrations. |
 | `application/webhooks.py` | webhook queue and dispatch | Event subscription and retry policy. |
+| `application/governance.py` | permission and access methods | Editor authorization, public access, member gating. |
 
 ## PlantUML
 
@@ -166,6 +194,10 @@ Primary source files:
 - `docs/diagrams/plantuml/media-usage-report.puml`
 - `docs/diagrams/plantuml/package-promotion-service.puml`
 - `docs/diagrams/plantuml/package-import-plan.puml`
+- `docs/diagrams/plantuml/webhook-application-service.puml`
+- `docs/diagrams/plantuml/webhook-dispatch-flow.puml`
+- `docs/diagrams/plantuml/governance-service.puml`
+- `docs/diagrams/plantuml/public-access-flow.puml`
 
 Render them with:
 
@@ -192,6 +224,10 @@ plantuml -tsvg docs/diagrams/plantuml/*.puml
   checks through `ArcHubMediaService`.
 - Package import/export runs through `ArcHubPackageService` with inspection,
   dry-run planning, and promotion events.
+- Webhook management and dispatch run through `ArcHubWebhookService` with
+  subscription events and dispatch result events.
+- Editor permissions and public access decisions run through
+  `ArcHubGovernanceService`.
 - Architecture diagrams are updated with each extracted module.
 
 ## References
@@ -201,6 +237,9 @@ plantuml -tsvg docs/diagrams/plantuml/*.puml
 - [Strapi REST API parameters](https://docs.strapi.io/cms/api/rest/parameters)
 - [Contentful environments](https://www.contentful.com/help/environments/)
 - [Contentful webhooks](https://www.contentful.com/developers/docs/concepts/webhooks/)
+- [Umbraco Webhooks](https://docs.umbraco.com/umbraco-cms/reference/webhooks)
+- [Strapi Webhooks](https://docs.strapi.io/cms/backend-customization/webhooks)
+- [Sanity webhooks](https://www.sanity.io/docs/content-lake/webhooks)
 - [Contentful media](https://www.contentful.com/help/media/)
 - [Umbraco Packages](https://docs.umbraco.com/umbraco-cms/extending/packages)
 - [Umbraco Media Management](https://docs.umbraco.com/umbraco-cms/tutorials/editors-manual/media-management)
@@ -209,4 +248,6 @@ plantuml -tsvg docs/diagrams/plantuml/*.puml
 - [Sanity assets](https://www.sanity.io/docs/content-lake/assets)
 - [Sanity datasets](https://www.sanity.io/docs/content-lake/datasets)
 - [Sanity roles](https://www.sanity.io/docs/user-guides/roles)
+- [Contentful roles](https://www.contentful.com/help/roles/)
+- [Contentful content permissions](https://www.contentful.com/help/content-permissions/)
 - [Sanity schemas](https://www.sanity.io/docs/schemas-and-forms)
