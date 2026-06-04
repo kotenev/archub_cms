@@ -1,0 +1,33 @@
+@startuml
+title ArcHub CMS - Enterprise Knowledge Platform DDD Boundary
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+actor "Knowledge worker" as Worker
+actor "Plugin developer" as PluginDev
+component "Knowledge admin/API routes\nweb.routes" as Routes
+component "ArcHubKnowledgeBaseService\napplication.knowledge" as Knowledge
+component "ArcHubPluginRegistry\napplication.plugins" as Plugins
+component "Knowledge domain\nspaces documents graph" as Domain
+interface "LLMProviderPort" as LLMPort
+component "Offline Extractive\nprovider" as Offline
+component "OpenAI-compatible\nprovider" as Online
+component "ArcHubCMSService\ncompatibility adapter" as CMS
+database "SQLite CMS store" as DB
+folder "Plugin manifests\nplugins/" as PluginFiles
+folder "Markdown vault export" as Vault
+
+Worker --> Routes : search, graph,\nask, export
+Routes --> Knowledge : application use cases
+Knowledge --> Domain : build read models
+Knowledge --> CMS : published content,\nRAG materials
+CMS --> DB : content nodes,\nversions, activity
+Knowledge --> LLMPort : grounded answer request
+LLMPort <|.. Offline
+LLMPort <|.. Online
+Knowledge --> Vault : markdown files payload
+PluginDev --> PluginFiles : plugin.json
+Plugins --> PluginFiles : discover and validate
+Knowledge --> Plugins : platform capabilities
+@enduml

@@ -2,4 +2,4 @@
 
 from __future__ import annotations
 
-__all__ = ["events"]
+__all__ = ["events", "knowledge", "plugins"]

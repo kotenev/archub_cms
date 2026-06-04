@@ -5,9 +5,11 @@ from fastapi.testclient import TestClient
 from archub_cms.app import create_archub_app
 from archub_cms.application.delivery import DeliveryQuery, get_archub_delivery_service
 from archub_cms.application.governance import get_archub_governance_service
+from archub_cms.application.knowledge import KnowledgeQuery, get_archub_knowledge_base_service
 from archub_cms.application.media import ArcHubMediaService, MediaPolicy, get_archub_media_service
 from archub_cms.application.modeling import get_archub_modeling_service
 from archub_cms.application.packages import get_archub_package_service
+from archub_cms.application.plugins import ArcHubPluginRegistry
 from archub_cms.application.publishing import get_archub_publishing_service
 from archub_cms.application.versioning import get_archub_versioning_service
 from archub_cms.application.webhooks import get_archub_webhook_service
@@ -512,3 +514,94 @@ def test_versioning_service_restores_and_cleans_old_versions(tmp_path, monkeypat
     assert cleanup.events[0].event_type == "content.versions.cleaned"
     assert cleanup.payload["deleted_count"] == after_restore["total"] - 2
     assert versioning.versions(node.node_id, limit=20)["total"] == 2
+
+
+def test_knowledge_platform_discovers_plugins_graph_and_offline_answers(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setenv("ARCHUB_CMS_DB", str(tmp_path / "archub.db"))
+    get_archub_cms_service.cache_clear()
+    seed_demo_content()
+    plugin_dir = tmp_path / "plugins" / "macro-test"
+    plugin_dir.mkdir(parents=True)
+    (plugin_dir / "plugin.json").write_text(
+        """
+        {
+          "id": "acme.macro.decision-log",
+          "name": "Decision Log Macro",
+          "version": "1.2.0",
+          "capability": "macro",
+          "runtime": "http",
+          "entrypoint": "https://plugins.example.test/decision-log",
+          "description": "Embeds ADR summaries in knowledge pages.",
+          "permissions": ["content:read"],
+          "tags": ["adr", "confluence"]
+        }
+        """,
+        encoding="utf-8",
+    )
+    cms = get_archub_cms_service()
+    space = cms.create_node(
+        parent_id="root",
+        content_type_alias="page",
+        name="Engineering KB",
+        slug="engineering",
+        payload={
+            "title": "Engineering KB",
+            "summary": "Engineering knowledge space.",
+            "body": "<p>Team knowledge root.</p>",
+        },
+        created_by="editor",
+    )
+    cms.publish_node(space.node_id, published_by="editor")
+    incident = cms.create_node(
+        parent_id=space.node_id,
+        content_type_alias="knowledge_article",
+        name="Incident process",
+        slug="incident-process",
+        payload={
+            "title": "Incident process",
+            "excerpt": "How engineering handles incidents.",
+            "body": (
+                "Incident response uses severity, owner, timeline and follow-up actions. "
+                "See [[engineering/postmortems]] and /cms/engineering/missing-runbook."
+            ),
+            "tags": "incident,runbook",
+        },
+        created_by="editor",
+    )
+    cms.publish_node(incident.node_id, published_by="editor")
+    postmortems = cms.create_node(
+        parent_id=space.node_id,
+        content_type_alias="knowledge_article",
+        name="Postmortems",
+        slug="postmortems",
+        payload={
+            "title": "Postmortems",
+            "excerpt": "Template for incident learning.",
+            "body": "Postmortems capture impact, root cause, timeline and action items.",
+            "tags": "incident,template",
+        },
+        created_by="editor",
+    )
+    cms.publish_node(postmortems.node_id, published_by="editor")
+
+    service = get_archub_knowledge_base_service(
+        cms,
+        plugin_registry=ArcHubPluginRegistry(plugin_dirs=(tmp_path / "plugins",)),
+    )
+    documents = service.documents(KnowledgeQuery(q="incident", space_key="engineering"))
+    graph = service.graph(space_key="engineering")
+    answer = service.answer("How do we handle incidents?", space_key="engineering")
+    vault = service.vault_export(space_key="engineering")
+    plugins = service.plugin_catalog()
+
+    assert documents["total"] >= 2
+    assert graph.as_dict()["edge_count"] >= 2
+    assert graph.as_dict()["unresolved_count"] == 1
+    assert answer.provider == "offline-extractive"
+    assert answer.sources
+    assert vault["format"] == "obsidian-compatible-markdown-vault"
+    assert any(item["path"].endswith("incident-process.md") for item in vault["files"])
+    assert any(item["plugin_id"] == "acme.macro.decision-log" for item in plugins["plugins"])
+    assert plugins["capability_counts"]["llm_provider"] >= 2

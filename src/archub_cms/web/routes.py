@@ -18,6 +18,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 
 from archub_cms.application.delivery import DeliveryQuery, get_archub_delivery_service
 from archub_cms.application.governance import get_archub_governance_service
+from archub_cms.application.knowledge import KnowledgeQuery, get_archub_knowledge_base_service
 from archub_cms.application.media import get_archub_media_service
 from archub_cms.application.modeling import get_archub_modeling_service
 from archub_cms.application.packages import get_archub_package_service
@@ -1329,6 +1330,91 @@ async def content_builder_blocks_json(request: Request):
             "total": len(builder.list_block_types()),
         }
     )
+
+
+@router.get("/admin/archub/knowledge/platform.json")
+async def knowledge_platform_json(request: Request):
+    user = _guard(request)
+    if user is None:
+        return RedirectResponse("/login", status_code=302)
+    if not _can(user, "browse"):
+        return _permission_denied("browse")
+    return JSONResponse(get_archub_knowledge_base_service().platform_report())
+
+
+@router.get("/admin/archub/knowledge/documents.json")
+async def knowledge_documents_json(
+    request: Request,
+    q: str = "",
+    space: str = "",
+    tags: str = "",
+    limit: int = 25,
+):
+    user = _guard(request)
+    if user is None:
+        return RedirectResponse("/login", status_code=302)
+    if not _can(user, "browse"):
+        return _permission_denied("browse")
+    query = KnowledgeQuery(
+        q=q,
+        space_key=space,
+        tags=tuple(item.strip() for item in tags.split(",") if item.strip()),
+        limit=limit,
+    )
+    return JSONResponse(get_archub_knowledge_base_service().documents(query))
+
+
+@router.get("/admin/archub/knowledge/graph.json")
+async def knowledge_graph_json(request: Request, space: str = "", limit: int = 200):
+    user = _guard(request)
+    if user is None:
+        return RedirectResponse("/login", status_code=302)
+    if not _can(user, "browse"):
+        return _permission_denied("browse")
+    graph = get_archub_knowledge_base_service().graph(space_key=space, limit=limit)
+    return JSONResponse(graph.as_dict())
+
+
+@router.get("/admin/archub/knowledge/plugins.json")
+async def knowledge_plugins_json(request: Request):
+    user = _guard(request)
+    if user is None:
+        return RedirectResponse("/login", status_code=302)
+    if not _can(user, "settings"):
+        return _permission_denied("settings")
+    return JSONResponse(get_archub_knowledge_base_service().plugin_catalog())
+
+
+@router.get("/admin/archub/knowledge/vault-export.json")
+async def knowledge_vault_export_json(request: Request, space: str = "", limit: int = 500):
+    user = _guard(request)
+    if user is None:
+        return RedirectResponse("/login", status_code=302)
+    if not _can(user, "browse"):
+        return _permission_denied("browse")
+    return JSONResponse(
+        get_archub_knowledge_base_service().vault_export(space_key=space, limit=limit)
+    )
+
+
+@router.post("/admin/archub/knowledge/ask")
+async def knowledge_ask(request: Request):
+    user = _guard(request)
+    if user is None:
+        return RedirectResponse("/login", status_code=302)
+    if not _can(user, "browse"):
+        return _permission_denied("browse")
+    form = await parse_form(request)
+    try:
+        answer = get_archub_knowledge_base_service().answer(
+            form.get("question", ""),
+            space_key=form.get("space", ""),
+            corpus_key=form.get("corpus_key", ""),
+            limit=int(form.get("limit", "5") or 5),
+        )
+    except (RuntimeError, ValueError) as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+    return JSONResponse(answer.as_dict())
 
 
 @router.get("/admin/archub/content-builder/blueprints.json")

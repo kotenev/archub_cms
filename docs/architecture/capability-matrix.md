@@ -23,6 +23,11 @@ refactoring seam added in this change, and future extraction work.
 | Webhooks | Existing + refactored | `ArcHubWebhookService` owns subscriptions, delivery logs, retry dispatch, signing, and maintenance integration. |
 | Runtime/RAG export | Existing + refactored | Runtime snapshot freshness is checked and refreshed by maintenance. |
 | Published content helper | Added | `ArcHubContentHelper` and `PublishedContent` provide Umbraco-style helper APIs. |
+| Enterprise knowledge spaces | Added | `ArcHubKnowledgeBaseService` groups published nodes into knowledge spaces and document projections. |
+| Knowledge graph/backlinks | Added | Wiki links, markdown links, CMS paths, unresolved links, and orphaned documents are exposed as a read model. |
+| Offline vault export | Added | `vault_export()` returns Obsidian-compatible Markdown files with front matter. |
+| Offline/online LLM answers | Added | `LLMProviderPort` supports offline extractive answers and OpenAI-compatible online/local chat providers. |
+| Plugin manifest registry | Added | `ArcHubPluginRegistry` validates manifest-only plugins across auth, storage, renderer, search, LLM, macro, automation, compliance, and connector categories. |
 | Dictionary/localization helper | Added | Helper resolves dictionary values with culture fallback. |
 | Media helper | Added | Helper resolves registered media by ID or URL. |
 | Media/DAM reports | Added | `ArcHubMediaService` adds allowed-type policy, folder summaries, duplicate groups, usage reports, and orphaned asset detection. |
@@ -41,6 +46,8 @@ refactoring seam added in this change, and future extraction work.
 | API-first delivery | Umbraco Delivery API, Contentful CDA/CPA, Strapi REST, Sanity Content Lake | Keep `/cms/api/*`, add expansion/limiting, preview contracts, and optional GraphQL later. |
 | Schema-driven editing | Umbraco document types, Strapi Content-Type Builder, Contentful content models, Sanity schemas | Route data type, template, composition, content type, and blueprint changes through `ArcHubModelingService`. |
 | Content history retention | Umbraco version cleanup, Contentful versions, Sanity history | Route rollback and cleanup through `ArcHubVersioningService`; add scheduled policies after manual cleanup is stable. |
+| Enterprise wiki spaces | Confluence spaces/pages, Wiki.js modular wiki, Obsidian vaults | Route space, graph, vault export, and grounded ask workflows through `ArcHubKnowledgeBaseService`. |
+| Plugin ecosystem | Wiki.js modules, Obsidian manifests, Atlassian Forge | Use manifest-only plugin discovery first; bind trusted runtimes later through host adapters. |
 | Published-content read model | Umbraco `IPublishedContent` and helper APIs | Use `PublishedContent` and `ArcHubContentHelper` in templates and host integrations. |
 | Operational background jobs | Umbraco scheduled publishing and cleanup jobs | Use `ArcHubMaintenanceService` as the host-neutral job boundary. |
 | Composable integrations | Umbraco composers, modern headless webhooks/apps | Keep host ports and add explicit event handlers behind publishing/package/runtime actions. |
@@ -55,15 +62,19 @@ refactoring seam added in this change, and future extraction work.
    guards, and migration events.
 2. Extend `application/versioning.py` with document-type retention overrides,
    published-version protection, and prevent-cleanup flags.
-3. Extend `application/delivery.py` with media-reference expansion and
+3. Add trusted plugin runtime adapters for HTTP tools, sandbox workers, and
+   host-provided Python entrypoints.
+4. Add enterprise knowledge importers for Confluence exports, Git-backed wiki
+   folders, and Obsidian vaults.
+5. Extend `application/delivery.py` with media-reference expansion and
    collection pagination metadata.
-4. Extend publishing and package events with validation, signing, rollback, and
+6. Extend publishing and package events with validation, signing, rollback, and
    runtime export intent metadata.
-5. Replace remaining route-level side effects with event handlers for audit,
+7. Replace remaining route-level side effects with event handlers for audit,
    runtime export, search indexing, and cache invalidation.
-6. Add explicit media cleanup commands, thumbnail metadata, and external storage
+8. Add explicit media cleanup commands, thumbnail metadata, and external storage
    provider ports.
-7. Add GraphQL/OData-style query adapters only after REST projection limits are
+9. Add GraphQL/OData-style query adapters only after REST projection limits are
    covered by compatibility tests.
 
 ## References
@@ -72,6 +83,11 @@ refactoring seam added in this change, and future extraction work.
 - [Umbraco Content Delivery API](https://docs.umbraco.com/umbraco-cms/reference/content-delivery-api)
 - [Umbraco Defining Content](https://docs.umbraco.com/umbraco-cms/fundamentals/data/defining-content)
 - [Umbraco Content Version Cleanup](https://docs.umbraco.com/umbraco-cms/fundamentals/data/content-version-cleanup)
+- [Wiki.js Modules](https://docs.requarks.io/dev/modules)
+- [Obsidian Vault API](https://docs.obsidian.md/Plugins/Vault)
+- [Obsidian Manifest](https://docs.obsidian.md/Reference/Manifest)
+- [Confluence Cloud REST API](https://developer.atlassian.com/cloud/confluence/rest/v1/intro/)
+- [Atlassian Forge for Confluence](https://developer.atlassian.com/cloud/confluence/forge/)
 - [Strapi REST API parameters](https://docs.strapi.io/cms/api/rest/parameters)
 - [Strapi Content-Type Builder](https://docs.strapi.io/cms/features/content-type-builder)
 - [Contentful content models](https://www.contentful.com/help/content-models/)

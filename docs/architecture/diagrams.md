@@ -90,6 +90,12 @@ point, or render the ArchiMate PlantUML source directly.
 - `versioning-service.puml`: content history, rollback, and retention cleanup
   application boundary.
 - `version-cleanup-flow.puml`: keep-latest and age-based pruning sequence.
+- `enterprise-knowledge-platform.puml`: DDD knowledge-base boundary with plugin
+  registry and LLM ports.
+- `knowledge-answer-flow.puml`: retrieval, RAG source merge, and grounded answer
+  sequence.
+- `plugin-manifest-lifecycle.puml`: manifest validation and future runtime
+  binding.
 - `published-helper.puml`: `ArcHubContentHelper` and `PublishedContent` facade.
 - `maintenance-jobs.puml`: scheduled publishing, webhook dispatch, runtime
   export, and health reporting.
