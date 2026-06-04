@@ -4,40 +4,40 @@ This matrix maps ArcHub CMS to capabilities commonly found in Umbraco and
 advanced headless CMS platforms. It distinguishes existing behavior, the
 refactoring seam added in this change, and future extraction work.
 
-| Capability | ArcHub status | Architecture note |
-|---|---|---|
-| Backoffice | Existing | `/admin/archub` provides editing, modeling, runtime, permissions, workflow, package, media, dictionary, webhook, and health screens. |
-| Published delivery API | Existing + refactored | `/cms/api/*`, RSS, sitemap, robots, public HTML, ETag, private/public cache behavior, and `ArcHubDeliveryService` projection contracts. |
-| Document types and fields | Existing + refactored | `ArcHubModelingService` owns `ContentType`, `ContentField`, data types, templates, compositions, and blueprints. |
-| Element/block content | Existing | `ArcHubContentBuilderService` models reusable block types and blueprints. |
-| Draft and publish | Existing + refactored | Nodes keep separate draft and published JSON payloads; commands run through `ArcHubPublishingService`. |
-| Version history | Existing + refactored | Save/publish creates retrievable versions; listing, JSON lookup, and restore run through `ArcHubVersioningService`. |
-| Preview | Existing | Tokenized preview route and no-store preview headers. |
-| Multilingual variants | Existing | Culture-specific published variants and delivery fallback. |
-| Personalization | Existing | Segment-specific payload overrides and delivery fallback. |
-| Domains and multi-site roots | Existing | Hostname-to-root/culture mapping through content domains. |
-| Redirects | Existing | Source-to-target redirect rules with active flags. |
-| Permissions and public access | Existing + refactored | `ArcHubGovernanceService` owns editor authorization, scoped actions, public access policies, and member gating. |
-| Locks | Existing | Active edit locks with expiry and force release. |
-| Workflow scheduling | Existing + refactored | `ArcHubPublishingService` applies due workflow transitions; `ArcHubMaintenanceService` invokes it operationally. |
-| Webhooks | Existing + refactored | `ArcHubWebhookService` owns subscriptions, delivery logs, retry dispatch, signing, and maintenance integration. |
-| Runtime/RAG export | Existing + refactored | Runtime snapshot freshness is checked and refreshed by maintenance. |
-| Published content helper | Added | `ArcHubContentHelper` and `PublishedContent` provide Umbraco-style helper APIs. |
-| Enterprise knowledge spaces | Added | `ArcHubKnowledgeBaseService` groups published nodes into knowledge spaces and document projections. |
-| Knowledge graph/backlinks | Added | Wiki links, markdown links, CMS paths, unresolved links, and orphaned documents are exposed as a read model. |
-| Offline vault export | Added | `vault_export()` returns Obsidian-compatible Markdown files with front matter. |
-| Offline/online LLM answers | Added | `LLMProviderPort` supports offline extractive answers and OpenAI-compatible online/local chat providers. |
-| Plugin manifest registry | Added | `ArcHubPluginRegistry` validates manifest-only plugins across auth, storage, renderer, search, LLM, macro, automation, compliance, and connector categories. |
-| Dictionary/localization helper | Added | Helper resolves dictionary values with culture fallback. |
-| Media helper | Added | Helper resolves registered media by ID or URL. |
-| Media/DAM reports | Added | `ArcHubMediaService` adds allowed-type policy, folder summaries, duplicate groups, usage reports, and orphaned asset detection. |
-| Environments/promotions | Partial + refactored | `ArcHubPackageService` wraps export, inspection, dry-run plans, import, and promotion events; target architecture should add environment metadata and migration scripts. |
-| Property expansion/limiting | Added | `fields`, `expand=properties[...]`, and `Start-Item` are handled by `application.delivery`. |
-| Content version cleanup | Added | `ArcHubVersioningService.cleanup()` prunes old snapshots with keep-latest and optional age rules; future work should add per-content-type overrides and prevent-cleanup flags. |
-| Media cleanup/duplicate checks | Added | Duplicate/orphan reports are exposed as computed read models; destructive cleanup remains a future explicit command. |
-| Realtime collaboration | Future | Track editor presence, optimistic concurrency, and conflict resolution. |
-| GraphQL/OData delivery | Future | REST is present; optional query endpoint can be added after permission and expansion rules are formalized. |
-| Audit/event bus | Partial + refactored | Activity exists; lifecycle commands now return `ArcHubDomainEvent` objects as the integration boundary. |
+| Capability                     | ArcHub status         | Architecture note                                                                                                                                                              |
+|--------------------------------|-----------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Backoffice                     | Existing              | `/admin/archub` provides editing, modeling, runtime, permissions, workflow, package, media, dictionary, webhook, and health screens.                                           |
+| Published delivery API         | Existing + refactored | `/cms/api/*`, RSS, sitemap, robots, public HTML, ETag, private/public cache behavior, and `ArcHubDeliveryService` projection contracts.                                        |
+| Document types and fields      | Existing + refactored | `ArcHubModelingService` owns `ContentType`, `ContentField`, data types, templates, compositions, and blueprints.                                                               |
+| Element/block content          | Existing              | `ArcHubContentBuilderService` models reusable block types and blueprints.                                                                                                      |
+| Draft and publish              | Existing + refactored | Nodes keep separate draft and published JSON payloads; commands run through `ArcHubPublishingService`.                                                                         |
+| Version history                | Existing + refactored | Save/publish creates retrievable versions; listing, JSON lookup, and restore run through `ArcHubVersioningService`.                                                            |
+| Preview                        | Existing              | Tokenized preview route and no-store preview headers.                                                                                                                          |
+| Multilingual variants          | Existing              | Culture-specific published variants and delivery fallback.                                                                                                                     |
+| Personalization                | Existing              | Segment-specific payload overrides and delivery fallback.                                                                                                                      |
+| Domains and multi-site roots   | Existing              | Hostname-to-root/culture mapping through content domains.                                                                                                                      |
+| Redirects                      | Existing              | Source-to-target redirect rules with active flags.                                                                                                                             |
+| Permissions and public access  | Existing + refactored | `ArcHubGovernanceService` owns editor authorization, scoped actions, public access policies, and member gating.                                                                |
+| Locks                          | Existing              | Active edit locks with expiry and force release.                                                                                                                               |
+| Workflow scheduling            | Existing + refactored | `ArcHubPublishingService` applies due workflow transitions; `ArcHubMaintenanceService` invokes it operationally.                                                               |
+| Webhooks                       | Existing + refactored | `ArcHubWebhookService` owns subscriptions, delivery logs, retry dispatch, signing, and maintenance integration.                                                                |
+| Runtime/RAG export             | Existing + refactored | Runtime snapshot freshness is checked and refreshed by maintenance.                                                                                                            |
+| Published content helper       | Added                 | `ArcHubContentHelper` and `PublishedContent` provide Umbraco-style helper APIs.                                                                                                |
+| Enterprise knowledge spaces    | Added                 | `ArcHubKnowledgeBaseService` groups published nodes into knowledge spaces and document projections.                                                                            |
+| Knowledge graph/backlinks      | Added                 | Wiki links, markdown links, CMS paths, unresolved links, and orphaned documents are exposed as a read model.                                                                   |
+| Offline vault export           | Added                 | `vault_export()` returns Obsidian-compatible Markdown files with front matter.                                                                                                 |
+| Offline/online LLM answers     | Added                 | `LLMProviderPort` supports offline extractive answers and OpenAI-compatible online/local chat providers.                                                                       |
+| Plugin manifest registry       | Added                 | `ArcHubPluginRegistry` validates manifest-only plugins across auth, storage, renderer, search, LLM, macro, automation, compliance, and connector categories.                   |
+| Dictionary/localization helper | Added                 | Helper resolves dictionary values with culture fallback.                                                                                                                       |
+| Media helper                   | Added                 | Helper resolves registered media by ID or URL.                                                                                                                                 |
+| Media/DAM reports              | Added                 | `ArcHubMediaService` adds allowed-type policy, folder summaries, duplicate groups, usage reports, and orphaned asset detection.                                                |
+| Environments/promotions        | Partial + refactored  | `ArcHubPackageService` wraps export, inspection, dry-run plans, import, and promotion events; target architecture should add environment metadata and migration scripts.       |
+| Property expansion/limiting    | Added                 | `fields`, `expand=properties[...]`, and `Start-Item` are handled by `application.delivery`.                                                                                    |
+| Content version cleanup        | Added                 | `ArcHubVersioningService.cleanup()` prunes old snapshots with keep-latest and optional age rules; future work should add per-content-type overrides and prevent-cleanup flags. |
+| Media cleanup/duplicate checks | Added                 | Duplicate/orphan reports are exposed as computed read models; destructive cleanup remains a future explicit command.                                                           |
+| Realtime collaboration         | Future                | Track editor presence, optimistic concurrency, and conflict resolution.                                                                                                        |
+| GraphQL/OData delivery         | Future                | REST is present; optional query endpoint can be added after permission and expansion rules are formalized.                                                                     |
+| Audit/event bus                | Partial + refactored  | Activity exists; lifecycle commands now return `ArcHubDomainEvent` objects as the integration boundary.                                                                        |
 
 ## Advanced CMS Pattern Mapping
 
