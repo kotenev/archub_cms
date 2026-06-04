@@ -20,6 +20,12 @@ class ArcHubSettings:
     background_jobs_enabled: bool = False
     background_job_interval_seconds: int = 60
     webhook_dispatch_limit: int = 50
+    plugin_dirs: tuple[Path, ...] = (Path("plugins"),)
+    llm_provider: str = "offline-extractive"
+    llm_base_url: str = ""
+    llm_api_key: str = ""
+    llm_model: str = ""
+    llm_timeout_seconds: float = 15.0
     allowed_media_content_types: tuple[str, ...] = (
         "image/jpeg",
         "image/png",
@@ -55,6 +61,13 @@ class ArcHubSettings:
                 60,
             ),
             webhook_dispatch_limit=_positive_int(source.get("ARCHUB_WEBHOOK_DISPATCH_LIMIT"), 50),
+            plugin_dirs=_path_tuple(source.get("ARCHUB_PLUGIN_DIRS"), cls.plugin_dirs),
+            llm_provider=source.get("ARCHUB_LLM_PROVIDER", "offline-extractive").strip()
+            or "offline-extractive",
+            llm_base_url=source.get("ARCHUB_LLM_BASE_URL", "").strip(),
+            llm_api_key=source.get("ARCHUB_LLM_API_KEY", "").strip(),
+            llm_model=source.get("ARCHUB_LLM_MODEL", "").strip(),
+            llm_timeout_seconds=_positive_float(source.get("ARCHUB_LLM_TIMEOUT"), 15.0),
             allowed_media_content_types=_csv_tuple(
                 source.get("ARCHUB_ALLOWED_MEDIA_CONTENT_TYPES"),
                 cls.allowed_media_content_types,
@@ -72,6 +85,16 @@ def _positive_int(value: str | None, default: int) -> int:
     return parsed if parsed > 0 else default
 
 
+def _positive_float(value: str | None, default: float) -> float:
+    if value is None:
+        return default
+    try:
+        parsed = float(value)
+    except ValueError:
+        return default
+    return parsed if parsed > 0 else default
+
+
 def _truthy(value: str | None) -> bool:
     if value is None:
         return False
@@ -82,6 +105,13 @@ def _csv_tuple(value: str | None, default: tuple[str, ...]) -> tuple[str, ...]:
     if value is None:
         return default
     items = tuple(item.strip() for item in value.split(",") if item.strip())
+    return items or default
+
+
+def _path_tuple(value: str | None, default: tuple[Path, ...]) -> tuple[Path, ...]:
+    if value is None:
+        return default
+    items = tuple(Path(item.strip()) for item in value.split(",") if item.strip())
     return items or default
 
 

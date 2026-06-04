@@ -1,4 +1,5 @@
 """Host integration contracts for standalone ArcHub CMS."""
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -11,6 +12,9 @@ __all__ = [
     "AuditSink",
     "AuthPort",
     "CacheInvalidationPort",
+    "LLMRequest",
+    "LLMResponse",
+    "LLMProviderPort",
     "NoopAuditSink",
     "NoopCacheInvalidationPort",
     "RuntimeImportSources",
@@ -38,6 +42,25 @@ class AuditEvent:
     action: str
     actor: str
     aggregate_id: str = ""
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class LLMRequest:
+    prompt: str
+    system_prompt: str = ""
+    context: tuple[Mapping[str, Any], ...] = ()
+    model: str = ""
+    temperature: float = 0.1
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class LLMResponse:
+    text: str
+    provider: str
+    model: str = ""
+    mode: str = "offline"
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
 
@@ -75,6 +98,15 @@ class CacheInvalidationPort(Protocol):
 class AuditSink(Protocol):
     def record(self, event: AuditEvent) -> None:
         """Record a CMS audit event."""
+
+
+@runtime_checkable
+class LLMProviderPort(Protocol):
+    provider_name: str
+    mode: str
+
+    def complete(self, request: LLMRequest) -> LLMResponse:
+        """Synthesize an answer from a prompt and supplied knowledge context."""
 
 
 class NoopCacheInvalidationPort:

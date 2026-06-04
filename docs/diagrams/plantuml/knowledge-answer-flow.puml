@@ -1,0 +1,25 @@
+@startuml
+title ArcHub CMS - Grounded Knowledge Answer Flow
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+participant "Admin route\n/knowledge/ask" as Route
+participant "ArcHubKnowledgeBaseService" as Knowledge
+participant "ArcHubCMSService" as CMS
+participant "LLMProviderPort" as LLM
+database "SQLite" as DB
+
+Route -> Knowledge : answer(question,\nspace_key, corpus_key)
+Knowledge -> CMS : list_tree()
+CMS -> DB : read published nodes
+Knowledge -> Knowledge : score documents by\nspace, tags, body
+Knowledge -> CMS : search_published_rag_materials()
+CMS -> DB : read active RAG materials
+Knowledge -> LLM : complete(prompt,\nsource context)
+alt offline provider
+  LLM --> Knowledge : extractive grounded draft
+else online/local provider
+  LLM --> Knowledge : chat completion result
+end
+Knowledge --> Route : answer, provider,\nmode, sources
+@enduml

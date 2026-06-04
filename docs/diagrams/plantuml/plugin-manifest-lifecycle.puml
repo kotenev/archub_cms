@@ -1,0 +1,21 @@
+@startuml
+title ArcHub CMS - Plugin Manifest Lifecycle
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+actor "Plugin developer" as Dev
+participant "Plugin manifest\nplugin.json" as Manifest
+participant "ArcHubPluginRegistry" as Registry
+participant "Knowledge platform" as Platform
+participant "Host adapter\nfuture sandbox" as Host
+
+Dev -> Manifest : declare id, version,\ncapability, runtime,\npermissions
+Registry -> Manifest : discover from\nARCHUB_PLUGIN_DIRS
+Registry -> Registry : validate semver,\ncapability, runtime
+Registry --> Platform : catalog and\ncapability matrix
+alt trusted runtime binding
+  Platform -> Host : bind validated manifest\nto external worker/API
+else manifest-only
+  Platform --> Platform : expose capability\nwithout code execution
+end
+@enduml

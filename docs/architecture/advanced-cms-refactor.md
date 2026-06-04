@@ -5,7 +5,8 @@ headless CMS platforms while preserving the package's FastAPI-first public API.
 The implemented refactoring introduces stable architectural seams:
 `ArcHubDeliveryService`, `ArcHubPublishingService`, `ArcHubDomainEvent`,
 `ArcHubModelingService`, `ArcHubMediaService`, `ArcHubPackageService`,
-`ArcHubVersioningService`, `ArcHubWebhookService`, `ArcHubGovernanceService`,
+`ArcHubVersioningService`, `ArcHubKnowledgeBaseService`,
+`ArcHubPluginRegistry`, `ArcHubWebhookService`, `ArcHubGovernanceService`,
 `ArcHubContentHelper`, `PublishedContent`, and `ArcHubMaintenanceService`.
 
 ## Design Inputs
@@ -63,6 +64,22 @@ incrementally extract cohesive modules behind the existing API.
 This mirrors Umbraco document types, data types, compositions, and templates,
 while aligning with Strapi Content-Type Builder, Contentful content models, and
 Sanity schemas.
+
+### Enterprise Knowledge Platform Context
+
+`ArcHubKnowledgeBaseService` introduces a DDD bounded context for corporate
+knowledge-base workflows:
+
+- `KnowledgeSpace` aggregates published documents by route-root;
+- `KnowledgeDocument` projects CMS nodes into searchable KB pages;
+- `KnowledgeGraph` exposes wiki links, backlinks, orphaned pages, and missing
+  targets;
+- `vault_export()` returns Obsidian-compatible Markdown payloads;
+- `answer()` retrieves published documents/RAG materials and calls an
+  `LLMProviderPort` with source context.
+
+`ArcHubPluginRegistry` adds manifest-driven extension discovery. It validates
+plugin manifests and capability categories without executing plugin code.
 
 ### Versioning Application Service
 
@@ -201,6 +218,8 @@ The large CMS service should be split only behind compatibility tests:
 |---|---|---|
 | `domain/content.py` | dataclasses and validation helpers | Content node/type/value objects and invariants. |
 | `application/modeling.py` | content model methods | Data types, templates, content types, compositions, blueprints. |
+| `application/knowledge.py` | published KB projections | Spaces, documents, graph, vault export, LLM answers. |
+| `application/plugins.py` | manifest discovery | Plugin capability registry and validation. |
 | `application/versioning.py` | version list/restore/cleanup methods | Content history, rollback, and retention cleanup. |
 | `application/publishing.py` | publish/unpublish/workflow methods | Publish use cases, domain events, cache/runtime side effects. |
 | `application/delivery.py` | published payload/search/tree/feed methods | Read model assembly and API projections. |
@@ -220,6 +239,9 @@ Primary source files:
 - `docs/diagrams/plantuml/content-model-update-flow.puml`
 - `docs/diagrams/plantuml/versioning-service.puml`
 - `docs/diagrams/plantuml/version-cleanup-flow.puml`
+- `docs/diagrams/plantuml/enterprise-knowledge-platform.puml`
+- `docs/diagrams/plantuml/knowledge-answer-flow.puml`
+- `docs/diagrams/plantuml/plugin-manifest-lifecycle.puml`
 - `docs/diagrams/plantuml/published-helper.puml`
 - `docs/diagrams/plantuml/maintenance-jobs.puml`
 - `docs/diagrams/plantuml/delivery-application-service.puml`
@@ -256,6 +278,9 @@ plantuml -tsvg docs/diagrams/plantuml/*.puml
   events.
 - Version history, rollback, and manual retention cleanup run through
   `ArcHubVersioningService` with explicit version events.
+- Knowledge-base spaces, document graph, offline vault export, plugin catalog,
+  and grounded LLM answers run through `ArcHubKnowledgeBaseService` and
+  manifest-only plugin discovery.
 - Publishing commands emit explicit domain events and return runtime export
   side-effect reports.
 - Delivery API uses `ArcHubDeliveryService` for controlled property
@@ -276,6 +301,11 @@ plantuml -tsvg docs/diagrams/plantuml/*.puml
 - [Umbraco Content Delivery API](https://docs.umbraco.com/umbraco-cms/reference/content-delivery-api)
 - [Umbraco Defining Content](https://docs.umbraco.com/umbraco-cms/fundamentals/data/defining-content)
 - [Umbraco Content Version Cleanup](https://docs.umbraco.com/umbraco-cms/fundamentals/data/content-version-cleanup)
+- [Wiki.js Modules](https://docs.requarks.io/dev/modules)
+- [Obsidian Vault API](https://docs.obsidian.md/Plugins/Vault)
+- [Obsidian Manifest](https://docs.obsidian.md/Reference/Manifest)
+- [Confluence Cloud REST API](https://developer.atlassian.com/cloud/confluence/rest/v1/intro/)
+- [Atlassian Forge for Confluence](https://developer.atlassian.com/cloud/confluence/forge/)
 - [Strapi REST API parameters](https://docs.strapi.io/cms/api/rest/parameters)
 - [Strapi Content-Type Builder](https://docs.strapi.io/cms/features/content-type-builder)
 - [Contentful content models](https://www.contentful.com/help/content-models/)
