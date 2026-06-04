@@ -17,8 +17,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-_WIKI_LINK_RE = re.compile(r"\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|[^\]]+)?\]\]")
-_MARKDOWN_LINK_RE = re.compile(r"\[[^\]]+\]\((/cms/[^)\s]+)\)")
+_WIKI_LINK_RE = re.compile(r"\[\[([^]|#]+)(?:#[^]|]+)?(?:\|[^]]+)?]]")
+_MARKDOWN_LINK_RE = re.compile(r"\[[^]]+](/cms/[^)\s]+)\)")
 _CMS_PATH_RE = re.compile(r"(?<![\w/])(/cms/[A-Za-z0-9_./-]+)")
 _SPACE_KEY_RE = re.compile(r"[^a-z0-9]+")
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi.testclient import TestClient
 
 from archub_cms.app import create_archub_app
@@ -326,7 +328,7 @@ def test_webhook_service_manages_subscriptions_and_dispatches_signed_deliveries(
 
     get_archub_publishing_service(cms).publish(node.node_id, actor="test")
     pending = webhooks.deliveries(status="pending")
-    sent: list[dict[str, object]] = []
+    sent: list[dict[str, Any]] = []
 
     def sender(
         target_url: str,
