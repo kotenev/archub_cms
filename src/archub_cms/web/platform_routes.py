@@ -19,6 +19,11 @@ from archub_cms.application.knowledge import (
     get_archub_knowledge_base_service,
 )
 from archub_cms.application.modeling_service import get_archub_modeling_query_service
+from archub_cms.application.versioning_service import (
+    VersioningCommandService,
+    VersionNotFoundError,
+    get_archub_versioning_query_service,
+)
 from archub_cms.extensibility.host import get_plugin_host
 
 platform_router = APIRouter(prefix="/api/platform", tags=["platform"])
@@ -224,3 +229,40 @@ def delivery_resolve(path: str = Query(...)) -> dict[str, Any]:
     if found is None:
         raise HTTPException(status_code=404, detail="no redirect for path")
     return found
+
+
+# -- versioning context (history / diff / restore) ----------------------------
+
+
+@platform_router.get("/versioning/{node_id}/history")
+def versioning_history(
+    node_id: str, limit: int = Query(default=20, ge=1, le=500)
+) -> dict[str, Any]:
+    return get_archub_versioning_query_service().history(node_id, limit=limit)
+
+
+@platform_router.get("/versioning/{node_id}/diff")
+def versioning_diff(
+    node_id: str,
+    from_version: int = Query(..., alias="from", ge=1),
+    to_version: int = Query(..., alias="to", ge=1),
+) -> dict[str, Any]:
+    try:
+        return get_archub_versioning_query_service().diff(
+            node_id, from_version_no=from_version, to_version_no=to_version
+        )
+    except VersionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=f"version not found: {exc}") from exc
+
+
+@platform_router.post("/versioning/{node_id}/restore")
+def versioning_restore(
+    node_id: str,
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    try:
+        return VersioningCommandService().restore(
+            node_id, int(payload.get("version_no") or 0), actor=str(payload.get("actor") or "")
+        )
+    except VersionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=f"version not found: {exc}") from exc
