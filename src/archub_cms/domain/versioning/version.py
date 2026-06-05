@@ -22,7 +22,7 @@ class Version:
     note: str = ""
 
     def as_dict(self, *, include_payload: bool = False) -> dict[str, Any]:
-        data = {
+        data: dict[str, Any] = {
             "version_id": self.version_id,
             "node_id": self.node_id,
             "version_no": self.version_no,
