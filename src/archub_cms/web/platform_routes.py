@@ -33,6 +33,10 @@ from archub_cms.application.packaging_service import get_archub_packaging_servic
 from archub_cms.application.plugin_management_service import (
     get_archub_plugin_management_service,
 )
+from archub_cms.application.runtime_service import (
+    RuntimeCommandService,
+    get_archub_runtime_query_service,
+)
 from archub_cms.application.versioning_service import (
     VersioningCommandService,
     VersionNotFoundError,
@@ -572,3 +576,43 @@ def packaging_import(
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+# -- runtime / RAG-export context ---------------------------------------------
+
+
+@platform_router.get("/runtime/snapshot")
+def runtime_snapshot() -> dict[str, Any]:
+    return get_archub_runtime_query_service().snapshot()
+
+
+@platform_router.get("/runtime/status")
+def runtime_status() -> dict[str, Any]:
+    return get_archub_runtime_query_service().status()
+
+
+@platform_router.get("/runtime/search")
+def runtime_search(
+    corpus: str = Query(default=""),
+    q: str = Query(default=""),
+    limit: int = Query(default=6, ge=1, le=50),
+) -> dict[str, Any]:
+    return get_archub_runtime_query_service().search(corpus, q, limit=limit)
+
+
+@platform_router.post("/runtime/export")
+def runtime_export(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    return RuntimeCommandService().export(actor=str(payload.get("actor") or "system"))
+
+
+@platform_router.post("/runtime/rebuild-index")
+def runtime_rebuild_index(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    return RuntimeCommandService().rebuild_indexes(
+        corpus_key=payload.get("corpus_key"),
+        model=payload.get("model"),
+        actor=str(payload.get("actor") or "system"),
+    )
