@@ -112,7 +112,9 @@ def test_delete_and_missing(service):
 
 def test_reaction_added_event(service):
     seen: list[str] = []
-    get_event_bus().subscribe(REACTION_ADDED, lambda e: seen.append(str(e.metadata.get("kind") or "")))
+    get_event_bus().subscribe(
+        REACTION_ADDED, lambda e: seen.append(str(e.metadata.get("kind") or ""))
+    )
     c = service.add_comment(node_id="root", author="alice", body="x")
     service.react(c.comment_id, user="bob", kind="thanks")
     assert seen == ["thanks"]

@@ -1,0 +1,13 @@
+{
+  "id": "example.vault_exporter",
+  "name": "Obsidian Vault Exporter",
+  "version": "1.0.0",
+  "capability": "exporter",
+  "runtime": "python",
+  "entrypoint": "archub_cms.extensibility.example_plugins.vault_exporter:VaultExporterPlugin",
+  "description": "Exports documents to an Obsidian-compatible markdown vault for offline knowledge work.",
+  "provider": "archub",
+  "permissions": ["content:read"],
+  "tags": ["example", "obsidian", "exporter"],
+  "enabled_by_default": true
+}

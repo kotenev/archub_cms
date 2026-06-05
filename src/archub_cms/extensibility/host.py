@@ -5,6 +5,7 @@ from __future__ import annotations
 __all__ = ["LoadedPlugin", "PluginHost", "get_plugin_host"]
 
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -14,8 +15,12 @@ from archub_cms.extensibility.bus import HookLog
 from archub_cms.extensibility.config_store import PluginConfigStore
 from archub_cms.extensibility.extension_points import (
     EventHookExt,
+    ExporterExt,
+    ImporterExt,
     LLMToolExt,
+    MacroExt,
     PluginContext,
+    RendererExt,
     SearchExt,
     SearchHit,
 )
@@ -28,6 +33,23 @@ from archub_cms.settings import ArcHubSettings
 logger = logging.getLogger("archub_cms.plugins")
 
 _EXECUTABLE_RUNTIMES = {"python", "http", "external"}
+# Macro token syntax: {{ name key=value key2="quoted value" }}
+_MACRO_RE = re.compile(r"\{\{\s*([a-zA-Z][\w-]*)((?:\s+[^}]*)?)\}\}")
+_MACRO_ARG_RE = re.compile(r"([a-zA-Z_][\w-]*)=(\"[^\"]*\"|'[^']*'|\S+)")
+
+
+def _parse_macro_args(raw: str) -> dict[str, Any]:
+    args: dict[str, Any] = {}
+    for match in _MACRO_ARG_RE.finditer(raw or ""):
+        value = match.group(2)
+        if value[:1] in {'"', "'"} and value[-1:] == value[:1]:
+            value = value[1:-1]
+        args[match.group(1)] = value
+    return args
+
+
+def _ext_name(ext: Any) -> str:
+    return str(getattr(ext, "name", None) or type(ext).__name__)
 
 
 @dataclass
@@ -70,6 +92,10 @@ class PluginHost:
         self._event_hooks: list[EventHookExt] = []
         self._search_exts: list[SearchExt] = []
         self._llm_tools: dict[str, LLMToolExt] = {}
+        self._renderers: list[RendererExt] = []
+        self._macros: dict[str, MacroExt] = {}
+        self._importers: dict[str, ImporterExt] = {}
+        self._exporters: dict[str, ExporterExt] = {}
         self._loaded_ids: set[str] = set()
 
     # -- lifecycle ---------------------------------------------------------
@@ -127,6 +153,16 @@ class PluginHost:
                 self._search_exts.append(ext)
             if isinstance(ext, LLMToolExt):
                 self._llm_tools[ext.name] = ext
+            if isinstance(ext, MacroExt):
+                self._macros[ext.macro_name] = ext
+            # RendererExt is checked after MacroExt because a macro is not a
+            # whole-body renderer; the two protocols are distinct by method.
+            if isinstance(ext, RendererExt):
+                self._renderers.append(ext)
+            if isinstance(ext, ImporterExt):
+                self._importers[_ext_name(ext)] = ext
+            if isinstance(ext, ExporterExt):
+                self._exporters[_ext_name(ext)] = ext
 
     # -- accessors ---------------------------------------------------------
 
@@ -144,6 +180,18 @@ class PluginHost:
     def llm_tools(self) -> dict[str, LLMToolExt]:
         return dict(self._llm_tools)
 
+    @property
+    def macros(self) -> dict[str, MacroExt]:
+        return dict(self._macros)
+
+    @property
+    def importers(self) -> dict[str, ImporterExt]:
+        return dict(self._importers)
+
+    @property
+    def exporters(self) -> dict[str, ExporterExt]:
+        return dict(self._exporters)
+
     def search(self, query: str, *, limit: int = 10) -> list[SearchHit]:
         hits: list[SearchHit] = []
         for ext in self._search_exts:
@@ -154,6 +202,48 @@ class PluginHost:
         hits.sort(key=lambda hit: hit.score, reverse=True)
         return hits[:limit]
 
+    def render(self, body: str, *, context: dict[str, Any] | None = None) -> str:
+        """Run all whole-body renderers in sequence, then expand `{{macro}}`s."""
+        ctx = context or {}
+        text = body
+        for renderer in self._renderers:
+            try:
+                text = renderer.render(text, context=ctx)
+            except Exception:  # a renderer must not break content delivery
+                logger.exception("renderer extension failed")
+        if self._macros:
+            text = _MACRO_RE.sub(self._expand_macro, text)
+        return text
+
+    def _expand_macro(self, match: re.Match[str]) -> str:
+        name = match.group(1)
+        macro = self._macros.get(name)
+        if macro is None:
+            return match.group(0)  # leave unknown macros untouched
+        try:
+            return macro.expand(_parse_macro_args(match.group(2)))
+        except Exception:  # a macro must not break rendering
+            logger.exception("macro %s failed", name)
+            return match.group(0)
+
+    def run_tool(self, name: str, arguments: dict[str, Any]) -> str:
+        tool = self._llm_tools.get(name)
+        if tool is None:
+            raise KeyError(f"no LLM tool named {name!r}")
+        return tool.run(arguments)
+
+    def import_documents(self, importer: str, source: Any) -> list[dict[str, Any]]:
+        ext = self._importers.get(importer)
+        if ext is None:
+            raise KeyError(f"no importer named {importer!r}")
+        return ext.import_documents(source)
+
+    def export_documents(self, exporter: str, documents: list[dict[str, Any]]) -> Any:
+        ext = self._exporters.get(exporter)
+        if ext is None:
+            raise KeyError(f"no exporter named {exporter!r}")
+        return ext.export_documents(documents)
+
     def report(self) -> dict[str, Any]:
         catalog = self._registry.catalog()
         return {
@@ -163,6 +253,10 @@ class PluginHost:
             "event_hooks": len(self._event_hooks),
             "search_extensions": len(self._search_exts),
             "llm_tools": sorted(self._llm_tools),
+            "renderers": len(self._renderers),
+            "macros": sorted(self._macros),
+            "importers": sorted(self._importers),
+            "exporters": sorted(self._exporters),
             "hook_counts": self._hook_log.counts,
             "recent_hooks": self._hook_log.recent(),
             "catalog_total": catalog["total"],

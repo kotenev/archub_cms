@@ -11,7 +11,7 @@ __all__ = ["platform_router"]
 
 from typing import Any
 
-from fastapi import APIRouter, Body, Query
+from fastapi import APIRouter, Body, HTTPException, Query
 
 from archub_cms.application.knowledge import (
     KnowledgeQuery,
@@ -90,3 +90,66 @@ def knowledge_answer(
         limit=int(payload.get("limit") or 5),
     )
     return answer.as_dict()
+
+
+# -- executable extension points (renderers/macros/importers/exporters/tools) --
+
+
+@platform_router.post("/render")
+def render_content(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    rendered = get_plugin_host().render(
+        str(payload.get("body") or ""), context=payload.get("context") or {}
+    )
+    return {"rendered": rendered}
+
+
+@platform_router.get("/extensions")
+def list_extensions() -> dict[str, Any]:
+    host = get_plugin_host()
+    report = host.report()
+    return {
+        "macros": report["macros"],
+        "renderers": report["renderers"],
+        "importers": report["importers"],
+        "exporters": report["exporters"],
+        "llm_tools": report["llm_tools"],
+        "search_extensions": report["search_extensions"],
+        "event_hooks": report["event_hooks"],
+    }
+
+
+@platform_router.post("/import/{importer}")
+def import_documents(
+    importer: str,
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    try:
+        documents = get_plugin_host().import_documents(importer, payload.get("source"))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"importer": importer, "documents": documents, "total": len(documents)}
+
+
+@platform_router.post("/export/{exporter}")
+def export_documents(
+    exporter: str,
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> Any:
+    try:
+        return get_plugin_host().export_documents(exporter, payload.get("documents") or [])
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@platform_router.post("/tools/{name}/run")
+def run_tool(
+    name: str,
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    try:
+        result = get_plugin_host().run_tool(name, payload.get("arguments") or payload)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"tool": name, "result": result}

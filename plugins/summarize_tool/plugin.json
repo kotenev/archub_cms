@@ -1,0 +1,13 @@
+{
+  "id": "example.summarize_tool",
+  "name": "Summarize LLM Tool",
+  "version": "1.0.0",
+  "capability": "llm_tool",
+  "runtime": "python",
+  "entrypoint": "archub_cms.extensibility.example_plugins.summarize_tool:SummarizeToolPlugin",
+  "description": "An LLM tool that summarizes knowledge content (offline-extractive or online provider).",
+  "provider": "archub",
+  "permissions": ["llm:invoke", "network:outbound"],
+  "tags": ["example", "llm", "rag"],
+  "enabled_by_default": true
+}
