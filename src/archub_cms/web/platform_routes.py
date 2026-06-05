@@ -13,6 +13,7 @@ from typing import Any
 
 from fastapi import APIRouter, Body, HTTPException, Query
 
+from archub_cms.application.delivery_read_service import get_archub_delivery_read_service
 from archub_cms.application.knowledge import (
     KnowledgeQuery,
     get_archub_knowledge_base_service,
@@ -185,3 +186,41 @@ def modeling_data_types(limit: int = Query(default=200, ge=1, le=500)) -> dict[s
 @platform_router.get("/modeling/templates")
 def modeling_templates(limit: int = Query(default=200, ge=1, le=500)) -> dict[str, Any]:
     return get_archub_modeling_query_service().templates(limit=limit)
+
+
+# -- delivery context (sitemap / feed / tags / redirects) ---------------------
+
+
+@platform_router.get("/delivery/sitemap")
+def delivery_sitemap(base_url: str = Query(default="")) -> dict[str, Any]:
+    return get_archub_delivery_read_service().sitemap(base_url=base_url)
+
+
+@platform_router.get("/delivery/feed")
+def delivery_feed(
+    base_url: str = Query(default=""), limit: int = Query(default=25, ge=1, le=100)
+) -> dict[str, Any]:
+    return get_archub_delivery_read_service().feed(base_url=base_url, limit=limit)
+
+
+@platform_router.get("/delivery/tags")
+def delivery_tags() -> dict[str, Any]:
+    return get_archub_delivery_read_service().tags()
+
+
+@platform_router.get("/delivery/tags/{tag}")
+def delivery_by_tag(tag: str, limit: int = Query(default=50, ge=1, le=200)) -> dict[str, Any]:
+    return get_archub_delivery_read_service().by_tag(tag, limit=limit)
+
+
+@platform_router.get("/delivery/redirects")
+def delivery_redirects(active_only: bool = Query(default=False)) -> dict[str, Any]:
+    return get_archub_delivery_read_service().redirects(active_only=active_only)
+
+
+@platform_router.get("/delivery/resolve")
+def delivery_resolve(path: str = Query(...)) -> dict[str, Any]:
+    found = get_archub_delivery_read_service().resolve(path)
+    if found is None:
+        raise HTTPException(status_code=404, detail="no redirect for path")
+    return found
