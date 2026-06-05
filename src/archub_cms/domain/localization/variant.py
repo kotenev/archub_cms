@@ -32,7 +32,7 @@ class LocalizedVariant:
         return str(source.get("title") or source.get("hero_title") or "")
 
     def as_dict(self, *, include_payload: bool = False) -> dict[str, Any]:
-        data = {
+        data: dict[str, Any] = {
             "node_id": self.node_id,
             "culture": self.culture.value,
             "status": self.status,
