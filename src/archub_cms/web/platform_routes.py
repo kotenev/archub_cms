@@ -13,6 +13,7 @@ from typing import Any
 
 from fastapi import APIRouter, Body, HTTPException, Query, Request
 
+from archub_cms.application.agent_service import get_archub_agent_service
 from archub_cms.application.analytics_service import get_archub_analytics_service
 from archub_cms.application.delivery_read_service import get_archub_delivery_read_service
 from archub_cms.application.governance_service import (
@@ -189,6 +190,27 @@ def knowledge_search(
         "items": [hit.as_dict() for hit in hits],
         "total": len(hits),
     }
+
+
+@platform_router.post("/knowledge/agent-answer")
+def knowledge_agent_answer(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    agent = get_archub_agent_service(plugin_host=get_plugin_host())
+    return agent.answer(
+        str(payload.get("question") or ""),
+        tools=tuple(payload.get("tools") or ()),
+        auto=bool(payload.get("auto", False)),
+        space_key=str(payload.get("space_key") or ""),
+        corpus_key=str(payload.get("corpus_key") or ""),
+        limit=int(payload.get("limit") or 5),
+    )
+
+
+@platform_router.get("/knowledge/tools")
+def knowledge_tools() -> dict[str, Any]:
+    tools = get_archub_agent_service(plugin_host=get_plugin_host()).available_tools()
+    return {"tools": tools, "total": len(tools)}
 
 
 @platform_router.get("/knowledge/graph")
