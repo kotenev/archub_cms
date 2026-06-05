@@ -9,6 +9,7 @@ from archub_cms.application.webhooks_service import (
     get_archub_webhooks_query_service,
 )
 from archub_cms.domain.webhooks.webhook import Webhook
+from archub_cms.extensibility.example_plugins.console_channel import ConsoleChannelPlugin
 from archub_cms.extensibility.host import PluginHost
 from archub_cms.kernel.events import get_event_bus
 from archub_cms.services.cms import get_archub_cms_service
@@ -111,6 +112,7 @@ def test_notification_channel_receives_events(cms):
     host = PluginHost().load()
     assert "console" in host.report()["notification_channels"]
     channel = host.notification_channels["console"]
+    assert isinstance(channel, ConsoleChannelPlugin)
 
     node = cms.create_node(
         parent_id="root",
