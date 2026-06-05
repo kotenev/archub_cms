@@ -5190,6 +5190,7 @@ class ArcHubCMSService:
                 )
                 conn.commit()
                 row = self._active_lock_row(conn, node_id=node_id, now=now)
+                assert row is not None
                 return _lock_from_row(row)
             finally:
                 conn.close()
@@ -6113,11 +6114,12 @@ class ArcHubCMSService:
 
         for node in nodes:
             content_type = types.get(node.content_type_alias)
-            payload = node.published if node.is_published else node.draft
             if content_type is None:
                 issues.append(self._audit_issue(node, "error", "Content type is missing."))
                 continue
-            template = self.get_template(content_type.template)
+            template_alias = content_type.template
+            template = self.get_template(template_alias)
+            payload = node.published if node.is_published else node.draft
             if template is None:
                 issues.append(
                     self._audit_issue(

@@ -10,7 +10,7 @@ __all__ = [
 import json
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from archub_cms.domain.plugins import PLUGIN_CAPABILITIES, KnowledgePluginManifest
 from archub_cms.settings import ArcHubSettings
@@ -111,9 +111,9 @@ def get_archub_plugin_registry(
     source = settings or ArcHubSettings.from_env()
     resolved: tuple[Path | str, ...]
     if plugin_dirs is None:
-        resolved = tuple(source.plugin_dirs)
+        resolved = cast(tuple[Path | str, ...], tuple(source.plugin_dirs))
     else:
-        resolved = tuple(plugin_dirs)
+        resolved = cast(tuple[Path | str, ...], tuple(plugin_dirs))
     return ArcHubPluginRegistry(plugin_dirs=resolved)
 
 
