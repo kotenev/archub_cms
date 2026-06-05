@@ -42,15 +42,21 @@ from archub_cms.application.runtime_service import (
     RuntimeCommandService,
     get_archub_runtime_query_service,
 )
+from archub_cms.application.search_service import get_archub_search_service
 from archub_cms.application.versioning_service import (
     VersioningCommandService,
     VersionNotFoundError,
     get_archub_versioning_query_service,
 )
+from archub_cms.application.webhooks_service import (
+    WebhooksCommandService,
+    get_archub_webhooks_query_service,
+)
 from archub_cms.application.workflow_service import (
     WorkflowCommandService,
     get_archub_workflow_query_service,
 )
+from archub_cms.domain.search.models import SearchQuery
 from archub_cms.domain.workflow.workflow import WorkflowTransitionError
 from archub_cms.extensibility.host import get_plugin_host
 
@@ -130,6 +136,37 @@ def plugin_settings(
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+def _csv(value: str) -> tuple[str, ...]:
+    return tuple(item.strip() for item in value.split(",") if item.strip())
+
+
+@platform_router.get("/search")
+def federated_search(
+    q: str = Query(default=""),
+    content_types: str = Query(default=""),
+    spaces: str = Query(default=""),
+    tags: str = Query(default=""),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> dict[str, Any]:
+    query = SearchQuery(
+        q=q,
+        content_types=_csv(content_types),
+        spaces=_csv(spaces),
+        tags=_csv(tags),
+        limit=limit,
+        offset=offset,
+    )
+    return get_archub_search_service(_knowledge_service()).search(query).as_dict()
+
+
+@platform_router.post("/search")
+def federated_search_post(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    return get_archub_search_service(_knowledge_service()).search_dict(payload)
 
 
 @platform_router.get("/knowledge/search")
@@ -735,3 +772,60 @@ def localization_variant_publish(
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+# -- webhooks / notifications context (Outbox) --------------------------------
+
+
+@platform_router.get("/webhooks")
+def webhooks_list(
+    active_only: bool = Query(default=False), limit: int = Query(default=100, ge=1, le=500)
+) -> dict[str, Any]:
+    return get_archub_webhooks_query_service().webhooks(active_only=active_only, limit=limit)
+
+
+@platform_router.get("/webhooks/deliveries")
+def webhooks_deliveries(limit: int = Query(default=100, ge=1, le=500)) -> dict[str, Any]:
+    return get_archub_webhooks_query_service().deliveries(limit=limit)
+
+
+@platform_router.get("/webhooks/report")
+def webhooks_report(limit: int = Query(default=100, ge=1, le=500)) -> dict[str, Any]:
+    return get_archub_webhooks_query_service().report(limit=limit)
+
+
+@platform_router.get("/webhooks/matching")
+def webhooks_matching(event_type: str = Query(...)) -> dict[str, Any]:
+    return get_archub_webhooks_query_service().matching(event_type)
+
+
+@platform_router.post("/webhooks")
+def webhooks_upsert(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    try:
+        webhook = WebhooksCommandService().upsert_webhook(
+            name=str(payload.get("name") or ""),
+            target_url=str(payload.get("target_url") or ""),
+            events=payload.get("events") or [],
+            secret=str(payload.get("secret") or ""),
+            active=bool(payload.get("active", True)),
+            actor=str(payload.get("actor") or ""),
+            webhook_id=str(payload.get("webhook_id") or ""),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return webhook.as_dict()
+
+
+@platform_router.post("/webhooks/dispatch")
+def webhooks_dispatch(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    return WebhooksCommandService().dispatch(limit=int(payload.get("limit") or 50))
+
+
+@platform_router.get("/notifications/channels")
+def notification_channels() -> dict[str, Any]:
+    channels = sorted(get_plugin_host().notification_channels)
+    return {"channels": channels, "total": len(channels)}

@@ -20,6 +20,7 @@ from archub_cms.extensibility.extension_points import (
     ImporterExt,
     LLMToolExt,
     MacroExt,
+    NotificationExt,
     PluginContext,
     RendererExt,
     SearchExt,
@@ -100,6 +101,7 @@ class PluginHost:
         self._exporters: dict[str, ExporterExt] = {}
         self._auth_exts: list[AuthExt] = []
         self._storage: dict[str, StorageExt] = {}
+        self._notifiers: dict[str, NotificationExt] = {}
         self._loaded_ids: set[str] = set()
 
     # -- lifecycle ---------------------------------------------------------
@@ -171,6 +173,9 @@ class PluginHost:
                 self._auth_exts.append(ext)
             if isinstance(ext, StorageExt):
                 self._storage[_ext_name(ext)] = ext
+            if isinstance(ext, NotificationExt):
+                self._notifiers[ext.channel] = ext
+                self._bus.subscribe("*", ext.notify)
 
     # -- accessors ---------------------------------------------------------
 
@@ -238,6 +243,10 @@ class PluginHost:
     def storage_backends(self) -> dict[str, StorageExt]:
         return dict(self._storage)
 
+    @property
+    def notification_channels(self) -> dict[str, NotificationExt]:
+        return dict(self._notifiers)
+
     def storage(self, name: str) -> StorageExt | None:
         return self._storage.get(name)
 
@@ -286,6 +295,7 @@ class PluginHost:
             "exporters": sorted(self._exporters),
             "auth_providers": len(self._auth_exts),
             "storage_backends": sorted(self._storage),
+            "notification_channels": sorted(self._notifiers),
             "hook_counts": self._hook_log.counts,
             "recent_hooks": self._hook_log.recent(),
             "catalog_total": catalog["total"],

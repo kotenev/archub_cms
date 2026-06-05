@@ -17,6 +17,7 @@ __all__ = [
     "ImporterExt",
     "LLMToolExt",
     "MacroExt",
+    "NotificationExt",
     "Plugin",
     "PluginContext",
     "RendererExt",
@@ -141,3 +142,16 @@ class StorageExt(Protocol):
     def read(self, key: str) -> bytes: ...
 
     def write(self, key: str, data: bytes) -> None: ...
+
+
+@runtime_checkable
+class NotificationExt(Protocol):
+    """An outbound notification channel (Slack, email, webhook, …).
+
+    The host subscribes every channel to the event bus, so domain events fan out
+    to all channels — the seam Wiki.js/Confluence integrations plug into.
+    """
+
+    channel: str
+
+    def notify(self, event: ArcHubDomainEvent) -> None: ...
