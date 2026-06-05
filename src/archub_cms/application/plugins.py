@@ -108,13 +108,10 @@ def get_archub_plugin_registry(
     *,
     plugin_dirs: Iterable[Path | str] | None = None,
 ) -> ArcHubPluginRegistry:
-    source = settings or ArcHubSettings.from_env()
-    resolved: tuple[Path | str, ...]
+    source = settings if settings is not None else ArcHubSettings.from_env()
     if plugin_dirs is None:
-        resolved = cast(tuple[Path | str, ...], tuple(source.plugin_dirs))
-    else:
-        resolved = cast(tuple[Path | str, ...], tuple(plugin_dirs))
-    return ArcHubPluginRegistry(plugin_dirs=resolved)
+        plugin_dirs = source.plugin_dirs
+    return ArcHubPluginRegistry(plugin_dirs=plugin_dirs)
 
 
 def _builtin_plugins() -> tuple[KnowledgePluginManifest, ...]:
