@@ -12,6 +12,7 @@ __all__ = [
     "AuditSink",
     "AuthPort",
     "CacheInvalidationPort",
+    "EmbeddingPort",
     "LLMRequest",
     "LLMResponse",
     "LLMProviderPort",
@@ -19,6 +20,7 @@ __all__ = [
     "NoopCacheInvalidationPort",
     "RuntimeImportSources",
     "RuntimeSourcePort",
+    "SearchPort",
     "TemplatePort",
 ]
 
@@ -107,6 +109,27 @@ class LLMProviderPort(Protocol):
 
     def complete(self, request: LLMRequest) -> LLMResponse:
         """Synthesize an answer from a prompt and supplied knowledge context."""
+
+
+@runtime_checkable
+class EmbeddingPort(Protocol):
+    """Turns text into a dense vector for semantic search (offline or online)."""
+
+    model: str
+    dim: int
+
+    def embed(self, text: str) -> tuple[float, ...]:
+        """Return an L2-normalized embedding vector for ``text``."""
+
+
+@runtime_checkable
+class SearchPort(Protocol):
+    """A vector index: store document embeddings and query by similarity."""
+
+    def index(self, route_path: str, text: str) -> None: ...
+
+    def query(self, text: str, *, limit: int) -> list[tuple[str, float]]:
+        """Return ``(route_path, similarity)`` pairs ordered by similarity desc."""
 
 
 class NoopCacheInvalidationPort:

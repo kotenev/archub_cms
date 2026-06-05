@@ -1,4 +1,5 @@
 """Demo content bootstrap for the standalone ArcHub CMS release."""
+
 from __future__ import annotations
 
 from archub_cms.services.cms import ArcHubCMSService, get_archub_cms_service

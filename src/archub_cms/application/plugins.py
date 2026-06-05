@@ -52,6 +52,15 @@ class ArcHubPluginRegistry:
             "plugin_dirs": [str(item) for item in self._plugin_dirs],
         }
 
+    def manifests(self) -> tuple[KnowledgePluginManifest, ...]:
+        """All valid manifests (builtins + discovered files) as domain objects.
+
+        Used by the extensibility runtime to instantiate plugins; the dict-based
+        ``catalog`` stays the read model for APIs/UIs.
+        """
+        file_manifests, _ = self._load_manifests()
+        return (*self._builtins, *file_manifests)
+
     def by_capability(self, capability: str) -> dict[str, Any]:
         clean = capability.strip()
         items = [

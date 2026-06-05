@@ -1,4 +1,5 @@
 """Standalone FastAPI web helpers for ArcHub CMS."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

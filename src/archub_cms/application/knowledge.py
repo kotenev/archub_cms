@@ -13,9 +13,10 @@ import json
 import re
 import urllib.error
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
+from archub_cms.application.embeddings import get_embedder_from_settings
 from archub_cms.application.plugins import ArcHubPluginRegistry, get_archub_plugin_registry
 from archub_cms.domain.knowledge import (
     KnowledgeAnswer,
@@ -27,7 +28,9 @@ from archub_cms.domain.knowledge import (
     extract_knowledge_links,
     slug_to_space_key,
 )
-from archub_cms.ports import LLMProviderPort, LLMRequest, LLMResponse
+from archub_cms.infrastructure.db.database import Database
+from archub_cms.infrastructure.sqlite.embedding_repository import SqliteEmbeddingRepository
+from archub_cms.ports import EmbeddingPort, LLMProviderPort, LLMRequest, LLMResponse, SearchPort
 from archub_cms.services.cms import ArcHubCMSService, ContentNode, get_archub_cms_service
 from archub_cms.settings import ArcHubSettings
 
@@ -42,6 +45,8 @@ _KNOWLEDGE_TYPES = (
 )
 _TAG_SPLIT_RE = re.compile(r"[,#\s]+")
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
+# How strongly semantic similarity (0..1) re-ranks vs. lexical token scores.
+_SEMANTIC_WEIGHT = 6.0
 
 
 @dataclass(frozen=True)
@@ -166,11 +171,22 @@ class ArcHubKnowledgeBaseService:
         settings: ArcHubSettings | None = None,
         llm_provider: LLMProviderPort | None = None,
         plugin_registry: ArcHubPluginRegistry | None = None,
+        embedder: EmbeddingPort | None = None,
+        search_index: SearchPort | None = None,
+        plugin_host: Any | None = None,
     ) -> None:
         self._cms = cms or get_archub_cms_service()
         self._settings = settings or ArcHubSettings.from_env()
         self._llm_provider = llm_provider or _llm_provider_from_settings(self._settings)
         self._plugin_registry = plugin_registry or get_archub_plugin_registry(self._settings)
+        # Semantic search is on by default via the offline hashing embedder.
+        self._embedder = embedder or get_embedder_from_settings(self._settings)
+        self._search_index = search_index or SqliteEmbeddingRepository(
+            Database(self._cms.db_path), self._embedder
+        )
+        # Plugin host is optional; injected lazily to avoid import cycles at boot.
+        self._plugin_host = plugin_host
+        self._indexed = False
 
     def platform_report(self) -> dict[str, Any]:
         documents = self._documents()
@@ -332,6 +348,43 @@ class ArcHubKnowledgeBaseService:
     def plugin_catalog(self) -> dict[str, Any]:
         return self._plugin_registry.catalog()
 
+    def hybrid_search(
+        self, query: str, *, space_key: str = "", limit: int = 10
+    ) -> list[KnowledgeSource]:
+        """Blend lexical, semantic (vector) and plugin-contributed results."""
+        candidates: dict[str, KnowledgeSource] = {}
+        for source in self._search_sources(query, space_key=space_key, limit=limit * 2):
+            candidates[source.route_path] = source
+
+        by_route = {doc.route_path: doc for doc in self._documents()}
+        for route, similarity in self._semantic_scores(query, space_key=space_key, limit=limit * 2):
+            document = by_route.get(route)
+            if document is None or similarity <= 0:
+                continue
+            boost = _SEMANTIC_WEIGHT * similarity
+            existing = candidates.get(route)
+            if existing is not None:
+                candidates[route] = replace(existing, score=existing.score + boost)
+            else:
+                candidates[route] = KnowledgeSource(
+                    title=document.title,
+                    route_path=route,
+                    excerpt=_excerpt(document.body or document.summary, query),
+                    score=boost,
+                )
+
+        for hit in self._plugin_hits(query, limit=limit):
+            existing = candidates.get(hit.route_path)
+            base = existing.score if existing is not None else 0.0
+            candidates[hit.route_path] = KnowledgeSource(
+                title=(existing.title if existing else hit.title) or hit.route_path,
+                route_path=hit.route_path,
+                excerpt=(existing.excerpt if existing else hit.excerpt),
+                score=base + hit.score,
+            )
+
+        return sorted(candidates.values(), key=lambda item: (-item.score, item.route_path))[:limit]
+
     def _answer_sources(
         self,
         question: str,
@@ -340,9 +393,10 @@ class ArcHubKnowledgeBaseService:
         corpus_key: str,
         limit: int,
     ) -> list[KnowledgeSource]:
-        candidates: dict[str, KnowledgeSource] = {}
-        for source in self._search_sources(question, space_key=space_key, limit=limit):
-            candidates[source.route_path] = source
+        candidates: dict[str, KnowledgeSource] = {
+            source.route_path: source
+            for source in self.hybrid_search(question, space_key=space_key, limit=limit)
+        }
         for node in self._cms.search_published_rag_materials(
             corpus_key or None, question, limit=limit
         ):
@@ -352,9 +406,40 @@ class ArcHubKnowledgeBaseService:
                 title=str(payload.get("title") or node.name),
                 route_path=node.route_path,
                 excerpt=excerpt,
-                score=max(candidates.get(node.route_path, KnowledgeSource("", "", "")).score, 8),
+                score=max(candidates.get(node.route_path, KnowledgeSource("", "", "")).score, 8.0),
             )
         return sorted(candidates.values(), key=lambda item: (-item.score, item.route_path))[:limit]
+
+    def _ensure_index(self) -> None:
+        if self._indexed:
+            return
+        for document in self._documents():
+            text = " ".join(
+                (document.title, document.summary, " ".join(document.tags), document.body)
+            )
+            try:
+                self._search_index.index(document.route_path, text)
+            except Exception:  # indexing must never break answering
+                continue
+        self._indexed = True
+
+    def _semantic_scores(
+        self, query: str, *, space_key: str, limit: int
+    ) -> list[tuple[str, float]]:
+        try:
+            self._ensure_index()
+            return self._search_index.query(query, limit=limit)
+        except Exception:  # fall back to lexical-only on any failure
+            return []
+
+    def _plugin_hits(self, query: str, *, limit: int) -> list[Any]:
+        host = self._plugin_host
+        if host is None:
+            return []
+        try:
+            return list(host.search(query, limit=limit))
+        except Exception:  # a plugin must not break the answer path
+            return []
 
     def _search_sources(
         self, q: str, *, space_key: str = "", limit: int = 10
@@ -424,12 +509,18 @@ def get_archub_knowledge_base_service(
     settings: ArcHubSettings | None = None,
     llm_provider: LLMProviderPort | None = None,
     plugin_registry: ArcHubPluginRegistry | None = None,
+    embedder: EmbeddingPort | None = None,
+    search_index: SearchPort | None = None,
+    plugin_host: Any | None = None,
 ) -> ArcHubKnowledgeBaseService:
     return ArcHubKnowledgeBaseService(
         cms,
         settings=settings,
         llm_provider=llm_provider,
         plugin_registry=plugin_registry,
+        embedder=embedder,
+        search_index=search_index,
+        plugin_host=plugin_host,
     )
 
 

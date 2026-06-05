@@ -4,6 +4,7 @@ The builder is intentionally independent from the CMS storage service. ArcHub
 stores builder blocks as JSON in a content payload, while this service owns the
 block registry, normalization, previews, and public HTML rendering.
 """
+
 from __future__ import annotations
 
 __all__ = [
@@ -169,7 +170,9 @@ class ArcHubContentBuilderService:
             title = str(item.get("title") or block_type.name).strip() or block_type.name
             blocks.append(
                 ContentBlock(
-                    block_id=str(item.get("id") or item.get("block_id") or secrets.token_urlsafe(6)),
+                    block_id=str(
+                        item.get("id") or item.get("block_id") or secrets.token_urlsafe(6)
+                    ),
                     block_type=block_type.alias,
                     title=title,
                     settings=clean_settings,
@@ -248,7 +251,9 @@ class ArcHubContentBuilderService:
             "blocks": len(blocks),
             "categories": categories,
             "estimated_words": words,
-            "has_cta": any(block.block_type in {"cta", "hero", "download_card"} for block in blocks),
+            "has_cta": any(
+                block.block_type in {"cta", "hero", "download_card"} for block in blocks
+            ),
             "has_api": any(block.block_type == "api_tool" for block in blocks),
             "has_rag": any(block.block_type == "rag_reference" for block in blocks),
             "audit_score": self.audit_score(issues),
@@ -292,13 +297,22 @@ class ArcHubContentBuilderService:
                 issues.append(self._issue(block, "warning", "Hero title is too short."))
             if block.block_type == "media" and not str(s.get("alt_text") or "").strip():
                 issues.append(self._issue(block, "warning", "Media block should include alt text."))
-            if block.block_type == "download_card" and not str(s.get("file_url") or "").startswith("/"):
-                issues.append(self._issue(block, "warning", "Download URL should be an internal absolute path."))
+            if block.block_type == "download_card" and not str(s.get("file_url") or "").startswith(
+                "/"
+            ):
+                issues.append(
+                    self._issue(
+                        block, "warning", "Download URL should be an internal absolute path."
+                    )
+                )
             if block.block_type == "api_tool" and not str(s.get("endpoint") or "").startswith("/"):
                 issues.append(self._issue(block, "error", "API endpoint must start with '/'."))
             if block.block_type == "rag_reference" and not str(s.get("corpus_key") or "").strip():
                 issues.append(self._issue(block, "error", "RAG Reference must include corpus_key."))
-            if block.block_type == "rich_text" and len(re.sub(r"<[^>]+>", "", str(s.get("body") or "")).strip()) < 20:
+            if (
+                block.block_type == "rich_text"
+                and len(re.sub(r"<[^>]+>", "", str(s.get("body") or "")).strip()) < 20
+            ):
                 issues.append(self._issue(block, "warning", "Rich Text body is very short."))
         return issues
 
@@ -342,7 +356,9 @@ class ArcHubContentBuilderService:
             data = data.get("blocks", [])
         if not isinstance(data, list):
             if strict:
-                raise ValueError("Content Builder payload must be a JSON list or an object with blocks")
+                raise ValueError(
+                    "Content Builder payload must be a JSON list or an object with blocks"
+                )
             return []
         return data
 
@@ -420,7 +436,9 @@ class ArcHubContentBuilderService:
             for item in value:
                 if isinstance(item, dict):
                     clean = {
-                        str(key): cls._safe_html(str(val or "")) if str(key) == "body" else str(val or "").strip()
+                        str(key): cls._safe_html(str(val or ""))
+                        if str(key) == "body"
+                        else str(val or "").strip()
                         for key, val in item.items()
                     }
                     if any(clean.values()):
@@ -478,15 +496,15 @@ class ArcHubContentBuilderService:
         if s.get("cta_label") and s.get("cta_url"):
             cta_html = (
                 f'<a class="btn" href="{self._attr_url(s.get("cta_url"))}">'
-                f'{self._e(s.get("cta_label"))}</a>'
+                f"{self._e(s.get('cta_label'))}</a>"
             )
         compact = " archub-block--compact" if s.get("compact") else ""
         return (
             f'<section class="archub-block archub-block--hero{compact}">'
             f'<div class="archub-block__copy">'
             f'<span class="badge">{self._e(s.get("eyebrow"))}</span>'
-            f'<h2>{self._e(s.get("title"))}</h2>'
-            f'<p>{self._e(s.get("subtitle"))}</p>{cta_html}</div>{image_html}</section>'
+            f"<h2>{self._e(s.get('title'))}</h2>"
+            f"<p>{self._e(s.get('subtitle'))}</p>{cta_html}</div>{image_html}</section>"
         )
 
     def _render_rich_text(self, block: ContentBlock) -> str:
@@ -498,44 +516,44 @@ class ArcHubContentBuilderService:
         if s.get("button_label") and s.get("button_url"):
             button = (
                 f'<a class="btn" href="{self._attr_url(s.get("button_url"))}">'
-                f'{self._e(s.get("button_label"))}</a>'
+                f"{self._e(s.get('button_label'))}</a>"
             )
         return (
             f'<section class="archub-block archub-block--cta archub-block--{self._e(s.get("tone"))}">'
-            f'<h2>{self._e(s.get("title"))}</h2><p>{self._e(s.get("text"))}</p>{button}</section>'
+            f"<h2>{self._e(s.get('title'))}</h2><p>{self._e(s.get('text'))}</p>{button}</section>"
         )
 
     def _render_feature_grid(self, block: ContentBlock) -> str:
         items = "".join(
             '<article class="archub-feature">'
-            f'<span>{self._e(item.get("icon") or "✦")}</span>'
-            f'<h3>{self._e(item.get("title"))}</h3>'
-            f'<p>{self._e(item.get("text"))}</p>'
+            f"<span>{self._e(item.get('icon') or '✦')}</span>"
+            f"<h3>{self._e(item.get('title'))}</h3>"
+            f"<p>{self._e(item.get('text'))}</p>"
             "</article>"
             for item in self._items(block)
         )
         return (
             f'<section class="archub-block archub-block--features">'
-            f'<h2>{self._e(block.settings.get("title"))}</h2>'
+            f"<h2>{self._e(block.settings.get('title'))}</h2>"
             f'<div class="archub-feature-grid">{items}</div></section>'
         )
 
     def _render_faq(self, block: ContentBlock) -> str:
         items = "".join(
             f'<details class="archub-faq"><summary>{self._e(item.get("title"))}</summary>'
-            f'<p>{self._e(item.get("text"))}</p></details>'
+            f"<p>{self._e(item.get('text'))}</p></details>"
             for item in self._items(block)
         )
         return (
             f'<section class="archub-block archub-block--faq">'
-            f'<h2>{self._e(block.settings.get("title"))}</h2>{items}</section>'
+            f"<h2>{self._e(block.settings.get('title'))}</h2>{items}</section>"
         )
 
     def _render_quote(self, block: ContentBlock) -> str:
         return (
             '<blockquote class="archub-block archub-block--quote">'
-            f'<p>{self._e(block.settings.get("quote"))}</p>'
-            f'<cite>{self._e(block.settings.get("attribution"))}</cite>'
+            f"<p>{self._e(block.settings.get('quote'))}</p>"
+            f"<cite>{self._e(block.settings.get('attribution'))}</cite>"
             "</blockquote>"
         )
 
@@ -544,7 +562,7 @@ class ArcHubContentBuilderService:
         return (
             '<figure class="archub-block archub-block--media">'
             f'<img src="{self._attr_url(s.get("media_url"))}" alt="{self._e(s.get("alt_text"))}">'
-            f'<figcaption>{self._e(s.get("caption"))}</figcaption>'
+            f"<figcaption>{self._e(s.get('caption'))}</figcaption>"
             "</figure>"
         )
 
@@ -554,8 +572,8 @@ class ArcHubContentBuilderService:
         return (
             '<section class="archub-block archub-block--api">'
             f'<span class="badge">{method}</span><h2>{self._e(s.get("title"))}</h2>'
-            f'<code>{self._e(s.get("endpoint"))}</code><p>{self._e(s.get("description"))}</p>'
-            f'<pre>{self._e(s.get("payload_example"))}</pre></section>'
+            f"<code>{self._e(s.get('endpoint'))}</code><p>{self._e(s.get('description'))}</p>"
+            f"<pre>{self._e(s.get('payload_example'))}</pre></section>"
         )
 
     def _render_rag_reference(self, block: ContentBlock) -> str:
@@ -563,49 +581,52 @@ class ArcHubContentBuilderService:
         return (
             '<section class="archub-block archub-block--rag">'
             f'<span class="badge">RAG · {self._e(s.get("corpus_key"))}</span>'
-            f'<h2>{self._e(s.get("title"))}</h2>'
-            f'<p>{self._e(s.get("query_hint"))}</p>'
-            f'<small>{self._e(s.get("tags"))}</small></section>'
+            f"<h2>{self._e(s.get('title'))}</h2>"
+            f"<p>{self._e(s.get('query_hint'))}</p>"
+            f"<small>{self._e(s.get('tags'))}</small></section>"
         )
 
     def _render_expert_cards(self, block: ContentBlock) -> str:
-        ids = "".join(f'<li><code>{self._e(item)}</code></li>' for item in block.settings.get("expert_ids", []))
+        ids = "".join(
+            f"<li><code>{self._e(item)}</code></li>"
+            for item in block.settings.get("expert_ids", [])
+        )
         return (
             '<section class="archub-block archub-block--experts">'
-            f'<h2>{self._e(block.settings.get("title"))}</h2><ul>{ids}</ul></section>'
+            f"<h2>{self._e(block.settings.get('title'))}</h2><ul>{ids}</ul></section>"
         )
 
     def _render_pricing_table(self, block: ContentBlock) -> str:
         rows = "".join(
             '<article class="archub-price">'
-            f'<h3>{self._e(item.get("title"))}</h3>'
-            f'<strong>{self._e(item.get("price"))}</strong>'
-            f'<span>{self._e(item.get("tokens"))}</span>'
-            f'<p>{self._e(item.get("text"))}</p>'
+            f"<h3>{self._e(item.get('title'))}</h3>"
+            f"<strong>{self._e(item.get('price'))}</strong>"
+            f"<span>{self._e(item.get('tokens'))}</span>"
+            f"<p>{self._e(item.get('text'))}</p>"
             "</article>"
             for item in self._items(block)
         )
         return (
             '<section class="archub-block archub-block--pricing">'
-            f'<h2>{self._e(block.settings.get("title"))}</h2>'
+            f"<h2>{self._e(block.settings.get('title'))}</h2>"
             f'<div class="archub-price-grid">{rows}</div></section>'
         )
 
     def _render_steps(self, block: ContentBlock) -> str:
         items = "".join(
-            f'<li><strong>{self._e(item.get("title"))}</strong><span>{self._e(item.get("text"))}</span></li>'
+            f"<li><strong>{self._e(item.get('title'))}</strong><span>{self._e(item.get('text'))}</span></li>"
             for item in self._items(block)
         )
         return (
             '<section class="archub-block archub-block--steps">'
-            f'<h2>{self._e(block.settings.get("title"))}</h2><ol>{items}</ol></section>'
+            f"<h2>{self._e(block.settings.get('title'))}</h2><ol>{items}</ol></section>"
         )
 
     def _render_download_card(self, block: ContentBlock) -> str:
         s = block.settings
         return (
             '<section class="archub-block archub-block--download">'
-            f'<h2>{self._e(s.get("title"))}</h2><p>{self._e(s.get("description"))}</p>'
+            f"<h2>{self._e(s.get('title'))}</h2><p>{self._e(s.get('description'))}</p>"
             f'<a class="btn" href="{self._attr_url(s.get("file_url"))}" download>{self._e(s.get("button_label"))}</a>'
             "</section>"
         )
@@ -613,27 +634,27 @@ class ArcHubContentBuilderService:
     def _render_embed(self, block: ContentBlock) -> str:
         return (
             '<section class="archub-block archub-block--embed">'
-            f'<h2>{self._e(block.settings.get("title"))}</h2>{self._rich(block.settings.get("html"))}</section>'
+            f"<h2>{self._e(block.settings.get('title'))}</h2>{self._rich(block.settings.get('html'))}</section>"
         )
 
     def _render_metrics(self, block: ContentBlock) -> str:
         items = "".join(
             '<article class="archub-metric">'
-            f'<strong>{self._e(item.get("title"))}</strong>'
-            f'<span>{self._e(item.get("text"))}</span>'
+            f"<strong>{self._e(item.get('title'))}</strong>"
+            f"<span>{self._e(item.get('text'))}</span>"
             "</article>"
             for item in self._items(block)
         )
         return (
             '<section class="archub-block archub-block--metrics">'
-            f'<h2>{self._e(block.settings.get("title"))}</h2>{items}</section>'
+            f"<h2>{self._e(block.settings.get('title'))}</h2>{items}</section>"
         )
 
     def _render_generic(self, block: ContentBlock) -> str:
         payload = self._e(json.dumps(block.settings, ensure_ascii=False, indent=2))
         return (
             '<section class="archub-block archub-block--generic">'
-            f'<h2>{self._e(block.title)}</h2><pre>{payload}</pre></section>'
+            f"<h2>{self._e(block.title)}</h2><pre>{payload}</pre></section>"
         )
 
     @staticmethod
@@ -652,7 +673,13 @@ class ArcHubContentBuilderService:
                     BuilderField("cta_label", "CTA label", default="Open"),
                     BuilderField("cta_url", "CTA URL", "url", default="/consultations"),
                     BuilderField("image_url", "Image URL", "url"),
-                    BuilderField("alignment", "Alignment", "select", default="left", options=("left", "center")),
+                    BuilderField(
+                        "alignment",
+                        "Alignment",
+                        "select",
+                        default="left",
+                        options=("left", "center"),
+                    ),
                     BuilderField("compact", "Compact", "checkbox", default=False),
                 ),
                 sample={
@@ -672,8 +699,14 @@ class ArcHubContentBuilderService:
                 icon="T",
                 category="Content",
                 description="Long-form editorial HTML content.",
-                fields=(BuilderField("body", "Body", "richtext", True, default="<p>Editable rich text.</p>"),),
-                sample={"body": "<p>Editable rich text block with links, headings, and inline formatting.</p>"},
+                fields=(
+                    BuilderField(
+                        "body", "Body", "richtext", True, default="<p>Editable rich text.</p>"
+                    ),
+                ),
+                sample={
+                    "body": "<p>Editable rich text block with links, headings, and inline formatting.</p>"
+                },
             ),
             ContentBlockType(
                 alias="cta",
@@ -686,7 +719,13 @@ class ArcHubContentBuilderService:
                     BuilderField("text", "Text", "textarea"),
                     BuilderField("button_label", "Button label", default="Continue"),
                     BuilderField("button_url", "Button URL", "url", default="/experts"),
-                    BuilderField("tone", "Tone", "select", default="primary", options=("primary", "neutral", "warning")),
+                    BuilderField(
+                        "tone",
+                        "Tone",
+                        "select",
+                        default="primary",
+                        options=("primary", "neutral", "warning"),
+                    ),
                 ),
                 sample={
                     "title": "Ready to continue?",
@@ -709,9 +748,21 @@ class ArcHubContentBuilderService:
                 sample={
                     "title": "CMS capabilities",
                     "items": [
-                        {"icon": "CMS", "title": "Drafts", "text": "Edit and publish versioned content."},
-                        {"icon": "RAG", "title": "Corpora", "text": "Curate expert-specific knowledge materials."},
-                        {"icon": "API", "title": "Tools", "text": "Describe backend APIs used by AI experts."},
+                        {
+                            "icon": "CMS",
+                            "title": "Drafts",
+                            "text": "Edit and publish versioned content.",
+                        },
+                        {
+                            "icon": "RAG",
+                            "title": "Corpora",
+                            "text": "Curate expert-specific knowledge materials.",
+                        },
+                        {
+                            "icon": "API",
+                            "title": "Tools",
+                            "text": "Describe backend APIs used by AI experts.",
+                        },
                     ],
                 },
             ),
@@ -728,8 +779,14 @@ class ArcHubContentBuilderService:
                 sample={
                     "title": "FAQ",
                     "items": [
-                        {"title": "Can I edit RAG materials?", "text": "Yes, publish RAG materials in ArcHub CMS."},
-                        {"title": "Can experts use backend APIs?", "text": "Yes, API tools are cataloged as content blocks."},
+                        {
+                            "title": "Can I edit RAG materials?",
+                            "text": "Yes, publish RAG materials in ArcHub CMS.",
+                        },
+                        {
+                            "title": "Can experts use backend APIs?",
+                            "text": "Yes, API tools are cataloged as content blocks.",
+                        },
                     ],
                 },
             ),
@@ -743,7 +800,10 @@ class ArcHubContentBuilderService:
                     BuilderField("quote", "Quote", "textarea", True),
                     BuilderField("attribution", "Attribution"),
                 ),
-                sample={"quote": "Content and runtime knowledge should be governed in one place.", "attribution": "ArcHub"},
+                sample={
+                    "quote": "Content and runtime knowledge should be governed in one place.",
+                    "attribution": "ArcHub",
+                },
             ),
             ContentBlockType(
                 alias="media",
@@ -755,9 +815,15 @@ class ArcHubContentBuilderService:
                     BuilderField("media_url", "Media URL", "url", True),
                     BuilderField("alt_text", "Alt text"),
                     BuilderField("caption", "Caption"),
-                    BuilderField("layout", "Layout", "select", default="wide", options=("wide", "inline")),
+                    BuilderField(
+                        "layout", "Layout", "select", default="wide", options=("wide", "inline")
+                    ),
                 ),
-                sample={"media_url": "/static/favicon.svg", "alt_text": "ArcHub media", "caption": "Managed media asset."},
+                sample={
+                    "media_url": "/static/favicon.svg",
+                    "alt_text": "ArcHub media",
+                    "caption": "Managed media asset.",
+                },
             ),
             ContentBlockType(
                 alias="api_tool",
@@ -767,8 +833,16 @@ class ArcHubContentBuilderService:
                 description="Catalog entry for a backend API capability available to AI experts.",
                 fields=(
                     BuilderField("title", "Title", required=True, default="Natal chart PDF"),
-                    BuilderField("endpoint", "Endpoint", required=True, default="/api/v1/reports/natal-pdf"),
-                    BuilderField("method", "Method", "select", default="POST", options=("GET", "POST", "PUT", "DELETE")),
+                    BuilderField(
+                        "endpoint", "Endpoint", required=True, default="/api/v1/reports/natal-pdf"
+                    ),
+                    BuilderField(
+                        "method",
+                        "Method",
+                        "select",
+                        default="POST",
+                        options=("GET", "POST", "PUT", "DELETE"),
+                    ),
                     BuilderField("description", "Description", "textarea"),
                     BuilderField("payload_example", "Payload example", "code"),
                 ),
@@ -809,7 +883,10 @@ class ArcHubContentBuilderService:
                     BuilderField("title", "Title", default="Recommended experts"),
                     BuilderField("expert_ids", "Expert IDs", "list", default="exp_indubala"),
                 ),
-                sample={"title": "Recommended experts", "expert_ids": ["exp_indubala", "exp_numerology"]},
+                sample={
+                    "title": "Recommended experts",
+                    "expert_ids": ["exp_indubala", "exp_numerology"],
+                },
             ),
             ContentBlockType(
                 alias="pricing_table",
@@ -824,8 +901,18 @@ class ArcHubContentBuilderService:
                 sample={
                     "title": "Token plans",
                     "items": [
-                        {"title": "Starter", "tokens": "1 000 tokens", "price": "Free", "text": "For testing."},
-                        {"title": "Expert", "tokens": "25 000 tokens", "price": "$19", "text": "For active consultations."},
+                        {
+                            "title": "Starter",
+                            "tokens": "1 000 tokens",
+                            "price": "Free",
+                            "text": "For testing.",
+                        },
+                        {
+                            "title": "Expert",
+                            "tokens": "25 000 tokens",
+                            "price": "$19",
+                            "text": "For active consultations.",
+                        },
                     ],
                 },
             ),
@@ -842,8 +929,14 @@ class ArcHubContentBuilderService:
                 sample={
                     "title": "How it works",
                     "items": [
-                        {"title": "Create profile", "text": "Save birth data in the bot web interface."},
-                        {"title": "Ask expert", "text": "The expert checks RAG and backend APIs before LLM synthesis."},
+                        {
+                            "title": "Create profile",
+                            "text": "Save birth data in the bot web interface.",
+                        },
+                        {
+                            "title": "Ask expert",
+                            "text": "The expert checks RAG and backend APIs before LLM synthesis.",
+                        },
                     ],
                 },
             ),
@@ -876,7 +969,10 @@ class ArcHubContentBuilderService:
                     BuilderField("title", "Title"),
                     BuilderField("html", "HTML", "embed"),
                 ),
-                sample={"title": "Embedded widget", "html": "<div>External widget placeholder</div>"},
+                sample={
+                    "title": "Embedded widget",
+                    "html": "<div>External widget placeholder</div>",
+                },
             ),
             ContentBlockType(
                 alias="metrics",
@@ -925,9 +1021,21 @@ class ArcHubContentBuilderService:
                         "settings": {
                             "title": "Platform capabilities",
                             "items": [
-                                {"icon": "CMS", "title": "Published content", "text": "Versioned pages and bot resources."},
-                                {"icon": "RAG", "title": "Expert corpora", "text": "Separate knowledge bases per consultant."},
-                                {"icon": "API", "title": "Backend tools", "text": "Structured API capabilities before LLM synthesis."},
+                                {
+                                    "icon": "CMS",
+                                    "title": "Published content",
+                                    "text": "Versioned pages and bot resources.",
+                                },
+                                {
+                                    "icon": "RAG",
+                                    "title": "Expert corpora",
+                                    "text": "Separate knowledge bases per consultant.",
+                                },
+                                {
+                                    "icon": "API",
+                                    "title": "Backend tools",
+                                    "text": "Structured API capabilities before LLM synthesis.",
+                                },
                             ],
                         },
                     },
@@ -958,8 +1066,14 @@ class ArcHubContentBuilderService:
                         "settings": {
                             "title": "FAQ",
                             "items": [
-                                {"title": "Can content be edited?", "text": "Yes, editors publish pages and runtime resources in ArcHub."},
-                                {"title": "Can experts produce files?", "text": "Yes, API tools can be represented as downloadable report flows."},
+                                {
+                                    "title": "Can content be edited?",
+                                    "text": "Yes, editors publish pages and runtime resources in ArcHub.",
+                                },
+                                {
+                                    "title": "Can experts produce files?",
+                                    "text": "Yes, API tools can be represented as downloadable report flows.",
+                                },
                             ],
                         },
                     },
@@ -1004,8 +1118,14 @@ class ArcHubContentBuilderService:
                         "settings": {
                             "title": "FAQ",
                             "items": [
-                                {"title": "How is this used by the expert?", "text": "Published materials can be exported into expert-specific RAG indexes."},
-                                {"title": "Can it be versioned?", "text": "Yes, every save/publish creates a content version."},
+                                {
+                                    "title": "How is this used by the expert?",
+                                    "text": "Published materials can be exported into expert-specific RAG indexes.",
+                                },
+                                {
+                                    "title": "Can it be versioned?",
+                                    "text": "Yes, every save/publish creates a content version.",
+                                },
                             ],
                         },
                     },
@@ -1044,9 +1164,21 @@ class ArcHubContentBuilderService:
                         "settings": {
                             "title": "Expertise",
                             "items": [
-                                {"icon": "1", "title": "School", "text": "Clearly stated astrology or numerology school."},
-                                {"icon": "2", "title": "RAG", "text": "Separate corpus aligned to this expert."},
-                                {"icon": "3", "title": "Tools", "text": "Backend API tools used before LLM synthesis."},
+                                {
+                                    "icon": "1",
+                                    "title": "School",
+                                    "text": "Clearly stated astrology or numerology school.",
+                                },
+                                {
+                                    "icon": "2",
+                                    "title": "RAG",
+                                    "text": "Separate corpus aligned to this expert.",
+                                },
+                                {
+                                    "icon": "3",
+                                    "title": "Tools",
+                                    "text": "Backend API tools used before LLM synthesis.",
+                                },
                             ],
                         },
                     },

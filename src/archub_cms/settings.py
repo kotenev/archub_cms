@@ -25,6 +25,7 @@ class ArcHubSettings:
     llm_base_url: str = ""
     llm_api_key: str = ""
     llm_model: str = ""
+    llm_embedding_model: str = ""
     llm_timeout_seconds: float = 15.0
     allowed_media_content_types: tuple[str, ...] = (
         "image/jpeg",
@@ -67,6 +68,7 @@ class ArcHubSettings:
             llm_base_url=source.get("ARCHUB_LLM_BASE_URL", "").strip(),
             llm_api_key=source.get("ARCHUB_LLM_API_KEY", "").strip(),
             llm_model=source.get("ARCHUB_LLM_MODEL", "").strip(),
+            llm_embedding_model=source.get("ARCHUB_LLM_EMBEDDING_MODEL", "").strip(),
             llm_timeout_seconds=_positive_float(source.get("ARCHUB_LLM_TIMEOUT"), 15.0),
             allowed_media_content_types=_csv_tuple(
                 source.get("ARCHUB_ALLOWED_MEDIA_CONTENT_TYPES"),

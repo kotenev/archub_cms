@@ -1,4 +1,5 @@
 """Runtime content integration helpers for ArcHub CMS."""
+
 from __future__ import annotations
 
 __all__ = [
@@ -22,9 +23,7 @@ def default_runtime_import_sources() -> dict[str, Any]:
     return {
         "experts": (),
         "rag_specs": runtime_corpus_specs(),
-        "bot_resource_roots": (
-            Path("demo_content/bot_resources"),
-        ),
+        "bot_resource_roots": (Path("demo_content/bot_resources"),),
     }
 
 

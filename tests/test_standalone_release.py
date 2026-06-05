@@ -52,10 +52,7 @@ def test_demo_app_serves_backoffice_and_published_site(tmp_path, monkeypatch) ->
 
 def test_product_sources_do_not_import_original_host() -> None:
     source_root = Path(__file__).resolve().parents[1] / "src" / "archub_cms"
-    haystack = "\n".join(
-        path.read_text(encoding="utf-8")
-        for path in source_root.rglob("*.py")
-    )
+    haystack = "\n".join(path.read_text(encoding="utf-8") for path in source_root.rglob("*.py"))
 
     assert "botplatform." not in haystack
     assert "products.jyotish" not in haystack
