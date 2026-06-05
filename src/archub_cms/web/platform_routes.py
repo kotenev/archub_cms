@@ -28,6 +28,7 @@ from archub_cms.application.media_service import (
     get_archub_media_query_service,
 )
 from archub_cms.application.modeling_service import get_archub_modeling_query_service
+from archub_cms.application.packaging_service import get_archub_packaging_service
 from archub_cms.application.plugin_management_service import (
     get_archub_plugin_management_service,
 )
@@ -49,6 +50,12 @@ platform_router = APIRouter(prefix="/api/platform", tags=["platform"])
 def _knowledge_service():
     # Inject the loaded plugin host so search blends plugin-contributed hits.
     return get_archub_knowledge_base_service(plugin_host=get_plugin_host())
+
+
+def _dict_payload(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    return {str(key): item for key, item in value.items()}
 
 
 @platform_router.get("/report")
@@ -490,3 +497,53 @@ def storage_get(backend: str, key: str = Query(...)) -> dict[str, Any]:
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"backend": backend, "key": key, "content": data.decode("utf-8", errors="replace")}
+
+
+# -- packaging context (portable content bundles) -----------------------------
+
+
+@platform_router.post("/packaging/export")
+def packaging_export(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    package = get_archub_packaging_service().export(
+        name=str(payload.get("name") or "ArcHub package"),
+        description=str(payload.get("description") or ""),
+        node_ids=payload.get("node_ids") or [],
+        include_descendants=bool(payload.get("include_descendants", True)),
+        actor=str(payload.get("actor") or ""),
+    )
+    return {"summary": package.as_dict(), "package": package.data}
+
+
+@platform_router.post("/packaging/inspect")
+def packaging_inspect(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    package = _dict_payload(payload.get("package")) or payload
+    return get_archub_packaging_service().inspect(package).as_dict()
+
+
+@platform_router.post("/packaging/plan")
+def packaging_plan(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    package = _dict_payload(payload.get("package")) or payload
+    return get_archub_packaging_service().plan(
+        package, overwrite=bool(payload.get("overwrite", False))
+    )
+
+
+@platform_router.post("/packaging/import")
+def packaging_import(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    package = _dict_payload(payload.get("package"))
+    try:
+        return get_archub_packaging_service().import_package(
+            package,
+            actor=str(payload.get("actor") or ""),
+            overwrite=bool(payload.get("overwrite", False)),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
