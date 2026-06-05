@@ -28,6 +28,9 @@ from archub_cms.application.media_service import (
     get_archub_media_query_service,
 )
 from archub_cms.application.modeling_service import get_archub_modeling_query_service
+from archub_cms.application.plugin_management_service import (
+    get_archub_plugin_management_service,
+)
 from archub_cms.application.versioning_service import (
     VersioningCommandService,
     VersionNotFoundError,
@@ -64,6 +67,52 @@ def plugin_runtime() -> dict[str, Any]:
 @platform_router.get("/plugins/catalog")
 def plugin_catalog() -> dict[str, Any]:
     return _knowledge_service().plugin_catalog()
+
+
+@platform_router.get("/plugins/manage")
+def plugin_manage() -> dict[str, Any]:
+    return get_archub_plugin_management_service().catalog()
+
+
+@platform_router.post("/plugins/{plugin_id}/enable")
+def plugin_enable(
+    plugin_id: str,
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    try:
+        return get_archub_plugin_management_service().enable(
+            plugin_id, actor=str(payload.get("actor") or "")
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@platform_router.post("/plugins/{plugin_id}/disable")
+def plugin_disable(
+    plugin_id: str,
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    try:
+        return get_archub_plugin_management_service().disable(
+            plugin_id, actor=str(payload.get("actor") or "")
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@platform_router.post("/plugins/{plugin_id}/settings")
+def plugin_settings(
+    plugin_id: str,
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    try:
+        return get_archub_plugin_management_service().configure(
+            plugin_id,
+            dict(payload.get("settings") or {}),
+            actor=str(payload.get("actor") or ""),
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @platform_router.get("/knowledge/search")
