@@ -14,6 +14,7 @@ from archub_cms.domain.plugins import KnowledgePluginManifest
 from archub_cms.extensibility.bus import HookLog
 from archub_cms.extensibility.config_store import PluginConfigStore
 from archub_cms.extensibility.extension_points import (
+    AuthExt,
     EventHookExt,
     ExporterExt,
     ImporterExt,
@@ -96,6 +97,7 @@ class PluginHost:
         self._macros: dict[str, MacroExt] = {}
         self._importers: dict[str, ImporterExt] = {}
         self._exporters: dict[str, ExporterExt] = {}
+        self._auth_exts: list[AuthExt] = []
         self._loaded_ids: set[str] = set()
 
     # -- lifecycle ---------------------------------------------------------
@@ -163,6 +165,8 @@ class PluginHost:
                 self._importers[_ext_name(ext)] = ext
             if isinstance(ext, ExporterExt):
                 self._exporters[_ext_name(ext)] = ext
+            if isinstance(ext, AuthExt):
+                self._auth_exts.append(ext)
 
     # -- accessors ---------------------------------------------------------
 
@@ -226,6 +230,18 @@ class PluginHost:
             logger.exception("macro %s failed", name)
             return match.group(0)
 
+    def authenticate(self, request: Any) -> Any | None:
+        """Resolve an identity through auth plugins; first non-None wins."""
+        for ext in self._auth_exts:
+            try:
+                identity = ext.authenticate(request)
+            except Exception:  # an auth plugin must not break the request
+                logger.exception("auth extension failed")
+                continue
+            if identity is not None:
+                return identity
+        return None
+
     def run_tool(self, name: str, arguments: dict[str, Any]) -> str:
         tool = self._llm_tools.get(name)
         if tool is None:
@@ -257,6 +273,7 @@ class PluginHost:
             "macros": sorted(self._macros),
             "importers": sorted(self._importers),
             "exporters": sorted(self._exporters),
+            "auth_providers": len(self._auth_exts),
             "hook_counts": self._hook_log.counts,
             "recent_hooks": self._hook_log.recent(),
             "catalog_total": catalog["total"],

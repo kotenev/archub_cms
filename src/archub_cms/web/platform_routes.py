@@ -11,9 +11,13 @@ __all__ = ["platform_router"]
 
 from typing import Any
 
-from fastapi import APIRouter, Body, HTTPException, Query
+from fastapi import APIRouter, Body, HTTPException, Query, Request
 
 from archub_cms.application.delivery_read_service import get_archub_delivery_read_service
+from archub_cms.application.governance_service import (
+    AccessControlService,
+    get_archub_governance_query_service,
+)
 from archub_cms.application.knowledge import (
     KnowledgeQuery,
     get_archub_knowledge_base_service,
@@ -266,3 +270,62 @@ def versioning_restore(
         )
     except VersionNotFoundError as exc:
         raise HTTPException(status_code=404, detail=f"version not found: {exc}") from exc
+
+
+# -- governance context (RBAC + public access + pluggable auth) ---------------
+
+
+@platform_router.get("/governance/actions")
+def governance_actions() -> dict[str, Any]:
+    q = get_archub_governance_query_service()
+    return {"actions": q.actions(), "policies": q.policies()}
+
+
+@platform_router.get("/governance/permissions")
+def governance_permissions(limit: int = Query(default=100, ge=1, le=500)) -> dict[str, Any]:
+    return get_archub_governance_query_service().permissions(limit=limit)
+
+
+@platform_router.get("/governance/access-rules")
+def governance_access_rules(limit: int = Query(default=100, ge=1, le=500)) -> dict[str, Any]:
+    return get_archub_governance_query_service().access_rules(limit=limit)
+
+
+@platform_router.post("/governance/check")
+def governance_check(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    acl = AccessControlService()
+    allowed = acl.can_perform(
+        username=str(payload.get("username") or ""),
+        is_admin=bool(payload.get("is_admin")),
+        action=str(payload.get("action") or "browse"),
+        node_id=str(payload.get("node_id") or ""),
+    )
+    return {"allowed": allowed}
+
+
+@platform_router.post("/governance/access-check")
+def governance_access_check(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    acl = AccessControlService()
+    return acl.can_access(
+        str(payload.get("node_id") or ""),
+        authenticated=bool(payload.get("authenticated")),
+        groups=payload.get("groups") or [],
+    )
+
+
+@platform_router.get("/governance/whoami")
+def governance_whoami(request: Request) -> dict[str, Any]:
+    acl = AccessControlService(plugin_host=get_plugin_host())
+    identity = acl.identity(request)
+    if identity is None:
+        return {"authenticated": False}
+    return {
+        "authenticated": True,
+        "username": getattr(identity, "username", ""),
+        "is_admin": getattr(identity, "is_admin", False),
+        "groups": list(getattr(identity, "groups", ())),
+    }
