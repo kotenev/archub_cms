@@ -17,6 +17,7 @@ from archub_cms.application.knowledge import (
     KnowledgeQuery,
     get_archub_knowledge_base_service,
 )
+from archub_cms.application.modeling_service import get_archub_modeling_query_service
 from archub_cms.extensibility.host import get_plugin_host
 
 platform_router = APIRouter(prefix="/api/platform", tags=["platform"])
@@ -153,3 +154,34 @@ def run_tool(
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"tool": name, "result": result}
+
+
+# -- modeling context (content types / data types / templates) ----------------
+
+
+@platform_router.get("/modeling/report")
+def modeling_report() -> dict[str, Any]:
+    return get_archub_modeling_query_service().report()
+
+
+@platform_router.get("/modeling/content-types")
+def modeling_content_types() -> dict[str, Any]:
+    return get_archub_modeling_query_service().content_types()
+
+
+@platform_router.get("/modeling/content-types/{alias}")
+def modeling_content_type(alias: str) -> dict[str, Any]:
+    found = get_archub_modeling_query_service().content_type(alias)
+    if found is None:
+        raise HTTPException(status_code=404, detail="content type not found")
+    return found
+
+
+@platform_router.get("/modeling/data-types")
+def modeling_data_types(limit: int = Query(default=200, ge=1, le=500)) -> dict[str, Any]:
+    return get_archub_modeling_query_service().data_types(limit=limit)
+
+
+@platform_router.get("/modeling/templates")
+def modeling_templates(limit: int = Query(default=200, ge=1, le=500)) -> dict[str, Any]:
+    return get_archub_modeling_query_service().templates(limit=limit)
