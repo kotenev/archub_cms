@@ -22,6 +22,11 @@ from archub_cms.application.knowledge import (
     KnowledgeQuery,
     get_archub_knowledge_base_service,
 )
+from archub_cms.application.media_service import (
+    MediaCommandService,
+    StorageService,
+    get_archub_media_query_service,
+)
 from archub_cms.application.modeling_service import get_archub_modeling_query_service
 from archub_cms.application.versioning_service import (
     VersioningCommandService,
@@ -370,3 +375,69 @@ def workflow_transition(
     except WorkflowTransitionError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return workflow.as_dict()
+
+
+# -- media context + pluggable blob storage -----------------------------------
+
+
+@platform_router.get("/media")
+def media_assets(
+    folder: str = Query(default=""), limit: int = Query(default=100, ge=1, le=500)
+) -> dict[str, Any]:
+    return get_archub_media_query_service().assets(folder=folder, limit=limit)
+
+
+@platform_router.get("/media/folders")
+def media_folders() -> dict[str, Any]:
+    return get_archub_media_query_service().folders()
+
+
+@platform_router.post("/media/register")
+def media_register(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    try:
+        asset = MediaCommandService().register(
+            filename=str(payload.get("filename") or ""),
+            content_type=str(payload.get("content_type") or ""),
+            url=str(payload.get("url") or ""),
+            original_name=str(payload.get("original_name") or ""),
+            folder=str(payload.get("folder") or ""),
+            alt_text=str(payload.get("alt_text") or ""),
+            tags=payload.get("tags") or [],
+            metadata=payload.get("metadata") or {},
+            created_by=str(payload.get("created_by") or ""),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return asset.as_dict()
+
+
+@platform_router.get("/storage")
+def storage_backends() -> dict[str, Any]:
+    backends = StorageService(plugin_host=get_plugin_host()).backends()
+    return {"backends": backends, "total": len(backends)}
+
+
+@platform_router.post("/storage/{backend}/put")
+def storage_put(
+    backend: str,
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    service = StorageService(plugin_host=get_plugin_host())
+    try:
+        return service.put(
+            backend, str(payload.get("key") or ""), str(payload.get("content") or "").encode()
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@platform_router.get("/storage/{backend}/get")
+def storage_get(backend: str, key: str = Query(...)) -> dict[str, Any]:
+    service = StorageService(plugin_host=get_plugin_host())
+    try:
+        data = service.get(backend, key)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"backend": backend, "key": key, "content": data.decode("utf-8", errors="replace")}

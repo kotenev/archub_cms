@@ -1,0 +1,13 @@
+{
+  "id": "example.storage_backends",
+  "name": "Pluggable Storage Backends",
+  "version": "1.0.0",
+  "capability": "storage",
+  "runtime": "python",
+  "entrypoint": "archub_cms.extensibility.example_plugins.storage_backends:StorageBackendsPlugin",
+  "description": "In-memory (and optional filesystem) blob storage backends behind the StorageExt port.",
+  "provider": "archub",
+  "permissions": ["media:read", "media:write"],
+  "tags": ["example", "wikijs", "storage"],
+  "enabled_by_default": true
+}

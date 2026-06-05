@@ -24,6 +24,7 @@ from archub_cms.extensibility.extension_points import (
     RendererExt,
     SearchExt,
     SearchHit,
+    StorageExt,
 )
 from archub_cms.extensibility.loaders import PluginLoadError, select_loader
 from archub_cms.extensibility.permissions import PermissionDenied, PermissionGate
@@ -98,6 +99,7 @@ class PluginHost:
         self._importers: dict[str, ImporterExt] = {}
         self._exporters: dict[str, ExporterExt] = {}
         self._auth_exts: list[AuthExt] = []
+        self._storage: dict[str, StorageExt] = {}
         self._loaded_ids: set[str] = set()
 
     # -- lifecycle ---------------------------------------------------------
@@ -167,6 +169,8 @@ class PluginHost:
                 self._exporters[_ext_name(ext)] = ext
             if isinstance(ext, AuthExt):
                 self._auth_exts.append(ext)
+            if isinstance(ext, StorageExt):
+                self._storage[_ext_name(ext)] = ext
 
     # -- accessors ---------------------------------------------------------
 
@@ -230,6 +234,13 @@ class PluginHost:
             logger.exception("macro %s failed", name)
             return match.group(0)
 
+    @property
+    def storage_backends(self) -> dict[str, StorageExt]:
+        return dict(self._storage)
+
+    def storage(self, name: str) -> StorageExt | None:
+        return self._storage.get(name)
+
     def authenticate(self, request: Any) -> Any | None:
         """Resolve an identity through auth plugins; first non-None wins."""
         for ext in self._auth_exts:
@@ -274,6 +285,7 @@ class PluginHost:
             "importers": sorted(self._importers),
             "exporters": sorted(self._exporters),
             "auth_providers": len(self._auth_exts),
+            "storage_backends": sorted(self._storage),
             "hook_counts": self._hook_log.counts,
             "recent_hooks": self._hook_log.recent(),
             "catalog_total": catalog["total"],
