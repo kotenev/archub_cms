@@ -18,6 +18,7 @@ from archub_cms.application.governance_service import (
     AccessControlService,
     get_archub_governance_query_service,
 )
+from archub_cms.application.graph_service import get_archub_graph_service
 from archub_cms.application.knowledge import (
     KnowledgeQuery,
     get_archub_knowledge_base_service,
@@ -143,6 +144,30 @@ def knowledge_graph(
     space_key: str = Query(default=""), limit: int = Query(default=200)
 ) -> dict[str, Any]:
     return _knowledge_service().graph(space_key=space_key, limit=limit).as_dict()
+
+
+@platform_router.get("/graph/overview")
+def graph_overview(
+    space_key: str = Query(default=""), limit: int = Query(default=200, ge=1, le=1000)
+) -> dict[str, Any]:
+    return get_archub_graph_service().overview(space_key=space_key, limit=limit)
+
+
+@platform_router.get("/graph/backlinks")
+def graph_backlinks(route: str = Query(...), space_key: str = Query(default="")) -> dict[str, Any]:
+    return get_archub_graph_service().backlinks(route, space_key=space_key)
+
+
+@platform_router.get("/graph/backlinks-index")
+def graph_backlinks_index(space_key: str = Query(default="")) -> dict[str, Any]:
+    return get_archub_graph_service().backlinks_index(space_key=space_key)
+
+
+@platform_router.get("/graph/canvas")
+def graph_canvas(
+    space_key: str = Query(default=""), limit: int = Query(default=200, ge=1, le=1000)
+) -> dict[str, Any]:
+    return get_archub_graph_service().canvas(space_key=space_key, limit=limit)
 
 
 @platform_router.get("/knowledge/documents")
