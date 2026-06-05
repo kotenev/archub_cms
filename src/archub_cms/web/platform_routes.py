@@ -13,6 +13,7 @@ from typing import Any
 
 from fastapi import APIRouter, Body, HTTPException, Query, Request
 
+from archub_cms.application.analytics_service import get_archub_analytics_service
 from archub_cms.application.delivery_read_service import get_archub_delivery_read_service
 from archub_cms.application.governance_service import (
     AccessControlService,
@@ -152,6 +153,43 @@ def knowledge_graph(
     space_key: str = Query(default=""), limit: int = Query(default=200)
 ) -> dict[str, Any]:
     return _knowledge_service().graph(space_key=space_key, limit=limit).as_dict()
+
+
+@platform_router.get("/analytics/dashboard")
+def analytics_dashboard() -> dict[str, Any]:
+    return get_archub_analytics_service().dashboard()
+
+
+@platform_router.get("/analytics/health")
+def analytics_health() -> dict[str, Any]:
+    return get_archub_analytics_service().health()
+
+
+@platform_router.get("/analytics/stats")
+def analytics_stats() -> dict[str, int]:
+    return get_archub_analytics_service().stats()
+
+
+@platform_router.get("/analytics/audit")
+def analytics_audit() -> dict[str, Any]:
+    return get_archub_analytics_service().audit()
+
+
+@platform_router.get("/analytics/cache")
+def analytics_cache(limit: int = Query(default=20, ge=1, le=200)) -> dict[str, Any]:
+    return get_archub_analytics_service().cache(limit=limit)
+
+
+@platform_router.get("/analytics/activity")
+def analytics_activity(
+    node_id: str = Query(default=""),
+    action: str = Query(default=""),
+    actor: str = Query(default=""),
+    limit: int = Query(default=100, ge=1, le=1000),
+) -> dict[str, Any]:
+    return get_archub_analytics_service().activity(
+        node_id=node_id, action=action, actor=actor, limit=limit
+    )
 
 
 @platform_router.get("/graph/overview")
