@@ -23,6 +23,10 @@ from archub_cms.application.knowledge import (
     KnowledgeQuery,
     get_archub_knowledge_base_service,
 )
+from archub_cms.application.localization_service import (
+    LocalizationCommandService,
+    get_archub_localization_query_service,
+)
 from archub_cms.application.media_service import (
     MediaCommandService,
     StorageService,
@@ -616,3 +620,80 @@ def runtime_rebuild_index(
         model=payload.get("model"),
         actor=str(payload.get("actor") or "system"),
     )
+
+
+# -- localization / i18n context ----------------------------------------------
+
+
+@platform_router.get("/localization/dictionary")
+def localization_dictionary(
+    group: str = Query(default=""), limit: int = Query(default=200, ge=1, le=500)
+) -> dict[str, Any]:
+    return get_archub_localization_query_service().dictionary(group=group, limit=limit)
+
+
+@platform_router.get("/localization/translate")
+def localization_translate(
+    key: str = Query(...),
+    culture: str = Query(default=""),
+    group: str = Query(default=""),
+    default: str = Query(default=""),
+) -> dict[str, Any]:
+    return get_archub_localization_query_service().translate(
+        key, culture=culture, group=group, default=default
+    )
+
+
+@platform_router.post("/localization/dictionary")
+def localization_dictionary_upsert(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    try:
+        return LocalizationCommandService().upsert_dictionary(
+            key=str(payload.get("key") or ""),
+            group=str(payload.get("group") or ""),
+            values=_dict_payload(payload.get("values")),
+            actor=str(payload.get("actor") or ""),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@platform_router.get("/localization/{node_id}/variants")
+def localization_variants(node_id: str) -> dict[str, Any]:
+    return get_archub_localization_query_service().variants(node_id)
+
+
+@platform_router.get("/localization/{node_id}/cultures")
+def localization_cultures(node_id: str) -> dict[str, Any]:
+    return get_archub_localization_query_service().cultures(node_id)
+
+
+@platform_router.post("/localization/{node_id}/variants")
+def localization_variant_upsert(
+    node_id: str,
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    try:
+        return LocalizationCommandService().upsert_variant(
+            node_id,
+            culture=str(payload.get("culture") or ""),
+            payload=_dict_payload(payload.get("payload")),
+            actor=str(payload.get("actor") or ""),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@platform_router.post("/localization/{node_id}/variants/{culture}/publish")
+def localization_variant_publish(
+    node_id: str,
+    culture: str,
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    try:
+        return LocalizationCommandService().publish_variant(
+            node_id, culture=culture, actor=str(payload.get("actor") or "")
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
