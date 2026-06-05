@@ -121,7 +121,7 @@ class PluginHost:
         for ext in extensions:
             if isinstance(ext, EventHookExt):
                 self._event_hooks.append(ext)
-                for event_type in getattr(ext, "event_types", ()):
+                for event_type in ext.event_types:
                     self._bus.subscribe(event_type, ext.handle)
             if isinstance(ext, SearchExt):
                 self._search_exts.append(ext)
@@ -170,6 +170,8 @@ _HOST: PluginHost | None = None
 def get_plugin_host(*, reload: bool = False, settings: ArcHubSettings | None = None) -> PluginHost:
     """Return the process-wide PluginHost, loading plugins on first use."""
     global _HOST
-    if _HOST is None or reload:
-        _HOST = PluginHost(settings=settings).load()
-    return _HOST
+    host = _HOST
+    if host is None or reload:
+        host = PluginHost(settings=settings).load()
+        _HOST = host
+    return host

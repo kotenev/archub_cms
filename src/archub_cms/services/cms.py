@@ -44,6 +44,8 @@ import secrets
 import sqlite3
 import threading
 import time
+import urllib.error
+import urllib.request
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
@@ -5335,6 +5337,7 @@ class ArcHubCMSService:
                 )
                 conn.commit()
                 row = self._permission_rule_row(conn, clean_rule_id)
+                assert row is not None
                 return _permission_rule_from_row(row)
             finally:
                 conn.close()
@@ -5540,6 +5543,8 @@ class ArcHubCMSService:
                 )
                 conn.commit()
                 row = self._access_rule_row_for_node(conn, node_id)
+                if row is None:
+                    raise ValueError("Public access rule was not saved")
                 return _access_rule_from_row(row)
             finally:
                 conn.close()
@@ -6098,7 +6103,9 @@ class ArcHubCMSService:
     def content_health_report(self) -> dict[str, Any]:
         issues: list[ContentAuditIssue] = []
         nodes = self.list_tree()
-        types = {content_type.alias: content_type for content_type in self.list_content_types()}
+        types: dict[str, ContentType] = {
+            content_type.alias: content_type for content_type in self.list_content_types()
+        }
         published_paths = {
             node.route_path.rstrip("/") or _PUBLIC_ROOT for node in nodes if node.is_published
         }
@@ -6117,7 +6124,8 @@ class ArcHubCMSService:
                         node, "error", f"Template is missing: {content_type.template}"
                     )
                 )
-            elif (
+                continue
+            if (
                 template.allowed_content_type_aliases
                 and content_type.alias not in template.allowed_content_type_aliases
             ):
@@ -6369,7 +6377,7 @@ class ArcHubCMSService:
             known_keys.add(key)
             files = {
                 _relative_source_path(path)
-                for path in self._iter_corpus_files(getattr(spec, "corpus_dirs", ()))
+                for path in self._iter_corpus_files(self._corpus_dirs_from_spec(spec))
             }
             nodes = rag_by_corpus.get(key, [])
             sources = {
@@ -6380,7 +6388,7 @@ class ArcHubCMSService:
                 {
                     "key": key,
                     "title": str(getattr(spec, "title", "") or key),
-                    "corpus_dirs": [str(path) for path in getattr(spec, "corpus_dirs", ())],
+                    "corpus_dirs": [str(path) for path in self._corpus_dirs_from_spec(spec)],
                     "index_dir": str(getattr(spec, "default_index_dir", "") or ""),
                     "files_total": len(files),
                     "nodes_total": len(nodes),
@@ -6497,7 +6505,7 @@ class ArcHubCMSService:
             corpus_key = str(getattr(spec, "key", "") or "").strip()
             if not corpus_key:
                 continue
-            for file_path in self._iter_corpus_files(getattr(spec, "corpus_dirs", ())):
+            for file_path in self._iter_corpus_files(self._corpus_dirs_from_spec(spec)):
                 source_path = _relative_source_path(file_path)
                 if self.find_node_by_field("rag_material", "source_path", source_path):
                     continue
@@ -7847,6 +7855,18 @@ class ArcHubCMSService:
                 conn.close()
 
     @staticmethod
+    def _corpus_dirs_from_spec(spec: Any) -> tuple[Path | str, ...]:
+        roots = getattr(spec, "corpus_dirs", ())
+        if roots is None:
+            return ()
+        if isinstance(roots, str | Path):
+            return (roots,)
+        try:
+            return tuple(roots)
+        except TypeError:
+            return ()
+
+    @staticmethod
     def _iter_corpus_files(roots: Iterable[Path | str]) -> list[Path]:
         files: list[Path] = []
         for root in roots:
@@ -8728,10 +8748,18 @@ class ArcHubCMSService:
         headers: dict[str, str],
         timeout: float,
     ) -> int:
-        import requests
-
-        response = requests.post(target_url, json=payload, headers=headers, timeout=timeout)
-        return int(response.status_code)
+        body = _json_dumps(payload).encode("utf-8")
+        request = urllib.request.Request(
+            target_url,
+            data=body,
+            headers={**headers, "Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                return int(response.status)
+        except urllib.error.HTTPError as exc:
+            return int(exc.code)
 
     @staticmethod
     def _enqueue_webhook_deliveries(

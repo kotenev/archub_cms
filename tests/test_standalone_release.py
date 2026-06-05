@@ -25,7 +25,7 @@ def test_seed_demo_content_publishes_demo_pages(tmp_path, monkeypatch) -> None:
 
 def test_create_archub_app_includes_backoffice_and_delivery_routes() -> None:
     app = create_archub_app(seed_demo=False)
-    paths = {route.path for route in app.routes}
+    paths = {str(getattr(route, "path", "")) for route in app.routes}
 
     assert "/admin/archub" in paths
     assert "/cms" in paths
