@@ -108,7 +108,7 @@ def get_archub_plugin_registry(
     *,
     plugin_dirs: Iterable[Path | str] | None = None,
 ) -> ArcHubPluginRegistry:
-    source = settings if settings is not None else ArcHubSettings.from_env()
+    source: ArcHubSettings = settings if settings is not None else ArcHubSettings.from_env()
     default_dirs: Iterable[Path | str] = source.plugin_dirs
     chosen_dirs: Iterable[Path | str]
     if plugin_dirs is not None:
