@@ -42,6 +42,27 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
         )
         """,
     ),
+    (
+        "0003_comments",
+        """
+        CREATE TABLE IF NOT EXISTS archub_comments (
+            comment_id TEXT PRIMARY KEY,
+            node_id TEXT NOT NULL,
+            parent_comment_id TEXT NOT NULL DEFAULT '',
+            author TEXT NOT NULL,
+            body TEXT NOT NULL,
+            mentions_json TEXT NOT NULL DEFAULT '[]',
+            reactions_json TEXT NOT NULL DEFAULT '{}',
+            resolved INTEGER NOT NULL DEFAULT 0,
+            created_at REAL NOT NULL DEFAULT 0,
+            updated_at REAL NOT NULL DEFAULT 0
+        )
+        """,
+    ),
+    (
+        "0003_comments_node_idx",
+        "CREATE INDEX IF NOT EXISTS idx_archub_comments_node ON archub_comments (node_id)",
+    ),
 )
 
 

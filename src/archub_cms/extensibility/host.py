@@ -130,6 +130,12 @@ class PluginHost:
 
     # -- accessors ---------------------------------------------------------
 
+    def plugin_instance(self, plugin_id: str) -> Any | None:
+        for record in self._loaded:
+            if record.manifest.plugin_id == plugin_id:
+                return record.instance
+        return None
+
     @property
     def search_extensions(self) -> tuple[SearchExt, ...]:
         return tuple(self._search_exts)

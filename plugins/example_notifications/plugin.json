@@ -1,0 +1,13 @@
+{
+  "id": "example.notifications",
+  "name": "In-App Notifications",
+  "version": "1.0.0",
+  "capability": "notification",
+  "runtime": "python",
+  "entrypoint": "archub_cms.extensibility.example_plugins.notifications:NotificationsPlugin",
+  "description": "Builds a per-user notification feed from collaboration events (comments, @mentions, reactions).",
+  "provider": "archub",
+  "permissions": ["events:subscribe"],
+  "tags": ["example", "confluence", "notifications"],
+  "enabled_by_default": true
+}
