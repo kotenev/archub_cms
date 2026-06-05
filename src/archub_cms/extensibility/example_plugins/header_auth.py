@@ -10,6 +10,7 @@ from __future__ import annotations
 
 __all__ = ["HeaderAuthPlugin"]
 
+from collections.abc import Mapping
 from typing import Any
 
 from archub_cms.extensibility.extension_points import PluginContext
@@ -57,7 +58,9 @@ def _headers(request: Any) -> dict[str, str]:
         raw = request.get("headers")
     if raw is None:
         return {}
-    try:
-        return {str(k).lower(): str(v) for k, v in dict(raw).items()}
-    except (TypeError, ValueError):
-        return {}
+    if isinstance(raw, Mapping):
+        return {str(k).lower(): str(v) for k, v in raw.items()}
+    items = getattr(raw, "items", None)
+    if callable(items):
+        return {str(k).lower(): str(v) for k, v in items()}
+    return {}

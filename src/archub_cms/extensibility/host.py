@@ -35,7 +35,7 @@ logger = logging.getLogger("archub_cms.plugins")
 
 _EXECUTABLE_RUNTIMES = {"python", "http", "external"}
 # Macro token syntax: {{ name key=value key2="quoted value" }}
-_MACRO_RE = re.compile(r"\{\{\s*([a-zA-Z][\w-]*)((?:\s+[^}]*)?)\}\}")
+_MACRO_RE = re.compile(r"{{\s*([a-zA-Z][\w-]*)((?:\s+[^}]*)?)}}")
 _MACRO_ARG_RE = re.compile(r"([a-zA-Z_][\w-]*)=(\"[^\"]*\"|'[^']*'|\S+)")
 
 
