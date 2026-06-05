@@ -110,7 +110,8 @@ def get_archub_plugin_registry(
 ) -> ArcHubPluginRegistry:
     source: ArcHubSettings = settings if settings is not None else ArcHubSettings.from_env()
     if plugin_dirs is None:
-        return ArcHubPluginRegistry(plugin_dirs=tuple(source.plugin_dirs))
+        configured_dirs = source.plugin_dirs or ()
+        return ArcHubPluginRegistry(plugin_dirs=configured_dirs)
     return ArcHubPluginRegistry(plugin_dirs=tuple(plugin_dirs))
 
 
