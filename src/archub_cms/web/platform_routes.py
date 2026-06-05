@@ -35,6 +35,7 @@ from archub_cms.application.media_service import (
 )
 from archub_cms.application.modeling_service import get_archub_modeling_query_service
 from archub_cms.application.packaging_service import get_archub_packaging_service
+from archub_cms.application.platform import get_archub_platform
 from archub_cms.application.plugin_management_service import (
     get_archub_plugin_management_service,
 )
@@ -72,6 +73,11 @@ def _dict_payload(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         return {}
     return {str(key): item for key, item in value.items()}
+
+
+@platform_router.get("/capabilities")
+def platform_capabilities() -> dict[str, Any]:
+    return get_archub_platform(plugin_host=get_plugin_host()).capabilities()
 
 
 @platform_router.get("/report")
