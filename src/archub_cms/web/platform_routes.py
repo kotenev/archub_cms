@@ -28,6 +28,11 @@ from archub_cms.application.versioning_service import (
     VersionNotFoundError,
     get_archub_versioning_query_service,
 )
+from archub_cms.application.workflow_service import (
+    WorkflowCommandService,
+    get_archub_workflow_query_service,
+)
+from archub_cms.domain.workflow.workflow import WorkflowTransitionError
 from archub_cms.extensibility.host import get_plugin_host
 
 platform_router = APIRouter(prefix="/api/platform", tags=["platform"])
@@ -329,3 +334,39 @@ def governance_whoami(request: Request) -> dict[str, Any]:
         "is_admin": getattr(identity, "is_admin", False),
         "groups": list(getattr(identity, "groups", ())),
     }
+
+
+# -- workflow context (review/approval state machine) -------------------------
+
+
+@platform_router.get("/workflow/report")
+def workflow_report(limit: int = Query(default=200, ge=1, le=1000)) -> dict[str, Any]:
+    return get_archub_workflow_query_service().report(limit=limit)
+
+
+@platform_router.get("/workflow/{node_id}")
+def workflow_state(node_id: str) -> dict[str, Any]:
+    return get_archub_workflow_query_service().get(node_id)
+
+
+@platform_router.get("/workflow/{node_id}/transitions")
+def workflow_transitions(node_id: str) -> dict[str, Any]:
+    return get_archub_workflow_query_service().allowed_transitions(node_id)
+
+
+@platform_router.post("/workflow/{node_id}/transition")
+def workflow_transition(
+    node_id: str,
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    try:
+        workflow = WorkflowCommandService().transition(
+            node_id,
+            str(payload.get("to") or ""),
+            actor=str(payload.get("actor") or ""),
+            note=str(payload.get("note") or ""),
+            assigned_to=payload.get("assigned_to"),
+        )
+    except WorkflowTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return workflow.as_dict()
