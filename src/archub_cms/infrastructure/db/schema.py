@@ -63,6 +63,23 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
         "0003_comments_node_idx",
         "CREATE INDEX IF NOT EXISTS idx_archub_comments_node ON archub_comments (node_id)",
     ),
+    (
+        "0004_subscriptions",
+        """
+        CREATE TABLE IF NOT EXISTS archub_subscriptions (
+            subscription_id TEXT PRIMARY KEY,
+            subscriber TEXT NOT NULL,
+            node_id TEXT NOT NULL DEFAULT '',
+            event_prefix TEXT NOT NULL DEFAULT '',
+            created_at REAL NOT NULL DEFAULT 0
+        )
+        """,
+    ),
+    (
+        "0004_subscriptions_subscriber_idx",
+        "CREATE INDEX IF NOT EXISTS idx_archub_subscriptions_subscriber "
+        "ON archub_subscriptions (subscriber)",
+    ),
 )
 
 

@@ -45,6 +45,10 @@ from archub_cms.application.runtime_service import (
     get_archub_runtime_query_service,
 )
 from archub_cms.application.search_service import get_archub_search_service
+from archub_cms.application.subscription_service import (
+    SubscriptionCommandService,
+    get_archub_subscription_query_service,
+)
 from archub_cms.application.versioning_service import (
     VersioningCommandService,
     VersionNotFoundError,
@@ -857,3 +861,43 @@ def webhooks_dispatch(
 def notification_channels() -> dict[str, Any]:
     channels = sorted(get_plugin_host().notification_channels)
     return {"channels": channels, "total": len(channels)}
+
+
+# -- subscriptions / watchers (Confluence "watch") ----------------------------
+
+
+@platform_router.post("/subscriptions/watch")
+def subscriptions_watch(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    try:
+        sub = SubscriptionCommandService().watch(
+            subscriber=str(payload.get("subscriber") or ""),
+            node_id=str(payload.get("node_id") or ""),
+            event_prefix=str(payload.get("event_prefix") or ""),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return sub.as_dict()
+
+
+@platform_router.delete("/subscriptions/{subscription_id}")
+def subscriptions_unwatch(subscription_id: str, actor: str = Query(default="")) -> dict[str, Any]:
+    return {"removed": SubscriptionCommandService().unwatch(subscription_id, actor=actor)}
+
+
+@platform_router.get("/subscriptions")
+def subscriptions_list(subscriber: str = Query(...)) -> dict[str, Any]:
+    return get_archub_subscription_query_service().subscriptions_for(subscriber)
+
+
+@platform_router.get("/subscriptions/inbox")
+def subscriptions_inbox(
+    subscriber: str = Query(...), limit: int = Query(default=50, ge=1, le=500)
+) -> dict[str, Any]:
+    return get_archub_subscription_query_service().inbox(subscriber, limit=limit)
+
+
+@platform_router.get("/subscriptions/watchers/{node_id}")
+def subscriptions_watchers(node_id: str) -> dict[str, Any]:
+    return get_archub_subscription_query_service().watchers_of(node_id)
