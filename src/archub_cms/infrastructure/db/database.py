@@ -16,7 +16,15 @@ from pathlib import Path
 
 
 def connect(db_path: str) -> sqlite3.Connection:
-    """Open a connection configured the way ArcHub expects everywhere."""
+    """Open a connection configured the way ArcHub expects everywhere.
+
+    Ensures the parent directory exists first: the plugin host opens its config
+    store before the legacy service runs its own ``mkdir``, so on a fresh nested
+    ``ARCHUB_CMS_DB`` path the connection would otherwise fail to open.
+    """
+    parent = Path(db_path).parent
+    if str(parent) not in ("", "."):
+        parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
