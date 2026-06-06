@@ -52,6 +52,10 @@ from archub_cms.application.runtime_service import (
     get_archub_runtime_query_service,
 )
 from archub_cms.application.search_service import SearchService, get_archub_search_service
+from archub_cms.application.subscription_service import (
+    SubscriptionQueryService,
+    get_archub_subscription_query_service,
+)
 from archub_cms.application.versioning_service import (
     VersioningQueryService,
     get_archub_versioning_query_service,
@@ -87,6 +91,7 @@ _CONTEXTS: tuple[tuple[str, str], ...] = (
     ("analytics", "Content health, audit, activity dashboard."),
     ("webhooks", "Outbound delivery (Outbox) + notification channels."),
     ("search", "Federated, faceted search across the knowledge base."),
+    ("subscriptions", "Watchers + derived activity inbox."),
 )
 
 _PATTERNS: tuple[str, ...] = (
@@ -200,6 +205,10 @@ class ArcHubPlatform:
     @cached_property
     def search(self) -> SearchService:
         return get_archub_search_service(self.knowledge)
+
+    @cached_property
+    def subscriptions(self) -> SubscriptionQueryService:
+        return get_archub_subscription_query_service(cms=self._cms)
 
     @cached_property
     def plugins(self) -> PluginManagementService:

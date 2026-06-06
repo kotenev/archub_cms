@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ title }}</title>
+  <style>
+    :root { --bg:#0f172a; --card:#1e293b; --muted:#94a3b8; --fg:#e2e8f0; --accent:#38bdf8; --good:#22c55e; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:var(--bg); color:var(--fg); }
+    header { padding:24px 32px; border-bottom:1px solid #334155; display:flex; align-items:baseline; gap:16px; flex-wrap:wrap; }
+    header h1 { margin:0; font-size:22px; }
+    header .sub { color:var(--muted); font-size:14px; }
+    main { padding:24px 32px; display:grid; gap:24px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    .card { background:var(--card); border:1px solid #334155; border-radius:12px; padding:18px 20px; }
+    .card h2 { margin:0 0 12px; font-size:15px; text-transform:uppercase; letter-spacing:.04em; color:var(--accent); }
+    .grade { font-size:40px; font-weight:700; color:var(--good); }
+    .metric { display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid #2b3a52; font-size:14px; }
+    .metric:last-child { border-bottom:none; }
+    .metric .v { color:var(--muted); }
+    .chips { display:flex; flex-wrap:wrap; gap:8px; }
+    .chip { background:#0b1220; border:1px solid #334155; border-radius:999px; padding:4px 10px; font-size:12px; color:var(--fg); }
+    .ctx { display:grid; grid-template-columns: 1fr; gap:6px; }
+    .ctx .row { display:flex; flex-direction:column; padding:8px 0; border-bottom:1px solid #2b3a52; }
+    .ctx .row:last-child { border-bottom:none; }
+    .ctx .name { font-weight:600; font-size:14px; }
+    .ctx .desc { color:var(--muted); font-size:12px; }
+    code { background:#0b1220; padding:2px 6px; border-radius:6px; font-size:12px; }
+    a { color:var(--accent); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>{{ capabilities.product }}</h1>
+    <span class="sub">{{ capabilities.context_count }} bounded contexts ·
+      {{ report.loaded_total }} plugins loaded ·
+      health {{ health.grade }} ({{ health.score }})</span>
+    <span class="sub">API: <a href="/api/platform/index">/api/platform/index</a> ·
+      <a href="/api/platform/capabilities">/capabilities</a></span>
+  </header>
+  <main>
+    <section class="card">
+      <h2>Content health</h2>
+      <div class="grade">{{ health.grade }}</div>
+      <div class="metric"><span>Score</span><span class="v">{{ health.score }}/100</span></div>
+      <div class="metric"><span>Nodes</span><span class="v">{{ health.nodes }}</span></div>
+      <div class="metric"><span>Published</span><span class="v">{{ health.published }}</span></div>
+      <div class="metric"><span>Errors</span><span class="v">{{ health.error_count }}</span></div>
+      <div class="metric"><span>Warnings</span><span class="v">{{ health.warning_count }}</span></div>
+    </section>
+
+    <section class="card">
+      <h2>Plugin runtime</h2>
+      <div class="metric"><span>Loaded</span><span class="v">{{ report.loaded_total }}</span></div>
+      <div class="metric"><span>Failures</span><span class="v">{{ report.failures | length }}</span></div>
+      <div style="margin:10px 0 6px; color:var(--muted); font-size:12px;">Extension points</div>
+      <div class="chips">
+        {% for name, count in extension_points.items() %}
+          {% if count %}<span class="chip">{{ name }}: {{ count }}</span>{% endif %}
+        {% endfor %}
+      </div>
+      <div style="margin:12px 0 6px; color:var(--muted); font-size:12px;">Loaded plugins</div>
+      <div class="chips">
+        {% for plugin in report.loaded %}<span class="chip">{{ plugin.plugin_id }}</span>{% endfor %}
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Architectural patterns</h2>
+      <div class="chips">
+        {% for pattern in capabilities.architectural_patterns %}<span class="chip">{{ pattern }}</span>{% endfor %}
+      </div>
+      <div style="margin-top:14px; font-size:13px;">LLM:
+        <code>{{ capabilities.llm.provider }}</code>
+        {% if capabilities.llm.online_configured %}(online configured){% else %}(offline default){% endif %}
+      </div>
+    </section>
+
+    <section class="card" style="grid-column: 1 / -1;">
+      <h2>Bounded contexts</h2>
+      <div class="ctx">
+        {% for ctx in capabilities.bounded_contexts %}
+          <div class="row"><span class="name">{{ ctx.name }}</span><span class="desc">{{ ctx.description }}</span></div>
+        {% endfor %}
+      </div>
+    </section>
+  </main>
+</body>
+</html>

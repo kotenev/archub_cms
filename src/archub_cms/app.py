@@ -12,6 +12,7 @@ from archub_cms.demo import seed_demo_content
 from archub_cms.extensibility.host import get_plugin_host
 from archub_cms.services.jobs import ArcHubBackgroundWorker, get_archub_maintenance_service
 from archub_cms.settings import ArcHubSettings
+from archub_cms.web.admin_routes import admin_router
 from archub_cms.web.collaboration_routes import collaboration_router
 from archub_cms.web.platform_routes import platform_router
 from archub_cms.web.routes import router
@@ -57,4 +58,5 @@ def create_archub_app(*, seed_demo: bool = True) -> FastAPI:
     app.include_router(router)
     app.include_router(platform_router)
     app.include_router(collaboration_router)
+    app.include_router(admin_router)
     return app
