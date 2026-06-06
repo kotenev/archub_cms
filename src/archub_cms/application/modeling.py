@@ -1,4 +1,10 @@
-"""Content modeling application service for ArcHub CMS."""
+"""Content modeling application service for ArcHub CMS.
+
+.. deprecated:: Superseded by the modeling bounded context
+   (``archub_cms.application.modeling_service`` — ``ModelingQueryService`` /
+   ``ModelingCommandService`` over ``domain.modeling``). This thin facade is kept
+   for back-compat; prefer the new context for a domain model + invariants.
+"""
 
 from __future__ import annotations
 

@@ -85,6 +85,27 @@ def platform_capabilities() -> dict[str, Any]:
     return get_archub_platform(plugin_host=get_plugin_host()).capabilities()
 
 
+@platform_router.get("/index")
+def platform_index() -> dict[str, Any]:
+    """Self-describing API browser: every platform route grouped by context."""
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for route in platform_router.routes:
+        path = getattr(route, "path", "")
+        methods = sorted(set(getattr(route, "methods", set())) - {"HEAD", "OPTIONS"})
+        if not path.startswith("/api/platform"):
+            continue
+        rel = path.removeprefix("/api/platform/").removeprefix("/api/platform")
+        section = rel.split("/", 1)[0] or "platform"
+        groups.setdefault(section, []).append({"path": path, "methods": methods})
+    for routes in groups.values():
+        routes.sort(key=lambda r: r["path"])
+    return {
+        "sections": {name: groups[name] for name in sorted(groups)},
+        "section_count": len(groups),
+        "route_count": sum(len(routes) for routes in groups.values()),
+    }
+
+
 @platform_router.get("/report")
 def platform_report() -> dict[str, Any]:
     service = _knowledge_service()

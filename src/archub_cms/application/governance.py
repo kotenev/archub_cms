@@ -1,4 +1,10 @@
-"""Governance and access-control application service for ArcHub CMS."""
+"""Governance and access-control application service for ArcHub CMS.
+
+.. deprecated:: Superseded by the governance bounded context
+   (``archub_cms.application.governance_service`` — query/command/access-control
+   over ``domain.governance`` PermissionRule/AccessRule aggregates, with pluggable
+   AuthExt identity). Kept for back-compat.
+"""
 
 from __future__ import annotations
 

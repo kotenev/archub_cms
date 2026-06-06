@@ -1,4 +1,9 @@
-"""Content versioning application service for ArcHub CMS."""
+"""Content versioning application service for ArcHub CMS.
+
+.. deprecated:: Superseded by the versioning bounded context
+   (``archub_cms.application.versioning_service`` — history + field-level diff +
+   restore over ``domain.versioning``). Kept for back-compat.
+"""
 
 from __future__ import annotations
 
