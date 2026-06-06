@@ -16,6 +16,7 @@ from fastapi import APIRouter, Body, HTTPException, Query, Request
 from archub_cms.application.agent_service import get_archub_agent_service
 from archub_cms.application.analytics_service import get_archub_analytics_service
 from archub_cms.application.delivery_read_service import get_archub_delivery_read_service
+from archub_cms.application.fts_search_service import get_archub_fts_search_service
 from archub_cms.application.governance_service import (
     AccessControlService,
     get_archub_governance_query_service,
@@ -200,6 +201,18 @@ def federated_search_post(
     payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
 ) -> dict[str, Any]:
     return get_archub_search_service(_knowledge_service()).search_dict(payload)
+
+
+@platform_router.get("/search/fts")
+def fulltext_search(
+    q: str = Query(default=""), limit: int = Query(default=20, ge=1, le=100)
+) -> dict[str, Any]:
+    return get_archub_fts_search_service(knowledge=_knowledge_service()).search(q, limit=limit)
+
+
+@platform_router.post("/search/fts/reindex")
+def fulltext_reindex() -> dict[str, Any]:
+    return get_archub_fts_search_service(knowledge=_knowledge_service()).reindex()
 
 
 @platform_router.get("/knowledge/search")
