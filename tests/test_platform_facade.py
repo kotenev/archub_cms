@@ -42,6 +42,7 @@ def test_all_context_services_resolve(platform):
         "webhooks",
         "search",
         "subscriptions",
+        "blueprints",
         "plugins",
     ):
         assert getattr(platform, name) is not None
@@ -71,8 +72,8 @@ def test_facade_delegates_to_contexts(platform):
 
 def test_capabilities_surface(platform):
     caps = platform.capabilities()
-    assert caps["context_count"] == 17
-    assert len(caps["bounded_contexts"]) == 17
+    assert caps["context_count"] == 18
+    assert len(caps["bounded_contexts"]) == 18
     assert "Composition Root (this facade)" in caps["architectural_patterns"]
     ext = caps["plugins"]["extension_points"]
     # auth, storage and notification channels are all wired
@@ -105,6 +106,6 @@ def test_capabilities_endpoint(tmp_path, monkeypatch):
         caps = client.get("/api/platform/capabilities")
         assert caps.status_code == 200
         body = caps.json()
-        assert body["context_count"] == 17
+        assert body["context_count"] == 18
         assert body["plugins"]["loaded"] >= 9
         assert body["product"].startswith("ArcHub")

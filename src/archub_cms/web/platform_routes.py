@@ -15,6 +15,11 @@ from fastapi import APIRouter, Body, HTTPException, Query, Request
 
 from archub_cms.application.agent_service import get_archub_agent_service
 from archub_cms.application.analytics_service import get_archub_analytics_service
+from archub_cms.application.blueprint_service import (
+    BlueprintCommandService,
+    BlueprintNotFoundError,
+    get_archub_blueprint_query_service,
+)
 from archub_cms.application.delivery_read_service import get_archub_delivery_read_service
 from archub_cms.application.fts_search_service import get_archub_fts_search_service
 from archub_cms.application.governance_service import (
@@ -201,6 +206,58 @@ def federated_search_post(
     payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
 ) -> dict[str, Any]:
     return get_archub_search_service(_knowledge_service()).search_dict(payload)
+
+
+@platform_router.get("/blueprints")
+def blueprints_list(
+    content_type: str = Query(default=""), limit: int = Query(default=100, ge=1, le=1000)
+) -> dict[str, Any]:
+    return get_archub_blueprint_query_service().blueprints(
+        content_type_alias=content_type, limit=limit
+    )
+
+
+@platform_router.get("/blueprints/{blueprint_id}")
+def blueprint_detail(blueprint_id: str) -> dict[str, Any]:
+    found = get_archub_blueprint_query_service().blueprint(blueprint_id)
+    if found is None:
+        raise HTTPException(status_code=404, detail="blueprint not found")
+    return found
+
+
+@platform_router.post("/blueprints")
+def blueprint_create(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    try:
+        blueprint = BlueprintCommandService().create_blueprint(
+            content_type_alias=str(payload.get("content_type_alias") or ""),
+            name=str(payload.get("name") or ""),
+            payload=_dict_payload(payload.get("payload")),
+            description=str(payload.get("description") or ""),
+            actor=str(payload.get("actor") or ""),
+            blueprint_id=str(payload.get("blueprint_id") or ""),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return blueprint.as_dict()
+
+
+@platform_router.post("/blueprints/{blueprint_id}/instantiate")
+def blueprint_instantiate(
+    blueprint_id: str,
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    try:
+        return BlueprintCommandService().instantiate(
+            blueprint_id,
+            parent_id=str(payload.get("parent_id") or "root"),
+            name=str(payload.get("name") or ""),
+            overrides=_dict_payload(payload.get("overrides")),
+            actor=str(payload.get("actor") or ""),
+        )
+    except BlueprintNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=f"blueprint not found: {exc}") from exc
 
 
 @platform_router.get("/search/fts")

@@ -15,6 +15,10 @@ from functools import cached_property
 from typing import Any
 
 from archub_cms.application.analytics_service import AnalyticsService, get_archub_analytics_service
+from archub_cms.application.blueprint_service import (
+    BlueprintQueryService,
+    get_archub_blueprint_query_service,
+)
 from archub_cms.application.collaboration_service import (
     CollaborationService,
     get_archub_collaboration_service,
@@ -92,6 +96,7 @@ _CONTEXTS: tuple[tuple[str, str], ...] = (
     ("webhooks", "Outbound delivery (Outbox) + notification channels."),
     ("search", "Federated, faceted search across the knowledge base."),
     ("subscriptions", "Watchers + derived activity inbox."),
+    ("blueprints", "Reusable content templates (instantiate from blueprint)."),
 )
 
 _PATTERNS: tuple[str, ...] = (
@@ -210,6 +215,10 @@ class ArcHubPlatform:
     @cached_property
     def subscriptions(self) -> SubscriptionQueryService:
         return get_archub_subscription_query_service(cms=self._cms)
+
+    @cached_property
+    def blueprints(self) -> BlueprintQueryService:
+        return get_archub_blueprint_query_service(cms=self._cms)
 
     @cached_property
     def plugins(self) -> PluginManagementService:
