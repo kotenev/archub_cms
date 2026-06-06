@@ -1,14 +1,33 @@
 ID,Type,Name,Documentation,Source,Target
-rel-editor-admin,Used By,Uses backoffice,Editors use the backoffice application service.,app-admin-service,business-editor
-rel-visitor-delivery,Used By,Reads delivery,Public visitors use the delivery application service.,app-delivery-service,business-visitor
-rel-routes-admin,Serving,Serves admin,FastAPI routes expose the backoffice service.,app-routes,app-admin-service
-rel-routes-delivery,Serving,Serves delivery,FastAPI routes expose public delivery.,app-routes,app-delivery-service
-rel-process-routes,Composition,Runs routes,The FastAPI process contains the ArcHub router.,tech-process,app-routes
-rel-routes-cms,Composition,Uses CMS service,Routes delegate content operations to the CMS service.,app-routes,app-cms
-rel-routes-builder,Composition,Uses builder,Routes delegate block preview audit and render operations to the builder service.,app-routes,app-builder
-rel-routes-runtime,Composition,Uses runtime helpers,Routes trigger import export and rebuild operations.,app-routes,app-runtime
-rel-ports-routes,Serving,Provides host contracts,Ports provide host adapters for routes and services.,app-ports,app-routes
-rel-cms-store,Access,Persists content,The CMS service reads and writes SQLite state.,app-cms,data-sqlite
+rel-editor-backoffice,Used By,Uses backoffice,Editors use the backoffice application service.,business-backoffice,business-editor
+rel-visitor-delivery,Used By,Reads delivery,Public visitors use the delivery application service.,business-delivery,business-visitor
+rel-agent-knowledge,Used By,Uses knowledge platform,Agent clients use the knowledge platform service.,business-knowledge,business-agent-client
+rel-editor-collaboration,Used By,Uses collaboration,Editors use the collaboration service for comments and mentions.,business-collaboration,business-editor
+rel-routes-backoffice,Serving,Serves backoffice,Legacy routes expose the backoffice service.,app-routes,business-backoffice
+rel-routes-delivery,Serving,Serves delivery,Legacy routes expose public delivery.,app-routes,business-delivery
+rel-platform-routes-knowledge,Serving,Serves knowledge platform,Platform routes expose the knowledge platform API.,app-platform-routes,business-knowledge
+rel-collab-routes-collab,Serving,Serves collaboration,Collaboration routes expose the collaboration API.,app-collab-routes,business-collaboration
+rel-process-routes,Composition,Runs routes,The FastAPI process contains the legacy router.,tech-process,app-routes
+rel-process-platform-routes,Composition,Runs platform routes,The FastAPI process contains the platform router.,tech-process,app-platform-routes
+rel-process-collab-routes,Composition,Runs collaboration routes,The FastAPI process contains the collaboration router.,tech-process,app-collab-routes
+rel-platform-content,Composition,Owns content service,ArcHubPlatform wires the content service.,app-platform,app-content-svc
+rel-platform-modeling,Composition,Owns modeling service,ArcHubPlatform wires the modeling service.,app-platform,app-modeling-svc
+rel-platform-delivery,Composition,Owns delivery service,ArcHubPlatform wires the delivery read service.,app-platform,app-delivery-svc
+rel-platform-publishing,Composition,Owns publishing service,ArcHubPlatform wires the publishing service.,app-platform,app-publishing-svc
+rel-platform-workflow,Composition,Owns workflow service,ArcHubPlatform wires the workflow service.,app-platform,app-workflow-svc
+rel-platform-governance,Composition,Owns governance service,ArcHubPlatform wires the governance service.,app-platform,app-governance-svc
+rel-platform-agent,Composition,Owns agent service,ArcHubPlatform wires the agent service.,app-platform,app-agent-svc
+rel-platform-search,Composition,Owns search service,ArcHubPlatform wires the search service.,app-platform,app-search-svc
+rel-platform-collab,Composition,Owns collaboration service,ArcHubPlatform wires the collaboration service.,app-platform,app-collab-svc
+rel-platform-plugins,Composition,Owns plugin host,ArcHubPlatform wires the plugin host.,app-platform,app-plugin-host
+rel-cms-content,Assignment,Persists for content service,Legacy CMS provides SQLite persistence for content.,app-cms-legacy,app-content-svc
+rel-cms-modeling,Assignment,Persists for modeling service,Legacy CMS provides SQLite persistence for modeling.,app-cms-legacy,app-modeling-svc
+rel-cms-delivery,Assignment,Persists for delivery service,Legacy CMS provides SQLite persistence for delivery.,app-cms-legacy,app-delivery-svc
+rel-ports-platform,Serving,Provides host contracts,Ports provide host adapters for the platform composition root.,app-ports,app-platform
+rel-cms-store,Access,Persists content,The legacy CMS service reads and writes SQLite state.,app-cms-legacy,data-sqlite
 rel-routes-assets,Access,Renders assets,Routes render packaged templates and static assets.,app-routes,data-assets
-rel-runtime-snapshot,Access,Exports snapshots,Runtime helpers write published runtime snapshots.,app-runtime,data-snapshot
+rel-delivery-snapshot,Access,Exports snapshots,Delivery/publishing services write published runtime snapshots.,app-delivery-svc,data-snapshot
+rel-search-fts,Access,Searches FTS5,Search service reads and writes the FTS5 index.,app-search-svc,data-fts
 rel-consumer-snapshot,Used By,Consumes snapshots,Runtime consumers use exported files.,data-snapshot,business-runtime-consumer
+rel-plugin-dev-host,Association,Develops plugins,Plugin developers create plugin manifests consumed by the host.,business-plugin-developer,app-plugin-host
+rel-plugin-host-config,Access,Manages config,Plugin host reads and writes per-plugin config store.,app-plugin-host,data-plugin-config

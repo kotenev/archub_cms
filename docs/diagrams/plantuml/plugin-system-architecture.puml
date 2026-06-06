@@ -1,0 +1,67 @@
+@startuml
+title ArcHub CMS - Plugin System Architecture
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+actor "Plugin developer" as Dev
+folder "ARCHUB_PLUGIN_DIRS\nplugins/" as PluginFiles {
+    artifact "plugin.json\nmanifest" as Manifest
+    artifact "*.py entrypoint" as Code
+}
+
+component "PluginHost\nextensibility/host.py" as Host {
+    component "discover()" as Discover
+    component "permission check" as PermCheck
+    component "load()" as Load
+    component "wire()" as Wire
+}
+
+component "PermissionGate\nextensibility/permissions.py" as Gate
+component "PluginConfigStore\nextensibility/config_store.py" as ConfigStore
+component "Loaders" as Loaders {
+    component "InProcessLoader\nmodule:attribute" as InProcess
+    component "HttpToolLoader\nsandboxed HTTP" as HttpLoader
+}
+
+package "11 Extension Point Protocols — extensibility/extension_points.py" {
+    interface "EventHookExt\nsubscribe to events" as EventHook
+    interface "SearchExt\ncontribute search hits" as Search
+    interface "LLMToolExt\nagent-callable tools" as LLMTool
+    interface "RendererExt\ncontent rendering" as Renderer
+    interface "MacroExt\n{{macro}} expansion" as Macro
+    interface "ImporterExt\nbulk import" as Importer
+    interface "ExporterExt\nbulk export" as Exporter
+    interface "AuthExt\nresolve identity" as Auth
+    interface "StorageExt\nblob storage" as Storage
+    interface "NotificationExt\noutbound channels" as Notification
+    interface "Plugin\nbase protocol" as Plugin
+}
+
+component "EventBus\nkernel/events.py" as EventBus
+component "ArcHubPlatform\napplication/platform.py" as Platform
+database "SQLite\nplugin config" as DB
+
+Dev --> Manifest : write manifest
+Dev --> Code : implement extension points
+Host --> Manifest : discover from dirs
+Discover --> Gate : validate permissions
+PermCheck --> ConfigStore : check enabled
+Load --> InProcess : trusted plugins
+Load --> HttpLoader : sandboxed plugins
+Wire --> EventBus : subscribe EventHookExt
+Wire --> Platform : register capabilities
+
+EventHook <|.. Code
+Search <|.. Code
+LLMTool <|.. Code
+Renderer <|.. Code
+Macro <|.. Code
+Importer <|.. Code
+Exporter <|.. Code
+Auth <|.. Code
+Storage <|.. Code
+Notification <|.. Code
+
+ConfigStore --> DB : enable/disable + settings
+@enduml

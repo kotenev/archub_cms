@@ -1,0 +1,40 @@
+@startuml
+title ArcHub CMS - Agent Service and Resilient LLM Flow
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+actor "Agent client" as Client
+component "platform_routes\n/api/platform/knowledge/agent-answer" as Route
+component "AgentService\napplication/agent_service.py" as Agent
+component "SearchService" as Search
+component "FtsSearchService" as Fts
+component "LLMToolExt plugins" as Tools
+component "ResilientLLMProvider\napplication/resilient_llm.py" as ResilientLLM
+component "CircuitBreaker\nkernel/circuit_breaker.py" as CB
+interface "LLMProviderPort" as LLMPort
+component "OfflineExtractive\nprovider" as Offline
+component "OpenAI-compatible\nprovider" as Online
+component "HashingEmbedder\napplication/embeddings.py" as HashEmbed
+component "OpenAIEmbedder" as OpenAIEmbed
+interface "EmbeddingPort" as EmbedPort
+database "SQLite" as DB
+
+Client --> Route : POST question
+Route --> Agent : answer(question, space_key)
+Agent --> Search : search relevant docs
+Search --> Fts : BM25 full-text search
+Fts --> DB : FTS5 index
+Agent --> Tools : auto-match tool from question
+Tools --> Agent : tool result
+Agent --> ResilientLLM : complete(prompt, context)
+ResilientLLM --> CB : guard external call
+CB --> LLMPort : primary or fallback
+LLMPort <|.. Online : primary (online)
+LLMPort <|.. Offline : fallback (offline)
+Search --> HashEmbed : offline embedding
+Search --> OpenAIEmbed : online embedding
+HashEmbed ..|> EmbedPort
+OpenAIEmbed ..|> EmbedPort
+Agent --> Route : answer + sources + tools
+@enduml

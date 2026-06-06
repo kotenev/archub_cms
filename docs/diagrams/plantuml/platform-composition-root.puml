@@ -1,0 +1,85 @@
+@startuml
+title ArcHub CMS - ArcHubPlatform Composition Root
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+actor "Editor" as Editor
+actor "Visitor" as Visitor
+actor "Agent client" as Agent
+actor "Plugin developer" as PluginDev
+
+component "FastAPI routes" as Routes
+component "Platform routes\n/api/platform/*" as PlatformRoutes
+component "Collaboration routes" as CollabRoutes
+
+component "ArcHubPlatform\napplication/platform.py\n@cached_property services" as Platform {
+    component "ArcHubCMSService\nlegacy compat engine" as CMS
+    component "EventBus" as EventBus
+    component "PluginHost" as PluginHost
+}
+
+component "content_service" as ContentSvc
+component "modeling_service" as ModelingSvc
+component "delivery_read_service" as DeliverySvc
+component "publishing" as PublishingSvc
+component "workflow_service" as WorkflowSvc
+component "governance_service" as GovernanceSvc
+component "versioning_service" as VersioningSvc
+component "media_service" as MediaSvc
+component "packaging_service" as PackageSvc
+component "webhooks_service" as WebhookSvc
+component "search_service" as SearchSvc
+component "agent_service" as AgentSvc
+component "collaboration_service" as CollabSvc
+component "graph_service" as GraphSvc
+component "runtime_service" as RuntimeSvc
+component "localization_service" as LocSvc
+component "analytics_service" as AnalyticsSvc
+component "subscription_service" as SubSvc
+component "lock_service" as LockSvc
+component "trash_service" as TrashSvc
+component "blueprint_service" as BlueprintSvc
+component "plugin_management_service" as PluginMgmtSvc
+
+database "SQLite\nARCHUB_CMS_DB" as SQLite
+
+Editor --> Routes
+Visitor --> Routes
+Agent --> PlatformRoutes
+PluginDev --> PluginHost
+
+Routes --> Platform
+PlatformRoutes --> Platform
+CollabRoutes --> Platform
+
+Platform --> ContentSvc
+Platform --> ModelingSvc
+Platform --> DeliverySvc
+Platform --> PublishingSvc
+Platform --> WorkflowSvc
+Platform --> GovernanceSvc
+Platform --> VersioningSvc
+Platform --> MediaSvc
+Platform --> PackageSvc
+Platform --> WebhookSvc
+Platform --> SearchSvc
+Platform --> AgentSvc
+Platform --> CollabSvc
+Platform --> GraphSvc
+Platform --> RuntimeSvc
+Platform --> LocSvc
+Platform --> AnalyticsSvc
+Platform --> SubSvc
+Platform --> LockSvc
+Platform --> TrashSvc
+Platform --> BlueprintSvc
+Platform --> PluginMgmtSvc
+
+ContentSvc --> CMS
+ModelingSvc --> CMS
+PublishingSvc --> CMS
+CMS --> SQLite
+EventBus --> Platform : domain events
+PluginHost --> Platform : extension contributions
+@enduml

@@ -1,0 +1,25 @@
+sequenceDiagram
+    participant Client
+    participant Route as platform_routes
+    participant Agent as AgentService
+    participant Search as SearchService
+    participant LLM as LLMProviderPort
+    participant Tools as LLMToolExt plugins
+    participant CMS as ArcHubCMSService
+    participant DB as SQLite
+
+    Client->>Route: POST /api/platform/knowledge/agent-answer
+    Route->>Agent: answer(question, space_key)
+    Agent->>Search: search(question, limit=10)
+    Search->>CMS: published content + RAG materials
+    CMS->>DB: query nodes
+    DB-->>CMS: rows
+    CMS-->>Search: candidates
+    Search-->>Agent: ranked search results
+    Agent->>Agent: select matching LLMToolExt tools
+    Agent->>Tools: run tool if question matches
+    Tools-->>Agent: tool result
+    Agent->>LLM: complete(prompt, source context, tool results)
+    LLM-->>Agent: grounded answer
+    Agent-->>Route: answer, provider, sources, tools used
+    Route-->>Client: JSON response

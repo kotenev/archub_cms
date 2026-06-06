@@ -1,18 +1,26 @@
 sequenceDiagram
     participant Editor
     participant Routes as web.routes
+    participant PubSvc as PublishingService
     participant CMS as ArcHubCMSService
+    participant UoW as UnitOfWork
     participant DB as SQLite
+    participant Bus as EventBus
     participant Runtime as Runtime export
-    participant Webhooks
+    participant Webhooks as WebhookService
+    participant Hooks as Plugin EventHooks
 
     Editor->>Routes: POST /admin/archub/content/{node_id}/publish
-    Routes->>CMS: publish_node(node_id)
-    CMS->>CMS: validate draft against content type
+    Routes->>PubSvc: publish(node_id, actor)
+    PubSvc->>CMS: validate draft against content type
+    CMS->>UoW: begin transaction
     CMS->>DB: write published JSON and version
     CMS->>DB: record activity
-    CMS->>Webhooks: enqueue matching deliveries
-    Routes->>Runtime: refresh runtime export if needed
+    UoW->>Bus: publish domain events after commit
+    Bus->>Webhooks: content.published → enqueue deliveries
+    Bus->>Hooks: content.published → plugin event hooks
+    PubSvc->>Runtime: refresh runtime export if needed
     Runtime->>DB: read published runtime nodes
     Runtime->>Runtime: write snapshot and manifest
+    PubSvc-->>Routes: PublishingCommandResult + events
     Routes-->>Editor: 303 See Other

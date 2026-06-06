@@ -14,7 +14,9 @@ from archub_cms.domain.plugins import KnowledgePluginManifest
 from archub_cms.extensibility.bus import HookLog
 from archub_cms.extensibility.config_store import PluginConfigStore
 from archub_cms.extensibility.extension_points import (
+    AnalyticsProviderExt,
     AuthExt,
+    ContentTransformerExt,
     EventHookExt,
     ExporterExt,
     ImporterExt,
@@ -23,9 +25,14 @@ from archub_cms.extensibility.extension_points import (
     NotificationExt,
     PluginContext,
     RendererExt,
+    ScheduledJobExt,
     SearchExt,
     SearchHit,
+    SearchIndexerExt,
+    SecurityPolicyExt,
     StorageExt,
+    ThemeExt,
+    WorkflowActionExt,
 )
 from archub_cms.extensibility.loaders import PluginLoadError, select_loader
 from archub_cms.extensibility.permissions import PermissionDenied, PermissionGate
@@ -102,6 +109,13 @@ class PluginHost:
         self._auth_exts: list[AuthExt] = []
         self._storage: dict[str, StorageExt] = {}
         self._notifiers: dict[str, NotificationExt] = {}
+        self._themes: dict[str, ThemeExt] = {}
+        self._scheduled_jobs: dict[str, ScheduledJobExt] = {}
+        self._analytics_providers: dict[str, AnalyticsProviderExt] = {}
+        self._workflow_actions: dict[str, WorkflowActionExt] = {}
+        self._content_transformers: dict[str, ContentTransformerExt] = {}
+        self._search_indexers: dict[str, SearchIndexerExt] = {}
+        self._security_policies: dict[str, SecurityPolicyExt] = {}
         self._loaded_ids: set[str] = set()
 
     # -- lifecycle ---------------------------------------------------------
@@ -176,6 +190,21 @@ class PluginHost:
             if isinstance(ext, NotificationExt):
                 self._notifiers[ext.channel] = ext
                 self._bus.subscribe("*", ext.notify)
+            if isinstance(ext, ThemeExt):
+                self._themes[ext.theme_id] = ext
+            if isinstance(ext, ScheduledJobExt):
+                self._scheduled_jobs[ext.job_name] = ext
+            if isinstance(ext, AnalyticsProviderExt):
+                self._analytics_providers[ext.provider_name] = ext
+                self._bus.subscribe("*", ext.track)
+            if isinstance(ext, WorkflowActionExt):
+                self._workflow_actions[ext.action_name] = ext
+            if isinstance(ext, ContentTransformerExt):
+                self._content_transformers[ext.transformer_name] = ext
+            if isinstance(ext, SearchIndexerExt):
+                self._search_indexers[ext.indexer_name] = ext
+            if isinstance(ext, SecurityPolicyExt):
+                self._security_policies[ext.policy_name] = ext
 
     # -- accessors ---------------------------------------------------------
 
@@ -247,6 +276,59 @@ class PluginHost:
     def notification_channels(self) -> dict[str, NotificationExt]:
         return dict(self._notifiers)
 
+    @property
+    def themes(self) -> dict[str, ThemeExt]:
+        return dict(self._themes)
+
+    @property
+    def scheduled_job_extensions(self) -> dict[str, ScheduledJobExt]:
+        return dict(self._scheduled_jobs)
+
+    @property
+    def analytics_providers(self) -> dict[str, AnalyticsProviderExt]:
+        return dict(self._analytics_providers)
+
+    @property
+    def workflow_actions(self) -> dict[str, WorkflowActionExt]:
+        return dict(self._workflow_actions)
+
+    @property
+    def content_transformers(self) -> dict[str, ContentTransformerExt]:
+        return dict(self._content_transformers)
+
+    @property
+    def search_indexers(self) -> dict[str, SearchIndexerExt]:
+        return dict(self._search_indexers)
+
+    @property
+    def security_policies(self) -> dict[str, SecurityPolicyExt]:
+        return dict(self._security_policies)
+
+    def transform_content(
+        self, content: dict[str, Any], *, phase: str = "render"
+    ) -> dict[str, Any]:
+        for transformer in self._content_transformers.values():
+            if transformer.phase == phase:
+                try:
+                    content = transformer.transform(content)
+                except Exception:
+                    logger.exception("content transformer %s failed", transformer.transformer_name)
+        return content
+
+    def check_security_publish(self, content: dict[str, Any]) -> tuple[bool, str]:
+        for policy in self._security_policies.values():
+            allowed, reason = policy.check_publish(content)
+            if not allowed:
+                return False, f"{policy.policy_name}: {reason}"
+        return True, ""
+
+    def check_security_access(self, user: Any, content: dict[str, Any]) -> tuple[bool, str]:
+        for policy in self._security_policies.values():
+            allowed, reason = policy.check_access(user, content)
+            if not allowed:
+                return False, f"{policy.policy_name}: {reason}"
+        return True, ""
+
     def storage(self, name: str) -> StorageExt | None:
         return self._storage.get(name)
 
@@ -296,6 +378,13 @@ class PluginHost:
             "auth_providers": len(self._auth_exts),
             "storage_backends": sorted(self._storage),
             "notification_channels": sorted(self._notifiers),
+            "themes": sorted(self._themes),
+            "scheduled_jobs": sorted(self._scheduled_jobs),
+            "analytics_providers": sorted(self._analytics_providers),
+            "workflow_actions": sorted(self._workflow_actions),
+            "content_transformers": sorted(self._content_transformers),
+            "search_indexers": sorted(self._search_indexers),
+            "security_policies": sorted(self._security_policies),
             "hook_counts": self._hook_log.counts,
             "recent_hooks": self._hook_log.recent(),
             "catalog_total": catalog["total"],

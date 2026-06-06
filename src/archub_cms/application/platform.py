@@ -15,10 +15,15 @@ from functools import cached_property
 from typing import Any
 
 from archub_cms.application.analytics_service import AnalyticsService, get_archub_analytics_service
+from archub_cms.application.audit_trail_service import (
+    AuditTrailService,
+    get_archub_audit_trail_service,
+)
 from archub_cms.application.blueprint_service import (
     BlueprintQueryService,
     get_archub_blueprint_query_service,
 )
+from archub_cms.application.bookmark_service import BookmarkService, get_archub_bookmark_service
 from archub_cms.application.collaboration_service import (
     CollaborationService,
     get_archub_collaboration_service,
@@ -47,6 +52,10 @@ from archub_cms.application.modeling_service import (
     ModelingQueryService,
     get_archub_modeling_query_service,
 )
+from archub_cms.application.notification_hub_service import (
+    NotificationHubService,
+    get_archub_notification_hub_service,
+)
 from archub_cms.application.packaging_service import PackagingService, get_archub_packaging_service
 from archub_cms.application.plugin_management_service import (
     PluginManagementService,
@@ -56,11 +65,17 @@ from archub_cms.application.runtime_service import (
     RuntimeQueryService,
     get_archub_runtime_query_service,
 )
+from archub_cms.application.scheduler_service import (
+    SchedulerService,
+    get_archub_scheduler_service,
+)
 from archub_cms.application.search_service import SearchService, get_archub_search_service
+from archub_cms.application.space_service import SpaceService, get_archub_space_service
 from archub_cms.application.subscription_service import (
     SubscriptionQueryService,
     get_archub_subscription_query_service,
 )
+from archub_cms.application.tag_service import TagService, get_archub_tag_service
 from archub_cms.application.trash_service import (
     TrashQueryService,
     get_archub_trash_query_service,
@@ -104,6 +119,12 @@ _CONTEXTS: tuple[tuple[str, str], ...] = (
     ("blueprints", "Reusable content templates (instantiate from blueprint)."),
     ("trash", "Recycle bin: list, restore and purge deleted content."),
     ("locks", "Edit locks: who is editing, acquire/release with conflict rules."),
+    ("scheduler", "Cron-like scheduled jobs and maintenance tasks."),
+    ("audit_trail", "Immutable audit log with query and compliance support."),
+    ("notifications", "Notification hub with per-user preferences and channels."),
+    ("tags", "Hierarchical tag taxonomy (Confluence/Obsidian-style)."),
+    ("bookmarks", "User bookmarks and folders (favorites/stars)."),
+    ("spaces", "Confluence-style knowledge spaces with settings."),
 )
 
 _PATTERNS: tuple[str, ...] = (
@@ -112,14 +133,20 @@ _PATTERNS: tuple[str, ...] = (
     "Domain Events + in-process Event Bus",
     "Hexagonal Ports & Adapters",
     "CQRS-lite (command/query split)",
+    "CQRS Mediator (dispatch pipeline)",
     "Specification",
     "Strategy (LLM/embedding/storage providers)",
-    "Plugin / SPI",
+    "Plugin / SPI (19 extension points)",
     "Result type",
     "State Machine (workflow)",
     "Outbox (webhooks)",
     "Circuit Breaker (online LLM resilience)",
     "Composition Root (this facade)",
+    "Aggregate Root (event collection)",
+    "Saga / Process Manager",
+    "Event Store (event sourcing)",
+    "Projection Store (materialized views)",
+    "Identity / Timestamp / Pagination value objects",
 )
 
 
@@ -239,6 +266,30 @@ class ArcHubPlatform:
     def plugins(self) -> PluginManagementService:
         return get_archub_plugin_management_service(settings=self._settings)
 
+    @cached_property
+    def scheduler(self) -> SchedulerService:
+        return get_archub_scheduler_service(plugin_host=self._host)
+
+    @cached_property
+    def audit_trail(self) -> AuditTrailService:
+        return get_archub_audit_trail_service()
+
+    @cached_property
+    def notification_hub(self) -> NotificationHubService:
+        return get_archub_notification_hub_service(plugin_host=self._host)
+
+    @cached_property
+    def bookmark_service(self) -> BookmarkService:
+        return get_archub_bookmark_service()
+
+    @cached_property
+    def tag_service(self) -> TagService:
+        return get_archub_tag_service()
+
+    @cached_property
+    def space_service(self) -> SpaceService:
+        return get_archub_space_service()
+
     # -- self-description --------------------------------------------------
 
     def capabilities(self) -> dict[str, Any]:
@@ -261,6 +312,13 @@ class ArcHubPlatform:
                     "auth_providers": report["auth_providers"],
                     "storage_backends": len(report["storage_backends"]),
                     "notification_channels": len(report["notification_channels"]),
+                    "themes": len(report.get("themes", [])),
+                    "scheduled_jobs": len(report.get("scheduled_jobs", [])),
+                    "analytics_providers": len(report.get("analytics_providers", [])),
+                    "workflow_actions": len(report.get("workflow_actions", [])),
+                    "content_transformers": len(report.get("content_transformers", [])),
+                    "search_indexers": len(report.get("search_indexers", [])),
+                    "security_policies": len(report.get("security_policies", [])),
                 },
                 "capability_counts": report["capability_counts"],
             },

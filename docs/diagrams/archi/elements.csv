@@ -2,14 +2,34 @@ ID,Type,Name,Documentation
 business-editor,Business Actor,Content editor,Creates edits reviews publishes and manages ArcHub content.
 business-visitor,Business Actor,Public visitor,Reads published HTML pages and delivery API responses.
 business-runtime-consumer,Business Actor,Runtime/RAG consumer,Consumes exported runtime snapshots or rebuilt indexes.
-app-admin-service,Application Service,Backoffice service,Administrative editing management workflow and runtime operations.
-app-delivery-service,Application Service,Published delivery service,Public HTML API feed sitemap and preview delivery.
-app-routes,Application Component,FastAPI routes,Route handlers in src/archub_cms/web/routes.py.
-app-cms,Application Component,CMS service,ArcHubCMSService content model storage workflow delivery and runtime export logic.
-app-builder,Application Component,Content Builder service,Block registry normalization preview audit and HTML rendering.
-app-runtime,Application Component,Runtime export service,Runtime import export and rebuild helpers.
-app-ports,Application Interface,Host integration ports,Auth template runtime source audit and cache invalidation contracts.
+business-plugin-developer,Business Actor,Plugin developer,Develops and deploys ArcHub plugins via plugin.json manifests.
+business-agent-client,Business Actor,Agent/LLM client,Consumes knowledge platform API for tool-augmented answers.
+business-backoffice,Business Service,Backoffice service,Administrative editing management workflow and runtime operations.
+business-delivery,Business Service,Published delivery service,Public HTML API feed sitemap and preview delivery.
+business-knowledge,Business Service,Knowledge platform service,Knowledge search graph vault export and agent answers.
+business-collaboration,Business Service,Collaboration service,Comments mentions reactions and threaded discussions.
+app-admin-dashboard,Application Service,Admin HTML dashboard,Single-pane-of-glass HTML over capabilities plugins and health at /admin/platform.
+app-platform-api,Application Service,Platform JSON API,/api/platform/* covering 20 bounded contexts.
+app-collab-api,Application Service,Collaboration JSON API,/api/platform/collaboration/* for comments mentions reactions.
+app-routes,Application Component,Legacy FastAPI routes,Route handlers in web/routes.py for public and backoffice.
+app-platform-routes,Application Component,Platform routes,Route handlers in web/platform_routes.py for /api/platform/*.
+app-collab-routes,Application Component,Collaboration routes,Route handlers in web/collaboration_routes.py.
+app-platform,Application Component,ArcHubPlatform composition root,Facade wiring 20 bounded-context services onto shared CMS + EventBus + PluginHost.
+app-content-svc,Application Component,Content service,CQRS service for ContentNode aggregate.
+app-modeling-svc,Application Component,Modeling service,Query service for ContentTypeModel DataType Template.
+app-delivery-svc,Application Component,Delivery read service,Sitemap feed tags redirects and published documents.
+app-publishing-svc,Application Component,Publishing service,Lifecycle commands for publish unpublish workflow trash runtime export.
+app-workflow-svc,Application Component,Workflow service,CQRS for Workflow state machine transitions.
+app-governance-svc,Application Component,Governance service,CQRS for AccessRule PermissionRule RBAC and public access.
+app-agent-svc,Application Component,Agent service,Tool-augmented answering via LLMToolExt plugins.
+app-search-svc,Application Component,Search + FTS5 service,Federated faceted search with BM25 full-text index.
+app-collab-svc,Application Component,Collaboration service,Comments mentions reactions with threaded discussions.
+app-plugin-host,Application Component,Plugin host,Discover permission-check load and wire 11 extension point types.
+app-cms-legacy,Application Component,ArcHubCMSService legacy,Legacy monolithic service still used as SQLite persistence engine.
+app-ports,Application Interface,Host integration ports,Auth Template Runtime LLM Embedding Search Cache and Audit contracts.
 tech-process,Node,FastAPI process,Standalone or host FastAPI runtime process.
 data-sqlite,Data Object,SQLite CMS store,ARCHUB_CMS_DB editorial and delivery state.
 data-assets,Artifact,Templates and static assets,Packaged Jinja templates CSS and JavaScript assets.
 data-snapshot,Data Object,Runtime snapshot files,ARCHUB_RUNTIME_EXPORT_DIR exported published runtime materials.
+data-fts,Data Object,FTS5 full-text index,SQLite FTS5 index for BM25 full-text search.
+data-plugin-config,Data Object,Plugin config store,SQLite-backed per-plugin enable/disable and settings JSON.

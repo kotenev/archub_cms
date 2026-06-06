@@ -11,7 +11,9 @@ fill in — mirroring the breadth of Wiki.js/Confluence extension catalogs.
 from __future__ import annotations
 
 __all__ = [
+    "AnalyticsProviderExt",
     "AuthExt",
+    "ContentTransformerExt",
     "EventHookExt",
     "ExporterExt",
     "ImporterExt",
@@ -21,9 +23,14 @@ __all__ = [
     "Plugin",
     "PluginContext",
     "RendererExt",
+    "ScheduledJobExt",
     "SearchExt",
     "SearchHit",
+    "SearchIndexerExt",
+    "SecurityPolicyExt",
     "StorageExt",
+    "ThemeExt",
+    "WorkflowActionExt",
 ]
 
 from dataclasses import dataclass
@@ -155,3 +162,111 @@ class NotificationExt(Protocol):
     channel: str
 
     def notify(self, event: ArcHubDomainEvent) -> None: ...
+
+
+@runtime_checkable
+class ThemeExt(Protocol):
+    """Custom theme / layout provider (Wiki.js/Confluence-style).
+
+    Returns CSS, template overrides, or layout descriptors that the admin
+    dashboard and public delivery surface apply per-space or globally.
+    """
+
+    theme_id: str
+
+    def styles(self) -> str: ...
+
+    def layout_overrides(self) -> dict[str, Any]: ...
+
+
+@runtime_checkable
+class ScheduledJobExt(Protocol):
+    """Plugin-defined scheduled job (cron-like).
+
+    The scheduler context discovers these extensions and registers them as
+    managed jobs that the maintenance worker fires on schedule.
+    """
+
+    job_name: str
+    cron_expression: str
+
+    def execute(self, payload: dict[str, Any]) -> str: ...
+
+
+@runtime_checkable
+class AnalyticsProviderExt(Protocol):
+    """Custom analytics collector (page views, search analytics, user activity).
+
+    Plugins implement this to feed external analytics services (Google
+    Analytics, Matomo, custom dashboards) from ArcHub domain events.
+    """
+
+    provider_name: str
+
+    def track(self, event: ArcHubDomainEvent) -> None: ...
+
+    def report(self, *, metric: str, period: str) -> dict[str, Any]: ...
+
+
+@runtime_checkable
+class WorkflowActionExt(Protocol):
+    """Custom workflow action / trigger.
+
+    Extends the workflow state machine with plugin-defined transitions,
+    automatic actions, or external integrations triggered by workflow state
+    changes (e.g. notify Slack on approval, trigger CI on publish).
+    """
+
+    action_name: str
+
+    def can_execute(self, context: dict[str, Any]) -> bool: ...
+
+    def execute(self, context: dict[str, Any]) -> dict[str, Any]: ...
+
+
+@runtime_checkable
+class ContentTransformerExt(Protocol):
+    """Content pipeline transformation (Wiki.js-style rendering pipeline).
+
+    Transforms content payloads during publish or render — e.g. image
+    optimization, link rewriting, table-of-contents injection, or
+    Obsidian-style callout conversion.
+    """
+
+    transformer_name: str
+    phase: str  # "pre_publish", "post_publish", "render"
+
+    def transform(self, content: dict[str, Any]) -> dict[str, Any]: ...
+
+
+@runtime_checkable
+class SearchIndexerExt(Protocol):
+    """Custom search indexer (Elasticsearch, Meilisearch, Algolia, …).
+
+    Plugins implement this to sync ArcHub content to external search engines
+    when content is published or updated.
+    """
+
+    indexer_name: str
+
+    def index(self, route_path: str, content: dict[str, Any]) -> None: ...
+
+    def remove(self, route_path: str) -> None: ...
+
+    def rebuild(self, documents: list[dict[str, Any]]) -> int: ...
+
+
+@runtime_checkable
+class SecurityPolicyExt(Protocol):
+    """Custom security / compliance policy.
+
+    Plugins enforce content security policies (e.g. data classification,
+    PII detection, GDPR compliance, content approval rules) that gate
+    publishing or access beyond the built-in governance context.
+    """
+
+    policy_name: str
+
+    def check_publish(self, content: dict[str, Any]) -> tuple[bool, str]: ...
+
+    def check_access(self, user: Any, content: dict[str, Any]) -> tuple[bool, str]: ...

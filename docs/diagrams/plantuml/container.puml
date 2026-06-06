@@ -1,5 +1,5 @@
 @startuml
-title ArcHub CMS - Container View
+title ArcHub CMS - Container View (Current Architecture)
 skinparam componentStyle rectangle
 skinparam shadowing false
 skinparam defaultFontName Arial
@@ -7,30 +7,147 @@ skinparam defaultFontName Arial
 actor "Content editor" as Editor
 actor "Public visitor" as Visitor
 actor "Host app" as Host
+actor "Plugin developer" as PluginDev
+actor "Agent client" as AgentClient
 
-package "archub_cms" {
-  component "create_archub_app()\napp.py" as App
-  component "FastAPI router\nweb.routes" as Routes
-  component "CMS service\nservices.cms" as CMS
-  component "Content Builder\nservices.content_builder" as Builder
-  component "Runtime helpers\nservices.runtime" as Runtime
-  component "RAG registry\nintegrations.rag" as RAG
-  component "Host ports\nports.py" as Ports
-  artifact "Jinja templates\nand static assets" as Assets
+package "web/ — Route adapters" {
+    component "web.routes\npublic + backoffice" as Routes
+    component "web.platform_routes\n/api/platform/*" as PlatformRoutes
+    component "web.collaboration_routes\ncollaboration API" as CollabRoutes
+    component "web.admin_routes\n/admin/platform HTML" as AdminRoutes
 }
 
-database "SQLite\ncontent database" as DB
-folder "Runtime export\nsnapshot directory" as Files
+package "ports.py — Hexagonal contracts" {
+    interface "AuthPort" as AuthPort
+    interface "TemplatePort" as TemplatePort
+    interface "RuntimeSourcePort" as RuntimePort
+    interface "LLMProviderPort" as LLMPort
+    interface "EmbeddingPort" as EmbedPort
+    interface "SearchPort" as SearchPort
+    interface "CacheInvalidationPort" as CachePort
+    interface "AuditSink" as AuditPort
+}
 
-Editor --> Routes : admin forms and JSON APIs
+package "application/ — Bounded-context services" {
+    component "ArcHubPlatform\ncomposition root" as Platform
+    component "ContentService" as ContentSvc
+    component "ModelingQueryService\nModelingService" as ModelingSvc
+    component "DeliveryReadService" as DeliverySvc
+    component "PublishingService" as PublishingSvc
+    component "WorkflowQueryService\nWorkflowCommandService" as WorkflowSvc
+    component "GovernanceQueryService\nAccessControlService" as GovernanceSvc
+    component "VersioningQueryService\nVersioningCommandService" as VersioningSvc
+    component "MediaQueryService\nMediaCommandService" as MediaSvc
+    component "PackagingService" as PackageSvc
+    component "WebhooksQueryService\nWebhooksCommandService" as WebhookSvc
+    component "SearchService" as SearchSvc
+    component "AgentService" as AgentSvc
+    component "CollaborationService" as CollabSvc
+    component "GraphService" as GraphSvc
+    component "RuntimeQueryService\nRuntimeCommandService" as RuntimeSvc
+    component "LocalizationQueryService\nLocalizationCommandService" as LocSvc
+    component "AnalyticsService" as AnalyticsSvc
+    component "SubscriptionQueryService\nSubscriptionCommandService" as SubSvc
+    component "LockQueryService\nLockCommandService" as LockSvc
+    component "TrashQueryService\nTrashCommandService" as TrashSvc
+    component "BlueprintQueryService\nBlueprintCommandService" as BlueprintSvc
+    component "PluginManagementService" as PluginMgmtSvc
+    component "IngestionService" as IngestionSvc
+    component "FtsSearchService" as FtsSvc
+    component "ResilientLLMProvider" as ResilientLLM
+    component "HashingEmbedder\nOpenAIEmbedder" as Embeddings
+}
+
+package "domain/ — 20 bounded contexts" {
+    component "content\nContentNode aggregate" as ContentDomain
+    component "modeling\nContentTypeModel" as ModelingDomain
+    component "workflow\nWorkflow state machine" as WorkflowDomain
+    component "governance\nAccessRule + PermissionRule" as GovDomain
+    component "knowledge\nKnowledgeSpace + Graph" as KnowledgeDomain
+    component "collaboration\nComment + Mention + Reaction" as CollabDomain
+    component "search\nSearchQuery + Facets" as SearchDomain
+    component "17 other contexts" as OtherDomains
+}
+
+package "kernel/ — Shared primitives" {
+    component "EventBus + EventHandler" as EventBus
+    component "UnitOfWork" as UoW
+    component "Result / Ok / Err" as Result
+    component "Specification" as Spec
+    component "CircuitBreaker" as CB
+}
+
+package "extensibility/ — Plugin runtime" {
+    component "PluginHost\nlifecycle manager" as PluginHost
+    component "11 Extension Points\nEventHook, Search, LLMTool,\nRenderer, Macro, Importer,\nExporter, Auth, Storage,\nNotification..." as ExtPts
+    component "PermissionGate" as PermGate
+    component "PluginConfigStore" as ConfigStore
+}
+
+package "infrastructure/ — Persistence" {
+    component "Database\nconnection factory" as DB
+    component "17 SQLite repositories" as Repos
+    component "Schema + migrations" as Schema
+}
+
+database "SQLite\nARCHUB_CMS_DB" as SQLite
+folder "Runtime export\nARCHUB_RUNTIME_EXPORT_DIR" as Files
+folder "Plugin manifests\nARCHUB_PLUGIN_DIRS" as PluginFiles
+artifact "Templates + static\nJinja/CSS/JS" as Assets
+
+Editor --> Routes : admin forms and JSON
 Visitor --> Routes : public delivery
-Host --> Ports : auth, templates, sources,\naudit, cache invalidation
-App --> Routes : includes router
-Routes --> CMS : content, workflow,\npermissions, delivery
-Routes --> Builder : block catalog,\npreview, audit, render
-Routes --> Runtime : sync/export/rebuild
-Runtime --> RAG : corpus specs and index hook
-Routes --> Assets : render admin/public HTML
-CMS --> DB : SQLite transactions
-CMS --> Files : export runtime content
+AgentClient --> PlatformRoutes : knowledge, search,\nagent answers
+Host --> AuthPort : implements
+Host --> TemplatePort : implements
+Host --> RuntimePort : implements
+Host --> LLMPort : implements
+
+Routes --> Platform : delegates
+PlatformRoutes --> Platform : delegates
+CollabRoutes --> Platform : delegates
+AdminRoutes --> Platform : delegates
+
+Platform --> ContentSvc
+Platform --> ModelingSvc
+Platform --> DeliverySvc
+Platform --> PublishingSvc
+Platform --> WorkflowSvc
+Platform --> GovernanceSvc
+Platform --> AgentSvc
+Platform --> SearchSvc
+Platform --> CollabSvc
+Platform --> OtherDomains
+
+ContentSvc --> ContentDomain
+PublishingSvc --> ContentDomain
+ModelingSvc --> ModelingDomain
+WorkflowSvc --> WorkflowDomain
+GovernanceSvc --> GovDomain
+AgentSvc --> KnowledgeDomain
+CollabSvc --> CollabDomain
+SearchSvc --> SearchDomain
+
+ContentDomain --> EventBus
+ContentDomain --> UoW
+ContentDomain --> Result
+WorkflowDomain --> Spec
+AgentSvc --> CB
+ResilientLLM --> CB
+ResilientLLM --> LLMPort
+Embeddings --> EmbedPort
+
+ContentDomain --> Repos
+ModelingDomain --> Repos
+WorkflowDomain --> Repos
+GovDomain --> Repos
+Repos --> DB
+DB --> SQLite
+RuntimeSvc --> Files
+PluginHost --> PluginFiles
+PluginHost --> ExtPts
+PluginHost --> PermGate
+PluginHost --> ConfigStore
+ExtPts ..> Services : plugin contributions
+Routes --> Assets : render HTML
 @enduml

@@ -16,6 +16,7 @@ PLUGIN_CAPABILITIES = (
     "storage",
     "renderer",
     "search",
+    "search_indexer",
     "llm_provider",
     "llm_tool",
     "sync",
@@ -26,11 +27,17 @@ PLUGIN_CAPABILITIES = (
     "automation",
     "notification",
     "analytics",
+    "analytics_provider",
     "governance",
     "compliance",
+    "security_policy",
     "editor",
     "workflow",
+    "workflow_action",
     "connector",
+    "content_transformer",
+    "scheduler",
+    "cache",
 )
 _PLUGIN_ID_RE = re.compile(r"^[a-z][a-z0-9_.-]{2,127}$")
 _SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+(?:[-+][A-Za-z0-9_.-]+)?$")

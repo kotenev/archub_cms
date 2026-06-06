@@ -1,0 +1,16 @@
+"""ScheduledJob repository port."""
+
+from __future__ import annotations
+
+from typing import Protocol, runtime_checkable
+
+from archub_cms.domain.scheduler.job import ScheduledJob
+
+
+@runtime_checkable
+class ScheduledJobRepository(Protocol):
+    def get(self, job_id: str) -> ScheduledJob | None: ...
+    def list_active(self) -> list[ScheduledJob]: ...
+    def list_all(self) -> list[ScheduledJob]: ...
+    def upsert(self, job: ScheduledJob) -> ScheduledJob: ...
+    def delete(self, job_id: str) -> bool: ...

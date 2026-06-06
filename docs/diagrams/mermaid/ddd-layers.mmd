@@ -1,0 +1,76 @@
+flowchart TB
+    subgraph WebLayer["Web Layer — web/"]
+        direction LR
+        Routes[routes.py\npublic + backoffice]
+        PlatformRoutes[platform_routes.py\n/api/platform/*]
+        CollabRoutes[collaboration_routes.py\ncollaboration API]
+        AdminRoutes[admin_routes.py\nHTML dashboard]
+    end
+
+    subgraph PortsLayer["Hexagonal Ports — ports.py"]
+        direction LR
+        AuthPort
+        TemplatePort
+        RuntimeSourcePort
+        LLMProviderPort
+        EmbeddingPort
+        SearchPort
+        CachePort[CacheInvalidationPort]
+        AuditSink
+    end
+
+    subgraph AppLayer["Application Layer — application/"]
+        direction LR
+        Platform[ArcHubPlatform\ncomposition root]
+        Svc1[content_service]
+        Svc2[modeling_service]
+        Svc3[delivery_read_service]
+        Svc4[publishing]
+        Svc5[workflow_service]
+        Svc6[governance_service]
+        Svc7[agent_service]
+        Svc8[search_service]
+        SvcDots[... 20+ services]
+    end
+
+    subgraph DomainLayer["Domain Layer — domain/"]
+        direction LR
+        ContentCtx[content\nContentNode]
+        ModelCtx[modeling\nContentTypeModel]
+        WorkCtx[workflow\nWorkflow]
+        GovCtx[governance\nAccessRule]
+        KnowCtx[knowledge\nKnowledgeSpace]
+        PluginCtx[plugins\nManifest]
+        DomainDots[... 20 contexts]
+    end
+
+    subgraph KernelLayer["Kernel — kernel/"]
+        direction LR
+        EventBus[EventBus]
+        UoW[UnitOfWork]
+        Result[Result]
+        Spec[Specification]
+        CB[CircuitBreaker]
+    end
+
+    subgraph ExtLayer["Extensibility — extensibility/"]
+        direction LR
+        PluginHost[PluginHost]
+        ExtPts[11 Extension Points]
+        PermGate[PermissionGate]
+    end
+
+    subgraph InfraLayer["Infrastructure — infrastructure/"]
+        direction LR
+        DB[Database factory]
+        Repos[17 SQLite repos]
+        Schema[Schema + migrations]
+    end
+
+    WebLayer --> AppLayer
+    AppLayer --> DomainLayer
+    DomainLayer --> KernelLayer
+    AppLayer --> KernelLayer
+    DomainLayer --> InfraLayer
+    ExtLayer --> KernelLayer
+    PortsLayer -.->|host implements| AppLayer

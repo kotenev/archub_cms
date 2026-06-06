@@ -1,0 +1,39 @@
+flowchart TB
+    subgraph Content["Content & Modeling"]
+        content[content\nContentNode aggregate\nSlug, RoutePath, Culture]
+        modeling[modeling\nContentTypeModel, DataType, Template]
+        blueprints[blueprints\nBlueprint aggregate]
+        versioning[versioning\nVersion + VersionDiff]
+        localization[localization\nDictionaryEntry + LocalizedVariant]
+    end
+
+    subgraph Publishing["Publishing & Workflow"]
+        workflow[workflow\nWorkflow state machine\nDraft→Review→Approved→Scheduled→Published]
+        delivery[delivery\nRedirect + PublishedDocument]
+        runtime[runtime\nRuntimeSnapshot + ExportStatus]
+        trash[trash\nTrashedItem]
+    end
+
+    subgraph Governance["Governance & Access"]
+        governance[governance\nAccessRule + PermissionRule\nRBAC + public access]
+        locks[locks\nEditLock aggregate]
+        subscriptions[subscriptions\nSubscription aggregate]
+    end
+
+    subgraph Knowledge["Knowledge & Intelligence"]
+        knowledge[knowledge\nKnowledgeSpace, Document\nGraph, Answer, Source]
+        search[search\nSearchQuery + Facets]
+        graph[graph\nGraphMetrics + Canvas]
+        analytics[analytics\nHealthReport + ActivityEntry]
+    end
+
+    subgraph Integration["Integration & Extensibility"]
+        webhooks[webhooks\nWebhook + DeliveryRecord]
+        packaging[packaging\nContentPackage + Inspection]
+        media[media\nMediaAsset aggregate]
+        plugins[plugins\nPluginManifest + capabilities]
+    end
+
+    subgraph Collaboration["Collaboration"]
+        collaboration[collaboration\nComment aggregate\nMention + Reaction]
+    end
