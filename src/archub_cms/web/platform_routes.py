@@ -36,6 +36,11 @@ from archub_cms.application.localization_service import (
     LocalizationCommandService,
     get_archub_localization_query_service,
 )
+from archub_cms.application.lock_service import (
+    LockCommandService,
+    LockConflictError,
+    get_archub_lock_query_service,
+)
 from archub_cms.application.media_service import (
     MediaCommandService,
     StorageService,
@@ -211,6 +216,51 @@ def federated_search_post(
     payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
 ) -> dict[str, Any]:
     return get_archub_search_service(_knowledge_service()).search_dict(payload)
+
+
+@platform_router.get("/locks")
+def locks_list(limit: int = Query(default=100, ge=1, le=1000)) -> dict[str, Any]:
+    return get_archub_lock_query_service().active_locks(limit=limit)
+
+
+@platform_router.get("/locks/{node_id}")
+def lock_detail(node_id: str) -> dict[str, Any]:
+    found = get_archub_lock_query_service().lock(node_id)
+    return found if found is not None else {"node_id": node_id, "locked": False}
+
+
+@platform_router.post("/locks/{node_id}/acquire")
+def lock_acquire(
+    node_id: str,
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    try:
+        return LockCommandService().acquire(
+            node_id,
+            owner=str(payload.get("owner") or ""),
+            ttl_seconds=float(payload.get("ttl_seconds") or 1800.0),
+            note=str(payload.get("note") or ""),
+            force=bool(payload.get("force", False)),
+        )
+    except LockConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@platform_router.post("/locks/{node_id}/release")
+def lock_release(
+    node_id: str,
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    try:
+        return LockCommandService().release(
+            node_id, owner=str(payload.get("owner") or ""), force=bool(payload.get("force", False))
+        )
+    except LockConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @platform_router.get("/trash")

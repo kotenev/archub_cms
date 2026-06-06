@@ -41,6 +41,7 @@ from archub_cms.application.localization_service import (
     LocalizationQueryService,
     get_archub_localization_query_service,
 )
+from archub_cms.application.lock_service import LockQueryService, get_archub_lock_query_service
 from archub_cms.application.media_service import MediaQueryService, get_archub_media_query_service
 from archub_cms.application.modeling_service import (
     ModelingQueryService,
@@ -102,6 +103,7 @@ _CONTEXTS: tuple[tuple[str, str], ...] = (
     ("subscriptions", "Watchers + derived activity inbox."),
     ("blueprints", "Reusable content templates (instantiate from blueprint)."),
     ("trash", "Recycle bin: list, restore and purge deleted content."),
+    ("locks", "Edit locks: who is editing, acquire/release with conflict rules."),
 )
 
 _PATTERNS: tuple[str, ...] = (
@@ -228,6 +230,10 @@ class ArcHubPlatform:
     @cached_property
     def trash(self) -> TrashQueryService:
         return get_archub_trash_query_service(cms=self._cms)
+
+    @cached_property
+    def locks(self) -> LockQueryService:
+        return get_archub_lock_query_service(cms=self._cms)
 
     @cached_property
     def plugins(self) -> PluginManagementService:
