@@ -21,6 +21,7 @@ from archub_cms.application.governance_service import (
     get_archub_governance_query_service,
 )
 from archub_cms.application.graph_service import get_archub_graph_service
+from archub_cms.application.ingestion_service import get_archub_ingestion_service
 from archub_cms.application.knowledge import (
     KnowledgeQuery,
     get_archub_knowledge_base_service,
@@ -356,6 +357,24 @@ def list_extensions() -> dict[str, Any]:
         "search_extensions": report["search_extensions"],
         "event_hooks": report["event_hooks"],
     }
+
+
+@platform_router.post("/ingest/markdown")
+def ingest_markdown(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    service = get_archub_ingestion_service(plugin_host=get_plugin_host())
+    try:
+        return service.import_markdown(
+            payload.get("source"),
+            importer=str(payload.get("importer") or "markdown"),
+            parent_id=str(payload.get("parent_id") or "root"),
+            content_type_alias=str(payload.get("content_type") or "page"),
+            publish=bool(payload.get("publish", False)),
+            actor=str(payload.get("actor") or "system"),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @platform_router.post("/import/{importer}")
