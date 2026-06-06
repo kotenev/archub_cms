@@ -532,13 +532,18 @@ def _llm_provider_from_settings(settings: ArcHubSettings) -> LLMProviderPort:
             if "localhost" in settings.llm_base_url or "127.0.0.1" in settings.llm_base_url
             else "online"
         )
-        return OpenAICompatibleLLMProvider(
+        online = OpenAICompatibleLLMProvider(
             base_url=settings.llm_base_url,
             api_key=settings.llm_api_key,
             model=settings.llm_model,
             timeout_seconds=settings.llm_timeout_seconds,
             mode=mode,
         )
+        # Guard the online endpoint with a circuit breaker that degrades to the
+        # offline extractive provider when the API is unavailable.
+        from archub_cms.application.resilient_llm import ResilientLLMProvider
+
+        return ResilientLLMProvider(primary=online, fallback=ExtractiveLLMProvider())
     return ExtractiveLLMProvider()
 
 

@@ -8,6 +8,7 @@ pattern for composable query filters.
 
 from __future__ import annotations
 
+from archub_cms.kernel.circuit_breaker import CircuitBreaker, CircuitState
 from archub_cms.kernel.events import ArcHubDomainEvent, EventBus, content_event, get_event_bus
 from archub_cms.kernel.result import Err, Ok, Result
 from archub_cms.kernel.specification import AndSpecification, NotSpecification, Specification
@@ -16,6 +17,8 @@ from archub_cms.kernel.unit_of_work import SqliteUnitOfWork, UnitOfWork
 __all__ = [
     "AndSpecification",
     "ArcHubDomainEvent",
+    "CircuitBreaker",
+    "CircuitState",
     "Err",
     "EventBus",
     "NotSpecification",

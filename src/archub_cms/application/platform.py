@@ -106,6 +106,7 @@ _PATTERNS: tuple[str, ...] = (
     "Result type",
     "State Machine (workflow)",
     "Outbox (webhooks)",
+    "Circuit Breaker (online LLM resilience)",
     "Composition Root (this facade)",
 )
 
