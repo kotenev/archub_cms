@@ -60,6 +60,10 @@ from archub_cms.application.subscription_service import (
     SubscriptionQueryService,
     get_archub_subscription_query_service,
 )
+from archub_cms.application.trash_service import (
+    TrashQueryService,
+    get_archub_trash_query_service,
+)
 from archub_cms.application.versioning_service import (
     VersioningQueryService,
     get_archub_versioning_query_service,
@@ -97,6 +101,7 @@ _CONTEXTS: tuple[tuple[str, str], ...] = (
     ("search", "Federated, faceted search across the knowledge base."),
     ("subscriptions", "Watchers + derived activity inbox."),
     ("blueprints", "Reusable content templates (instantiate from blueprint)."),
+    ("trash", "Recycle bin: list, restore and purge deleted content."),
 )
 
 _PATTERNS: tuple[str, ...] = (
@@ -219,6 +224,10 @@ class ArcHubPlatform:
     @cached_property
     def blueprints(self) -> BlueprintQueryService:
         return get_archub_blueprint_query_service(cms=self._cms)
+
+    @cached_property
+    def trash(self) -> TrashQueryService:
+        return get_archub_trash_query_service(cms=self._cms)
 
     @cached_property
     def plugins(self) -> PluginManagementService:

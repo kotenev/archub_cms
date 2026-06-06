@@ -38,7 +38,7 @@ class Blueprint:
         return not self.validate()
 
     def as_dict(self, *, include_payload: bool = True) -> dict[str, Any]:
-        data = {
+        data: dict[str, Any] = {
             "blueprint_id": self.blueprint_id,
             "content_type_alias": self.content_type_alias,
             "name": self.name,

@@ -198,5 +198,5 @@ def test_migration_intelligence_and_packaging(platform):
     health = platform.analytics.health()
     assert health["grade"] in {"A", "B", "C", "D", "F"}
     caps = platform.capabilities()
-    assert caps["context_count"] == 18
+    assert caps["context_count"] == 19
     assert caps["plugins"]["loaded"] >= 9

@@ -71,5 +71,5 @@ def test_capabilities_and_index_consistent(client):
     caps = client.get("/api/platform/capabilities").json()
     index = client.get("/api/platform/index").json()
     # capabilities lists the bounded contexts; the API index exposes at least that many sections
-    assert caps["context_count"] == 18
+    assert caps["context_count"] == 19
     assert index["section_count"] >= caps["context_count"]

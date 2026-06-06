@@ -56,6 +56,11 @@ from archub_cms.application.subscription_service import (
     SubscriptionCommandService,
     get_archub_subscription_query_service,
 )
+from archub_cms.application.trash_service import (
+    TrashCommandService,
+    TrashItemNotFoundError,
+    get_archub_trash_query_service,
+)
 from archub_cms.application.versioning_service import (
     VersioningCommandService,
     VersionNotFoundError,
@@ -206,6 +211,37 @@ def federated_search_post(
     payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
 ) -> dict[str, Any]:
     return get_archub_search_service(_knowledge_service()).search_dict(payload)
+
+
+@platform_router.get("/trash")
+def trash_list(limit: int = Query(default=100, ge=1, le=500)) -> dict[str, Any]:
+    return get_archub_trash_query_service().items(limit=limit)
+
+
+@platform_router.post("/trash/{node_id}/restore")
+def trash_restore(
+    node_id: str,
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    try:
+        return TrashCommandService().restore(node_id, actor=str(payload.get("actor") or ""))
+    except TrashItemNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=f"not in recycle bin: {exc}") from exc
+
+
+@platform_router.delete("/trash/{node_id}")
+def trash_purge(node_id: str, actor: str = Query(default="")) -> dict[str, Any]:
+    try:
+        return TrashCommandService().purge(node_id, actor=actor)
+    except TrashItemNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=f"not in recycle bin: {exc}") from exc
+
+
+@platform_router.post("/trash/empty")
+def trash_empty(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    return TrashCommandService().empty(actor=str(payload.get("actor") or ""))
 
 
 @platform_router.get("/blueprints")
