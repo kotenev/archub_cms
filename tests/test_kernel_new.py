@@ -42,10 +42,11 @@ class TestAggregateRoot:
         a = _SampleAggregate("1")
 
         class Other(AggregateRoot):
-            def reconstitute(cls, aggregate_id, state):
-                return Other.__new__(Other)
+            @classmethod
+            def reconstitute(cls, aggregate_id, state) -> "Other":
+                return object.__new__(cls)  # type: ignore[return-value]
 
-        c = Other.__new__(Other)
+        c = AggregateRoot.__new__(Other)  # type: ignore[call-arg]
         c.aggregate_id = "1"
         c.version = 0
         c._pending_events = []
