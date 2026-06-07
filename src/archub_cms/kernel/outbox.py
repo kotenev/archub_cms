@@ -84,7 +84,7 @@ class SqliteOutboxStore(OutboxStore):
             (aggregate_id, event_type, json.dumps(payload, default=str), time.time()),
         )
         self._conn.commit()
-        return cursor.lastrowid
+        return int(cursor.lastrowid or 0)
 
     def pending(self, *, limit: int = 100) -> list[OutboxEntry]:
         cursor = self._conn.execute(

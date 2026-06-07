@@ -89,11 +89,14 @@ class SqliteSpaceRepository(SpaceRepository):
             owner=row["owner"],
             visibility=row["visibility"],
             settings=SpaceSettings(
-                **{
-                    k: v
-                    for k, v in settings_data.items()
-                    if k in SpaceSettings.__dataclass_fields__
-                }
+                icon=str(settings_data.get("icon") or ""),
+                color=str(settings_data.get("color") or "#0B7285"),
+                default_content_type=str(settings_data.get("default_content_type") or "page"),
+                allow_comments=bool(settings_data.get("allow_comments", True)),
+                allow_reactions=bool(settings_data.get("allow_reactions", True)),
+                theme=str(settings_data.get("theme") or "default"),
+                custom_styles=str(settings_data.get("custom_styles") or ""),
+                sidebar_items=tuple(settings_data.get("sidebar_items") or ()),
             ),
             tags=tuple(json.loads(row["tags"])),
             document_count=row["document_count"],

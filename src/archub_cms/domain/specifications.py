@@ -25,7 +25,15 @@ def PublishedContentSpec() -> Specification:
 def CanPublishSpec() -> Specification:
     """Matches content nodes that pass publish validation."""
 
-    return spec(lambda node: getattr(node, "can_publish", lambda: None)().ok is True)
+    def _check(node: object) -> bool:
+        can_publish = getattr(node, "can_publish", None)
+        if callable(can_publish):
+            result = can_publish()
+            if result and hasattr(result, "ok"):
+                return bool(result.ok)
+        return False
+
+    return spec(_check)
 
 
 def ActiveJobSpec() -> Specification:

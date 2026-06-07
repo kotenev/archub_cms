@@ -45,11 +45,11 @@ class RevisionsDiffService:
         max_len = max(len(old_lines), len(new_lines))
         diff_lines: list[DiffLine] = []
         for i in range(max_len):
-            old = old_lines[i] if i < len(old_lines) else None
-            new = new_lines[i] if i < len(new_lines) else None
-            if old is None:
+            old = old_lines[i] if i < len(old_lines) else ""
+            new = new_lines[i] if i < len(new_lines) else ""
+            if old == "" and new != "":
                 diff_lines.append(DiffLine(0, i + 1, new, DiffType.ADDED))
-            elif new is None:
+            elif new == "" and old != "":
                 diff_lines.append(DiffLine(i + 1, 0, old, DiffType.REMOVED))
             elif old == new:
                 diff_lines.append(DiffLine(i + 1, i + 1, old, DiffType.UNCHANGED))

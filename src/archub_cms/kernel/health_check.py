@@ -69,4 +69,6 @@ def get_health_check_service() -> HealthCheckService:
     global _SERVICE
     if _SERVICE is None:
         _SERVICE = HealthCheckService()
-    return _SERVICE
+    svc = _SERVICE
+    assert svc is not None
+    return svc

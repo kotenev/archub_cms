@@ -50,4 +50,6 @@ def get_domain_registry() -> DomainRegistry:
     global _REGISTRY
     if _REGISTRY is None:
         _REGISTRY = DomainRegistry()
-    return _REGISTRY
+    registry = _REGISTRY
+    assert registry is not None
+    return registry

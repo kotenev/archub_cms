@@ -1277,6 +1277,16 @@ def spaces_upsert(
     from archub_cms.domain.spaces.space import Space, SpaceSettings
 
     settings_data = payload.get("settings") or {}
+    settings = SpaceSettings(
+        icon=str(settings_data.get("icon") or ""),
+        color=str(settings_data.get("color") or "#0B7285"),
+        default_content_type=str(settings_data.get("default_content_type") or "page"),
+        allow_comments=bool(settings_data.get("allow_comments", True)),
+        allow_reactions=bool(settings_data.get("allow_reactions", True)),
+        theme=str(settings_data.get("theme") or "default"),
+        custom_styles=str(settings_data.get("custom_styles") or ""),
+        sidebar_items=tuple(settings_data.get("sidebar_items") or ()),
+    )
     space = Space(
         space_key=str(payload.get("space_key") or ""),
         name=str(payload.get("name") or ""),
@@ -1284,10 +1294,7 @@ def spaces_upsert(
         root_node_id=str(payload.get("root_node_id") or ""),
         owner=str(payload.get("owner") or ""),
         visibility=str(payload.get("visibility") or "public"),
-        settings=SpaceSettings(
-            **{k: v for k, v in settings_data.items() if k in SpaceSettings.__dataclass_fields__}
-        ),
-        tags=tuple(payload.get("tags") or ()),
+        settings=settings,
     )
     return get_archub_space_service().upsert(space)
 

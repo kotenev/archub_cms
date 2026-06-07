@@ -43,7 +43,7 @@ class TestAggregateRoot:
 
         class Other(AggregateRoot):
             def reconstitute(cls, aggregate_id, state):
-                return Other(aggregate_id)
+                return Other.__new__(Other)
 
         c = Other.__new__(Other)
         c.aggregate_id = "1"
