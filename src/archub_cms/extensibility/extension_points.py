@@ -13,13 +13,21 @@ from __future__ import annotations
 __all__ = [
     "AnalyticsProviderExt",
     "AuthExt",
+    "ChatHandlerExt",
+    "ConnectorExt",
     "ContentTransformerExt",
+    "DashboardWidgetExt",
+    "EditorExt",
     "EventHookExt",
     "ExporterExt",
+    "ExportFormatExt",
     "ImporterExt",
+    "ImportFormatExt",
+    "LiveEditExt",
     "LLMToolExt",
     "MacroExt",
     "NotificationExt",
+    "PageActionExt",
     "Plugin",
     "PluginContext",
     "RendererExt",
@@ -270,3 +278,126 @@ class SecurityPolicyExt(Protocol):
     def check_publish(self, content: dict[str, Any]) -> tuple[bool, str]: ...
 
     def check_access(self, user: Any, content: dict[str, Any]) -> tuple[bool, str]: ...
+
+
+@runtime_checkable
+class EditorExt(Protocol):
+    """Custom editor provider (WYSIWYG, Markdown, LaTeX, draw.io, etc.).
+
+    Plugins register editors that the UI layer can use for content editing,
+    similar to Wiki.js editor switching and Confluence's editor marketplace.
+    """
+
+    editor_id: str
+    editor_type: str
+
+    def supported_content_types(self) -> tuple[str, ...]: ...
+
+    def initialize(self, config: dict[str, Any]) -> dict[str, Any]: ...
+
+
+@runtime_checkable
+class ConnectorExt(Protocol):
+    """External system connector (Jira, Slack, GitHub, Notion, etc.).
+
+    Bi-directional connectors that sync content, import data, or push
+    notifications to external platforms — the core of Confluence app ecosystem.
+    """
+
+    connector_id: str
+    target_system: str
+
+    def sync_pull(self, config: dict[str, Any]) -> list[dict[str, Any]]: ...
+
+    def sync_push(self, items: list[dict[str, Any]]) -> int: ...
+
+
+@runtime_checkable
+class ChatHandlerExt(Protocol):
+    """Custom AI chat handler for the knowledge base chat interface.
+
+    Plugins can provide alternative LLM backends, RAG strategies, or
+    specialized chat behaviors (code assistant, doc reviewer, etc.).
+    """
+
+    handler_id: str
+
+    def respond(
+        self, conversation_id: str, message: str, context: dict[str, Any]
+    ) -> dict[str, Any]: ...
+
+
+@runtime_checkable
+class DashboardWidgetExt(Protocol):
+    """Custom dashboard widget provider.
+
+    Plugins register widgets that users can add to their personal or
+    space dashboards — mirroring Confluence's dashboard gadget ecosystem.
+    """
+
+    widget_type: str
+    widget_name: str
+
+    def render(self, config: dict[str, Any]) -> dict[str, Any]: ...
+
+
+@runtime_checkable
+class ExportFormatExt(Protocol):
+    """Custom export format handler (PDF, DOCX, EPUB, LaTeX, etc.).
+
+    Extends the built-in export capabilities with plugin-provided formats,
+    similar to Confluence's PDF export customization and Wiki.js export modules.
+    """
+
+    format_id: str
+    format_name: str
+    file_extension: str
+
+    def export(self, content: list[dict[str, Any]], options: dict[str, Any]) -> bytes: ...
+
+
+@runtime_checkable
+class ImportFormatExt(Protocol):
+    """Custom import format handler (Notion, Confluence XML, Word, HTML, etc.).
+
+    Extends the built-in import capabilities with plugin-provided format parsers,
+    mirroring Confluence's import wizard and Wiki.js migration tools.
+    """
+
+    format_id: str
+    format_name: str
+    file_extensions: tuple[str, ...]
+
+    def parse(self, data: bytes, options: dict[str, Any]) -> list[dict[str, Any]]: ...
+
+
+@runtime_checkable
+class LiveEditExt(Protocol):
+    """Real-time collaborative editing integration.
+
+    Plugins implement operational transform or CRDT strategies for
+    Google Docs / Confluence-style live co-editing.
+    """
+
+    provider_id: str
+
+    def transform(self, operation: dict[str, Any], against: dict[str, Any]) -> dict[str, Any]: ...
+
+    def presence_update(self, user: str, position: dict[str, Any]) -> dict[str, Any]: ...
+
+
+@runtime_checkable
+class PageActionExt(Protocol):
+    """Custom page action / context menu item.
+
+    Adds actions to page context menus (e.g., "Share to Slack", "Create Jira
+    ticket", "Generate PDF", "Translate") — the Confluence page menu pattern.
+    """
+
+    action_id: str
+    action_label: str
+    icon: str
+
+    def is_available(self, page_context: dict[str, Any]) -> bool: ...
+
+    def execute(self, page_context: dict[str, Any]) -> dict[str, Any]: ...

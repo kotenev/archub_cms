@@ -21,7 +21,9 @@ PLUGIN_CAPABILITIES = (
     "llm_tool",
     "sync",
     "importer",
+    "import_format",
     "exporter",
+    "export_format",
     "macro",
     "theme",
     "automation",
@@ -38,6 +40,10 @@ PLUGIN_CAPABILITIES = (
     "content_transformer",
     "scheduler",
     "cache",
+    "chat_handler",
+    "dashboard_widget",
+    "live_edit",
+    "page_action",
 )
 _PLUGIN_ID_RE = re.compile(r"^[a-z][a-z0-9_.-]{2,127}$")
 _SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+(?:[-+][A-Za-z0-9_.-]+)?$")

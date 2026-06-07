@@ -13,14 +13,22 @@ from typing import Any
 
 from fastapi import APIRouter, Body, HTTPException, Query, Request
 
+from archub_cms.application.activity_feed_service import get_archub_activity_feed_service
 from archub_cms.application.agent_service import get_archub_agent_service
+from archub_cms.application.ai_chat_service import get_archub_ai_chat_service
 from archub_cms.application.analytics_service import get_archub_analytics_service
+from archub_cms.application.audit_trail_service import get_archub_audit_trail_service
 from archub_cms.application.blueprint_service import (
     BlueprintCommandService,
     BlueprintNotFoundError,
     get_archub_blueprint_query_service,
 )
+from archub_cms.application.bookmark_service import get_archub_bookmark_service
+from archub_cms.application.comments_thread_service import get_archub_comments_thread_service
+from archub_cms.application.custom_field_service import get_archub_custom_field_service
+from archub_cms.application.dashboard_service import get_archub_dashboard_service
 from archub_cms.application.delivery_read_service import get_archub_delivery_read_service
+from archub_cms.application.embedding_store_service import get_archub_embedding_store_service
 from archub_cms.application.fts_search_service import get_archub_fts_search_service
 from archub_cms.application.governance_service import (
     AccessControlService,
@@ -32,6 +40,7 @@ from archub_cms.application.knowledge import (
     KnowledgeQuery,
     get_archub_knowledge_base_service,
 )
+from archub_cms.application.live_edit_service import get_archub_live_edit_service
 from archub_cms.application.localization_service import (
     LocalizationCommandService,
     get_archub_localization_query_service,
@@ -47,20 +56,29 @@ from archub_cms.application.media_service import (
     get_archub_media_query_service,
 )
 from archub_cms.application.modeling_service import get_archub_modeling_query_service
+from archub_cms.application.notification_hub_service import get_archub_notification_hub_service
 from archub_cms.application.packaging_service import get_archub_packaging_service
+from archub_cms.application.page_cloning_service import get_archub_page_cloning_service
+from archub_cms.application.pdf_export_service import get_archub_pdf_export_service
+from archub_cms.application.permission_service import get_archub_permission_service
 from archub_cms.application.platform import get_archub_platform
 from archub_cms.application.plugin_management_service import (
     get_archub_plugin_management_service,
 )
+from archub_cms.application.revisions_diff_service import get_archub_revisions_diff_service
 from archub_cms.application.runtime_service import (
     RuntimeCommandService,
     get_archub_runtime_query_service,
 )
+from archub_cms.application.scheduler_service import get_archub_scheduler_service
 from archub_cms.application.search_service import get_archub_search_service
+from archub_cms.application.space_service import get_archub_space_service
 from archub_cms.application.subscription_service import (
     SubscriptionCommandService,
     get_archub_subscription_query_service,
 )
+from archub_cms.application.tag_service import get_archub_tag_service
+from archub_cms.application.template_service import get_archub_template_service
 from archub_cms.application.trash_service import (
     TrashCommandService,
     TrashItemNotFoundError,
@@ -1097,3 +1115,517 @@ def subscriptions_inbox(
 @platform_router.get("/subscriptions/watchers/{node_id}")
 def subscriptions_watchers(node_id: str) -> dict[str, Any]:
     return get_archub_subscription_query_service().watchers_of(node_id)
+
+
+# -- scheduler (cron-like jobs) ------------------------------------------------
+
+
+@platform_router.get("/scheduler/jobs")
+def scheduler_list_jobs() -> dict[str, Any]:
+    jobs = get_archub_scheduler_service().list_jobs()
+    return {"jobs": jobs, "total": len(jobs)}
+
+
+@platform_router.post("/scheduler/tick")
+def scheduler_tick() -> dict[str, Any]:
+    return get_archub_scheduler_service().tick()
+
+
+# -- audit trail (immutable log) -----------------------------------------------
+
+
+@platform_router.get("/audit-trail")
+def audit_trail_query(
+    aggregate_id: str = Query(default=""),
+    actor: str = Query(default=""),
+    action: str = Query(default=""),
+    limit: int = Query(default=50, ge=1, le=500),
+) -> dict[str, Any]:
+    from archub_cms.domain.audit_trail.entry import AuditQuery
+
+    return get_archub_audit_trail_service().query(
+        AuditQuery(aggregate_id=aggregate_id, actor=actor, action=action, limit=limit)
+    )
+
+
+@platform_router.get("/audit-trail/{aggregate_id}")
+def audit_trail_for_aggregate(aggregate_id: str, limit: int = Query(default=50)) -> dict[str, Any]:
+    return get_archub_audit_trail_service().for_aggregate(aggregate_id, limit=limit)
+
+
+# -- notification hub ----------------------------------------------------------
+
+
+@platform_router.get("/notifications/inbox")
+def notification_inbox(
+    username: str = Query(...),
+    unread_only: bool = Query(default=False),
+    limit: int = Query(default=50, ge=1, le=500),
+) -> dict[str, Any]:
+    return get_archub_notification_hub_service().inbox(
+        username, unread_only=unread_only, limit=limit
+    )
+
+
+@platform_router.post("/notifications/{notification_id}/read")
+def notification_mark_read(notification_id: str) -> dict[str, Any]:
+    return {"read": get_archub_notification_hub_service().mark_read(notification_id)}
+
+
+@platform_router.get("/notifications/preferences/{username}")
+def notification_preferences(username: str) -> dict[str, Any]:
+    return get_archub_notification_hub_service().preferences(username)
+
+
+# -- bookmarks / favorites -----------------------------------------------------
+
+
+@platform_router.post("/bookmarks")
+def bookmarks_add(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008
+) -> dict[str, Any]:
+    return get_archub_bookmark_service().add(
+        username=str(payload.get("username") or ""),
+        node_id=str(payload.get("node_id") or ""),
+        folder_id=str(payload.get("folder_id") or ""),
+        note=str(payload.get("note") or ""),
+    )
+
+
+@platform_router.delete("/bookmarks/{bookmark_id}")
+def bookmarks_remove(bookmark_id: str) -> dict[str, Any]:
+    return {"removed": get_archub_bookmark_service().remove(bookmark_id)}
+
+
+@platform_router.get("/bookmarks")
+def bookmarks_list(
+    username: str = Query(...), folder_id: str = Query(default="")
+) -> dict[str, Any]:
+    return get_archub_bookmark_service().list_for_user(username, folder_id=folder_id)
+
+
+@platform_router.get("/bookmarks/folders")
+def bookmarks_folders(username: str = Query(...)) -> dict[str, Any]:
+    return get_archub_bookmark_service().folders(username)
+
+
+@platform_router.post("/bookmarks/folders")
+def bookmarks_create_folder(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008
+) -> dict[str, Any]:
+    return get_archub_bookmark_service().create_folder(
+        username=str(payload.get("username") or ""),
+        name=str(payload.get("name") or ""),
+        parent_folder_id=str(payload.get("parent_folder_id") or ""),
+    )
+
+
+# -- tags / taxonomy -----------------------------------------------------------
+
+
+@platform_router.get("/tags")
+def tags_list() -> dict[str, Any]:
+    return get_archub_tag_service().list_all()
+
+
+@platform_router.get("/tags/tree")
+def tags_tree() -> dict[str, Any]:
+    return get_archub_tag_service().tree()
+
+
+@platform_router.post("/tags")
+def tags_upsert(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008
+) -> dict[str, Any]:
+    from archub_cms.domain.tags.tag import Tag
+
+    tag = Tag(
+        slug=str(payload.get("slug") or ""),
+        display_name=str(payload.get("display_name") or ""),
+        parent_slug=str(payload.get("parent_slug") or ""),
+        aliases=tuple(payload.get("aliases") or ()),
+        description=str(payload.get("description") or ""),
+    )
+    return get_archub_tag_service().upsert(tag)
+
+
+@platform_router.delete("/tags/{slug}")
+def tags_delete(slug: str) -> dict[str, Any]:
+    return {"removed": get_archub_tag_service().delete(slug)}
+
+
+# -- spaces (Confluence-style) -------------------------------------------------
+
+
+@platform_router.get("/spaces")
+def spaces_list() -> dict[str, Any]:
+    return get_archub_space_service().list_all()
+
+
+@platform_router.get("/spaces/{space_key}")
+def spaces_get(space_key: str) -> dict[str, Any]:
+    result = get_archub_space_service().get(space_key)
+    if result is None:
+        raise HTTPException(status_code=404, detail="space not found")
+    return result
+
+
+@platform_router.post("/spaces")
+def spaces_upsert(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008
+) -> dict[str, Any]:
+    from archub_cms.domain.spaces.space import Space, SpaceSettings
+
+    settings_data = payload.get("settings") or {}
+    space = Space(
+        space_key=str(payload.get("space_key") or ""),
+        name=str(payload.get("name") or ""),
+        description=str(payload.get("description") or ""),
+        root_node_id=str(payload.get("root_node_id") or ""),
+        owner=str(payload.get("owner") or ""),
+        visibility=str(payload.get("visibility") or "public"),
+        settings=SpaceSettings(
+            **{k: v for k, v in settings_data.items() if k in SpaceSettings.__dataclass_fields__}
+        ),
+        tags=tuple(payload.get("tags") or ()),
+    )
+    return get_archub_space_service().upsert(space)
+
+
+@platform_router.delete("/spaces/{space_key}")
+def spaces_delete(space_key: str) -> dict[str, Any]:
+    return {"removed": get_archub_space_service().delete(space_key)}
+
+
+# -- comments thread -----------------------------------------------------------
+
+
+@platform_router.get("/comments/threads/{node_id}")
+def comment_threads_list(node_id: str) -> dict[str, Any]:
+    return get_archub_comments_thread_service().list_for_node(node_id)
+
+
+@platform_router.post("/comments/threads")
+def comment_threads_create(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008
+) -> dict[str, Any]:
+    thread = get_archub_comments_thread_service().create_thread(
+        node_id=str(payload.get("node_id") or ""),
+        title=str(payload.get("title") or ""),
+    )
+    return {"thread_id": thread.thread_id, "node_id": thread.node_id}
+
+
+@platform_router.post("/comments")
+def comments_add(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008
+) -> dict[str, Any]:
+    comment = get_archub_comments_thread_service().add_comment(
+        thread_id=str(payload.get("thread_id") or ""),
+        author=str(payload.get("author") or ""),
+        body=str(payload.get("body") or ""),
+        parent_id=str(payload.get("parent_comment_id") or ""),
+    )
+    return comment.as_dict()
+
+
+# -- templates -----------------------------------------------------------------
+
+
+@platform_router.get("/templates")
+def templates_list(space_key: str = "", category: str = "") -> dict[str, Any]:
+    return get_archub_template_service().list_templates(space_key=space_key, category=category)
+
+
+@platform_router.get("/templates/{template_id}")
+def templates_get(template_id: str) -> dict[str, Any]:
+    tmpl = get_archub_template_service().get_template(template_id)
+    if tmpl is None:
+        raise HTTPException(status_code=404, detail="template not found")
+    return tmpl.as_dict()
+
+
+@platform_router.post("/templates")
+def templates_create(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008
+) -> dict[str, Any]:
+    tmpl = get_archub_template_service().create_template(
+        name=str(payload.get("name") or ""),
+        body=str(payload.get("body") or ""),
+        category=str(payload.get("category") or "blank"),
+        space_key=str(payload.get("space_key") or ""),
+        created_by=str(payload.get("created_by") or ""),
+    )
+    return tmpl.as_dict()
+
+
+# -- permissions ---------------------------------------------------------------
+
+
+@platform_router.get("/permissions")
+def permissions_list(resource_type: str, resource_id: str) -> dict[str, Any]:
+    return get_archub_permission_service().list_permissions_for_resource(resource_type, resource_id)
+
+
+@platform_router.post("/permissions")
+def permissions_grant(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008
+) -> dict[str, Any]:
+    perm = get_archub_permission_service().grant(
+        subject_type=str(payload.get("subject_type") or ""),
+        subject_id=str(payload.get("subject_id") or ""),
+        resource_type=str(payload.get("resource_type") or ""),
+        resource_id=str(payload.get("resource_id") or ""),
+        level=str(payload.get("level") or "view"),
+        granted_by=str(payload.get("granted_by") or ""),
+    )
+    return perm.as_dict()
+
+
+@platform_router.get("/permissions/check")
+def permissions_check(
+    user: str, resource_type: str, resource_id: str, level: str = "view"
+) -> dict[str, Any]:
+    return get_archub_permission_service().check_access(user, resource_type, resource_id, level)
+
+
+# -- ai chat -------------------------------------------------------------------
+
+
+@platform_router.get("/chat/conversations")
+def chat_conversations_list(owner: str) -> dict[str, Any]:
+    return get_archub_ai_chat_service().list_conversations(owner)
+
+
+@platform_router.post("/chat/conversations")
+def chat_conversations_create(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008
+) -> dict[str, Any]:
+    conv = get_archub_ai_chat_service().create_conversation(
+        title=str(payload.get("title") or "New Chat"),
+        owner=str(payload.get("owner") or ""),
+        space_key=str(payload.get("space_key") or ""),
+    )
+    return conv.as_dict()
+
+
+@platform_router.post("/chat/send")
+def chat_send(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008
+) -> dict[str, Any]:
+    return get_archub_ai_chat_service().send_message(
+        conversation_id=str(payload.get("conversation_id") or ""),
+        message=str(payload.get("message") or ""),
+        user=str(payload.get("user") or ""),
+    )
+
+
+# -- dashboard -----------------------------------------------------------------
+
+
+@platform_router.get("/dashboard")
+def dashboard_get(owner: str, space_key: str = "") -> dict[str, Any]:
+    return get_archub_dashboard_service().get_layout(owner, space_key)
+
+
+@platform_router.post("/dashboard/widgets")
+def dashboard_add_widget(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008
+) -> dict[str, Any]:
+    widget = get_archub_dashboard_service().add_widget(
+        layout_id=str(payload.get("layout_id") or ""),
+        widget_type=str(payload.get("widget_type") or "recent_pages"),
+        title=str(payload.get("title") or ""),
+        config=payload.get("config") or {},
+    )
+    return widget.as_dict()
+
+
+# -- activity feed -------------------------------------------------------------
+
+
+@platform_router.get("/activity")
+def activity_feed_list(space_key: str = "", actor: str = "", limit: int = 50) -> dict[str, Any]:
+    return get_archub_activity_feed_service().list_activities(
+        space_key=space_key, actor=actor, limit=limit
+    )
+
+
+@platform_router.get("/activity/user/{username}")
+def activity_feed_user(username: str, limit: int = 50) -> dict[str, Any]:
+    return get_archub_activity_feed_service().list_user_activities(username, limit)
+
+
+# -- custom fields -------------------------------------------------------------
+
+
+@platform_router.get("/custom-fields/definitions")
+def custom_fields_list(space_key: str = "") -> dict[str, Any]:
+    return get_archub_custom_field_service().list_field_definitions(space_key)
+
+
+@platform_router.post("/custom-fields/definitions")
+def custom_fields_define(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008
+) -> dict[str, Any]:
+    definition = get_archub_custom_field_service().define_field(
+        name=str(payload.get("name") or ""),
+        field_type=str(payload.get("field_type") or "text"),
+        space_key=str(payload.get("space_key") or ""),
+        description=str(payload.get("description") or ""),
+        required=bool(payload.get("required")),
+        options=tuple(payload.get("options") or ()),
+    )
+    return definition.as_dict()
+
+
+@platform_router.get("/custom-fields/values/{node_id}")
+def custom_fields_get_values(node_id: str) -> dict[str, Any]:
+    return get_archub_custom_field_service().get_field_values(node_id)
+
+
+# -- page cloning --------------------------------------------------------------
+
+
+@platform_router.post("/pages/clone")
+def pages_clone(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008
+) -> dict[str, Any]:
+    from archub_cms.domain.page_cloning.models import CloneOptions
+
+    options = CloneOptions(
+        source_id=str(payload.get("source_id") or ""),
+        target_parent_id=str(payload.get("target_parent_id") or ""),
+        target_space_key=str(payload.get("target_space_key") or ""),
+        clone_children=bool(payload.get("clone_children", True)),
+        clone_attachments=bool(payload.get("clone_attachments", True)),
+        clone_custom_fields=bool(payload.get("clone_custom_fields", True)),
+        clone_comments=bool(payload.get("clone_comments", False)),
+        title_prefix=str(payload.get("title_prefix") or "Copy of "),
+        owner=str(payload.get("owner") or ""),
+    )
+    result = get_archub_page_cloning_service().clone_page(options)
+    return result.as_dict()
+
+
+@platform_router.post("/pages/clone/estimate")
+def pages_clone_estimate(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008
+) -> dict[str, Any]:
+    return get_archub_page_cloning_service().estimate_clone(
+        source_id=str(payload.get("source_id") or ""),
+        include_children=bool(payload.get("include_children", True)),
+    )
+
+
+# -- pdf/export ----------------------------------------------------------------
+
+
+@platform_router.get("/export/formats")
+def export_formats_list() -> dict[str, Any]:
+    return get_archub_pdf_export_service().get_supported_formats()
+
+
+@platform_router.post("/export/jobs")
+def export_jobs_create(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008
+) -> dict[str, Any]:
+    job = get_archub_pdf_export_service().create_export_job(
+        format=str(payload.get("format") or "pdf"),
+        target_type=str(payload.get("target_type") or "page"),
+        target_id=str(payload.get("target_id") or ""),
+        requester=str(payload.get("requester") or ""),
+        options=payload.get("options"),
+    )
+    return job.as_dict()
+
+
+@platform_router.get("/export/jobs")
+def export_jobs_list(requester: str, limit: int = 20) -> dict[str, Any]:
+    return get_archub_pdf_export_service().list_jobs(requester, limit)
+
+
+@platform_router.get("/export/jobs/{job_id}")
+def export_jobs_get(job_id: str) -> dict[str, Any]:
+    return get_archub_pdf_export_service().get_job_status(job_id)
+
+
+# -- embedding store ------------------------------------------------------------
+
+
+@platform_router.get("/embeddings/stats")
+def embeddings_stats() -> dict[str, Any]:
+    return get_archub_embedding_store_service().stats()
+
+
+@platform_router.get("/embeddings/stale")
+def embeddings_stale(limit: int = 100) -> dict[str, Any]:
+    return get_archub_embedding_store_service().list_stale(limit)
+
+
+# -- revisions diff -------------------------------------------------------------
+
+
+@platform_router.get("/revisions/diff")
+def revisions_diff(node_id: str, old_revision: int, new_revision: int) -> dict[str, Any]:
+    old_content = (
+        get_archub_revisions_diff_service().get_revision_content(node_id, old_revision) or ""
+    )
+    new_content = (
+        get_archub_revisions_diff_service().get_revision_content(node_id, new_revision) or ""
+    )
+    comparison = get_archub_revisions_diff_service().compare(
+        node_id, old_content, new_content, old_revision, new_revision
+    )
+    return comparison.as_dict()
+
+
+# -- live edit -----------------------------------------------------------------
+
+
+@platform_router.post("/live-edit/sessions")
+def live_edit_create_session(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008
+) -> dict[str, Any]:
+    session = get_archub_live_edit_service().create_session(
+        node_id=str(payload.get("node_id") or "")
+    )
+    return session.as_dict()
+
+
+@platform_router.post("/live-edit/join")
+def live_edit_join(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008
+) -> dict[str, Any]:
+    presence = get_archub_live_edit_service().join_session(
+        session_id=str(payload.get("session_id") or ""),
+        user=str(payload.get("user") or ""),
+        color=str(payload.get("color") or ""),
+    )
+    return presence.as_dict()
+
+
+@platform_router.post("/live-edit/leave")
+def live_edit_leave(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008
+) -> dict[str, Any]:
+    get_archub_live_edit_service().leave_session(
+        session_id=str(payload.get("session_id") or ""),
+        user=str(payload.get("user") or ""),
+    )
+    return {"left": True}
+
+
+@platform_router.get("/live-edit/sessions/{session_id}/users")
+def live_edit_users(session_id: str) -> dict[str, Any]:
+    return get_archub_live_edit_service().get_active_users(session_id)
+
+
+# -- health check --------------------------------------------------------------
+
+
+@platform_router.get("/health")
+def health_check() -> dict[str, Any]:
+    from archub_cms.kernel.health_check import get_health_check_service
+
+    return get_health_check_service().check()

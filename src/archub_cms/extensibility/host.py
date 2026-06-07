@@ -16,13 +16,21 @@ from archub_cms.extensibility.config_store import PluginConfigStore
 from archub_cms.extensibility.extension_points import (
     AnalyticsProviderExt,
     AuthExt,
+    ChatHandlerExt,
+    ConnectorExt,
     ContentTransformerExt,
+    DashboardWidgetExt,
+    EditorExt,
     EventHookExt,
     ExporterExt,
+    ExportFormatExt,
     ImporterExt,
+    ImportFormatExt,
+    LiveEditExt,
     LLMToolExt,
     MacroExt,
     NotificationExt,
+    PageActionExt,
     PluginContext,
     RendererExt,
     ScheduledJobExt,
@@ -116,6 +124,14 @@ class PluginHost:
         self._content_transformers: dict[str, ContentTransformerExt] = {}
         self._search_indexers: dict[str, SearchIndexerExt] = {}
         self._security_policies: dict[str, SecurityPolicyExt] = {}
+        self._editors: dict[str, EditorExt] = {}
+        self._connectors: dict[str, ConnectorExt] = {}
+        self._chat_handlers: dict[str, ChatHandlerExt] = {}
+        self._dashboard_widgets: dict[str, DashboardWidgetExt] = {}
+        self._export_formats: dict[str, ExportFormatExt] = {}
+        self._import_formats: dict[str, ImportFormatExt] = {}
+        self._live_edit_providers: dict[str, LiveEditExt] = {}
+        self._page_actions: dict[str, PageActionExt] = {}
         self._loaded_ids: set[str] = set()
 
     # -- lifecycle ---------------------------------------------------------
@@ -205,6 +221,22 @@ class PluginHost:
                 self._search_indexers[ext.indexer_name] = ext
             if isinstance(ext, SecurityPolicyExt):
                 self._security_policies[ext.policy_name] = ext
+            if isinstance(ext, EditorExt):
+                self._editors[ext.editor_id] = ext
+            if isinstance(ext, ConnectorExt):
+                self._connectors[ext.connector_id] = ext
+            if isinstance(ext, ChatHandlerExt):
+                self._chat_handlers[ext.handler_id] = ext
+            if isinstance(ext, DashboardWidgetExt):
+                self._dashboard_widgets[ext.widget_type] = ext
+            if isinstance(ext, ExportFormatExt):
+                self._export_formats[ext.format_id] = ext
+            if isinstance(ext, ImportFormatExt):
+                self._import_formats[ext.format_id] = ext
+            if isinstance(ext, LiveEditExt):
+                self._live_edit_providers[ext.provider_id] = ext
+            if isinstance(ext, PageActionExt):
+                self._page_actions[ext.action_id] = ext
 
     # -- accessors ---------------------------------------------------------
 
@@ -304,6 +336,38 @@ class PluginHost:
     def security_policies(self) -> dict[str, SecurityPolicyExt]:
         return dict(self._security_policies)
 
+    @property
+    def editors(self) -> dict[str, EditorExt]:
+        return dict(self._editors)
+
+    @property
+    def connectors(self) -> dict[str, ConnectorExt]:
+        return dict(self._connectors)
+
+    @property
+    def chat_handlers(self) -> dict[str, ChatHandlerExt]:
+        return dict(self._chat_handlers)
+
+    @property
+    def dashboard_widgets(self) -> dict[str, DashboardWidgetExt]:
+        return dict(self._dashboard_widgets)
+
+    @property
+    def export_formats(self) -> dict[str, ExportFormatExt]:
+        return dict(self._export_formats)
+
+    @property
+    def import_formats(self) -> dict[str, ImportFormatExt]:
+        return dict(self._import_formats)
+
+    @property
+    def live_edit_providers(self) -> dict[str, LiveEditExt]:
+        return dict(self._live_edit_providers)
+
+    @property
+    def page_actions(self) -> dict[str, PageActionExt]:
+        return dict(self._page_actions)
+
     def transform_content(
         self, content: dict[str, Any], *, phase: str = "render"
     ) -> dict[str, Any]:
@@ -385,6 +449,14 @@ class PluginHost:
             "content_transformers": sorted(self._content_transformers),
             "search_indexers": sorted(self._search_indexers),
             "security_policies": sorted(self._security_policies),
+            "editors": sorted(self._editors),
+            "connectors": sorted(self._connectors),
+            "chat_handlers": sorted(self._chat_handlers),
+            "dashboard_widgets": sorted(self._dashboard_widgets),
+            "export_formats": sorted(self._export_formats),
+            "import_formats": sorted(self._import_formats),
+            "live_edit_providers": sorted(self._live_edit_providers),
+            "page_actions": sorted(self._page_actions),
             "hook_counts": self._hook_log.counts,
             "recent_hooks": self._hook_log.recent(),
             "catalog_total": catalog["total"],

@@ -14,6 +14,11 @@ __all__ = ["ArcHubPlatform", "get_archub_platform"]
 from functools import cached_property
 from typing import Any
 
+from archub_cms.application.activity_feed_service import (
+    ActivityFeedService,
+    get_archub_activity_feed_service,
+)
+from archub_cms.application.ai_chat_service import AIChatService, get_archub_ai_chat_service
 from archub_cms.application.analytics_service import AnalyticsService, get_archub_analytics_service
 from archub_cms.application.audit_trail_service import (
     AuditTrailService,
@@ -28,10 +33,23 @@ from archub_cms.application.collaboration_service import (
     CollaborationService,
     get_archub_collaboration_service,
 )
+from archub_cms.application.comments_thread_service import (
+    CommentsThreadService,
+    get_archub_comments_thread_service,
+)
 from archub_cms.application.content_service import ContentService, get_archub_content_service
+from archub_cms.application.custom_field_service import (
+    CustomFieldService,
+    get_archub_custom_field_service,
+)
+from archub_cms.application.dashboard_service import DashboardService, get_archub_dashboard_service
 from archub_cms.application.delivery_read_service import (
     DeliveryReadService,
     get_archub_delivery_read_service,
+)
+from archub_cms.application.embedding_store_service import (
+    EmbeddingStoreService,
+    get_archub_embedding_store_service,
 )
 from archub_cms.application.governance_service import (
     GovernanceQueryService,
@@ -42,6 +60,7 @@ from archub_cms.application.knowledge import (
     ArcHubKnowledgeBaseService,
     get_archub_knowledge_base_service,
 )
+from archub_cms.application.live_edit_service import LiveEditService, get_archub_live_edit_service
 from archub_cms.application.localization_service import (
     LocalizationQueryService,
     get_archub_localization_query_service,
@@ -57,9 +76,25 @@ from archub_cms.application.notification_hub_service import (
     get_archub_notification_hub_service,
 )
 from archub_cms.application.packaging_service import PackagingService, get_archub_packaging_service
+from archub_cms.application.page_cloning_service import (
+    PageCloningService,
+    get_archub_page_cloning_service,
+)
+from archub_cms.application.pdf_export_service import (
+    PDFExportService,
+    get_archub_pdf_export_service,
+)
+from archub_cms.application.permission_service import (
+    PermissionService,
+    get_archub_permission_service,
+)
 from archub_cms.application.plugin_management_service import (
     PluginManagementService,
     get_archub_plugin_management_service,
+)
+from archub_cms.application.revisions_diff_service import (
+    RevisionsDiffService,
+    get_archub_revisions_diff_service,
 )
 from archub_cms.application.runtime_service import (
     RuntimeQueryService,
@@ -76,6 +111,7 @@ from archub_cms.application.subscription_service import (
     get_archub_subscription_query_service,
 )
 from archub_cms.application.tag_service import TagService, get_archub_tag_service
+from archub_cms.application.template_service import TemplateService, get_archub_template_service
 from archub_cms.application.trash_service import (
     TrashQueryService,
     get_archub_trash_query_service,
@@ -97,11 +133,11 @@ from archub_cms.kernel.events import EventBus, get_event_bus
 from archub_cms.services.cms import ArcHubCMSService, get_archub_cms_service
 from archub_cms.settings import ArcHubSettings
 
-# (context name, one-line description) — the platform's self-description.
 _CONTEXTS: tuple[tuple[str, str], ...] = (
     ("content", "Authoring: the content-tree aggregate, drafts, publishing."),
     ("knowledge", "Knowledge base: spaces, documents, hybrid RAG answers."),
     ("collaboration", "Comments, @mentions and reactions."),
+    ("comments_thread", "Threaded comment discussions with replies and resolutions."),
     ("modeling", "Content types, fields, data types, templates."),
     ("delivery", "Syndication: sitemap, feed, tags, redirects."),
     ("versioning", "History, restore and field-level diff."),
@@ -125,6 +161,17 @@ _CONTEXTS: tuple[tuple[str, str], ...] = (
     ("tags", "Hierarchical tag taxonomy (Confluence/Obsidian-style)."),
     ("bookmarks", "User bookmarks and folders (favorites/stars)."),
     ("spaces", "Confluence-style knowledge spaces with settings."),
+    ("templates", "Reusable page templates with categories and extraction."),
+    ("permissions", "Fine-grained page/space permission matrix."),
+    ("ai_chat", "Conversational AI interface over the knowledge base."),
+    ("dashboard", "Customizable dashboard widgets per user/space."),
+    ("activity_feed", "Chronological activity stream across the knowledge base."),
+    ("custom_fields", "User-defined metadata fields (Jira/Confluence-style)."),
+    ("page_cloning", "Deep-copy pages with children and attachments."),
+    ("pdf_export", "On-demand PDF and multi-format export."),
+    ("embedding_store", "Vector embedding management and similarity search."),
+    ("revisions_diff", "Side-by-side and inline diff for page history."),
+    ("live_edit", "Real-time collaborative editing with presence tracking."),
 )
 
 _PATTERNS: tuple[str, ...] = (
@@ -136,16 +183,22 @@ _PATTERNS: tuple[str, ...] = (
     "CQRS Mediator (dispatch pipeline)",
     "Specification",
     "Strategy (LLM/embedding/storage providers)",
-    "Plugin / SPI (19 extension points)",
+    "Plugin / SPI (28 extension points)",
     "Result type",
     "State Machine (workflow)",
     "Outbox (webhooks)",
+    "Transactional Outbox (integration events)",
     "Circuit Breaker (online LLM resilience)",
     "Composition Root (this facade)",
     "Aggregate Root (event collection)",
     "Saga / Process Manager",
     "Event Store (event sourcing)",
+    "Snapshot Store (aggregate optimization)",
     "Projection Store (materialized views)",
+    "Domain Registry (cross-context service locator)",
+    "Health Check subsystem",
+    "Retry Policy (exponential backoff)",
+    "Async Command Bus (background processing)",
     "Identity / Timestamp / Pagination value objects",
 )
 
@@ -166,8 +219,6 @@ class ArcHubPlatform:
         self._host = plugin_host or get_plugin_host(settings=self._settings)
         self._bus = event_bus or get_event_bus()
 
-    # -- shared infrastructure --------------------------------------------
-
     @property
     def cms(self) -> ArcHubCMSService:
         return self._cms
@@ -180,8 +231,6 @@ class ArcHubPlatform:
     def event_bus(self) -> EventBus:
         return self._bus
 
-    # -- bounded-context services (lazily built, shared deps) -------------
-
     @cached_property
     def knowledge(self) -> ArcHubKnowledgeBaseService:
         return get_archub_knowledge_base_service(self._cms, plugin_host=self._host)
@@ -193,6 +242,10 @@ class ArcHubPlatform:
     @cached_property
     def collaboration(self) -> CollaborationService:
         return get_archub_collaboration_service(db_path=self._cms.db_path, event_bus=self._bus)
+
+    @cached_property
+    def comments_thread(self) -> CommentsThreadService:
+        return get_archub_comments_thread_service(event_bus=self._bus)
 
     @cached_property
     def modeling(self) -> ModelingQueryService:
@@ -290,12 +343,55 @@ class ArcHubPlatform:
     def space_service(self) -> SpaceService:
         return get_archub_space_service()
 
-    # -- self-description --------------------------------------------------
+    @cached_property
+    def template_service(self) -> TemplateService:
+        return get_archub_template_service()
+
+    @cached_property
+    def permission_service(self) -> PermissionService:
+        return get_archub_permission_service()
+
+    @cached_property
+    def ai_chat(self) -> AIChatService:
+        return get_archub_ai_chat_service(plugin_host=self._host)
+
+    @cached_property
+    def dashboard(self) -> DashboardService:
+        return get_archub_dashboard_service(plugin_host=self._host)
+
+    @cached_property
+    def activity_feed(self) -> ActivityFeedService:
+        return get_archub_activity_feed_service(event_bus=self._bus)
+
+    @cached_property
+    def custom_field_service(self) -> CustomFieldService:
+        return get_archub_custom_field_service()
+
+    @cached_property
+    def page_cloning(self) -> PageCloningService:
+        return get_archub_page_cloning_service()
+
+    @cached_property
+    def pdf_export(self) -> PDFExportService:
+        return get_archub_pdf_export_service(plugin_host=self._host)
+
+    @cached_property
+    def embedding_store(self) -> EmbeddingStoreService:
+        return get_archub_embedding_store_service()
+
+    @cached_property
+    def revisions_diff(self) -> RevisionsDiffService:
+        return get_archub_revisions_diff_service()
+
+    @cached_property
+    def live_edit(self) -> LiveEditService:
+        return get_archub_live_edit_service(plugin_host=self._host)
 
     def capabilities(self) -> dict[str, Any]:
         report = self._host.report()
         return {
             "product": "ArcHub knowledge platform",
+            "version": "2.0.0",
             "bounded_contexts": [{"name": name, "description": desc} for name, desc in _CONTEXTS],
             "context_count": len(_CONTEXTS),
             "architectural_patterns": list(_PATTERNS),
@@ -319,6 +415,14 @@ class ArcHubPlatform:
                     "content_transformers": len(report.get("content_transformers", [])),
                     "search_indexers": len(report.get("search_indexers", [])),
                     "security_policies": len(report.get("security_policies", [])),
+                    "editors": len(report.get("editors", [])),
+                    "connectors": len(report.get("connectors", [])),
+                    "chat_handlers": len(report.get("chat_handlers", [])),
+                    "dashboard_widgets": len(report.get("dashboard_widgets", [])),
+                    "export_formats": len(report.get("export_formats", [])),
+                    "import_formats": len(report.get("import_formats", [])),
+                    "live_edit_providers": len(report.get("live_edit_providers", [])),
+                    "page_actions": len(report.get("page_actions", [])),
                 },
                 "capability_counts": report["capability_counts"],
             },
@@ -336,9 +440,4 @@ def get_archub_platform(
     plugin_host: PluginHost | None = None,
     settings: ArcHubSettings | None = None,
 ) -> ArcHubPlatform:
-    """Build a platform facade bound to the current CMS/host.
-
-    The facade is cheap — context services are lazy ``cached_property`` — so a
-    fresh instance per call is fine; hold the returned object to reuse it.
-    """
     return ArcHubPlatform(cms=cms, plugin_host=plugin_host, settings=settings)

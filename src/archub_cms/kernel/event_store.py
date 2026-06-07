@@ -62,6 +62,7 @@ class SqliteEventStore(EventStore):
 
     def __init__(self, connection: sqlite3.Connection) -> None:
         self._conn = connection
+        self._conn.row_factory = sqlite3.Row
         self._ensure_table()
 
     def _ensure_table(self) -> None:
