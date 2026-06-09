@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 __all__ = [
+    "ModuleDistributionBuilder",
     "ModuleDistributionInstaller",
     "ModuleMarketplaceRepository",
 ]
@@ -13,8 +14,10 @@ import re
 import shutil
 import tarfile
 import tempfile
+import time
 import zipfile
 from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +29,141 @@ _INDEX_FILES = (
     "archub-marketplace.json",
     ".archub/marketplace.json",
 )
+_ZIP_DATE_TIME = (2026, 1, 1, 0, 0, 0)
+_IGNORED_PACKAGE_NAMES = {".DS_Store"}
+_IGNORED_PACKAGE_PARTS = {"__pycache__", ".pytest_cache", ".ruff_cache"}
+
+
+@dataclass(frozen=True)
+class _PackageBuild:
+    manifest: KnowledgePluginManifest
+    archive_path: Path
+    package_path: str
+    sha256: str
+    source: str
+
+
+class ModuleDistributionBuilder:
+    """Build marketplace-ready archives for platform modules and plugins."""
+
+    def __init__(self, *, output_root: Path | str, replace: bool = True) -> None:
+        self._output_root = Path(output_root)
+        self._replace = replace
+
+    @property
+    def output_root(self) -> Path:
+        return self._output_root
+
+    def build_all(self, manifests: Iterable[KnowledgePluginManifest]) -> dict[str, Any]:
+        builds: list[_PackageBuild] = []
+        for manifest in sorted(manifests, key=lambda item: (item.capability, item.plugin_id)):
+            errors = manifest.validate()
+            if errors:
+                raise ValueError(
+                    f"invalid manifest {manifest.plugin_id!r}: {'; '.join(errors)}"
+                )
+            builds.append(self._build_one(manifest))
+        index = {
+            "schema_version": "1.0",
+            "generated_at": time.time(),
+            "modules": [self._marketplace_item(build) for build in builds],
+        }
+        index_path = self._output_root / "marketplace.json"
+        index_path.parent.mkdir(parents=True, exist_ok=True)
+        index_path.write_text(json.dumps(index, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        return {
+            "output_root": str(self._output_root),
+            "index": str(index_path),
+            "modules": index["modules"],
+            "total": len(builds),
+        }
+
+    def _build_one(self, manifest: KnowledgePluginManifest) -> _PackageBuild:
+        archive_path = self._archive_path(manifest)
+        if archive_path.exists() and not self._replace:
+            raise FileExistsError(str(archive_path))
+        archive_path.parent.mkdir(parents=True, exist_ok=True)
+        if archive_path.exists():
+            archive_path.unlink()
+
+        source_root = self._source_root(manifest)
+        if source_root is None:
+            with tempfile.TemporaryDirectory(prefix="archub-module-build-") as temp_dir:
+                package_root = self._write_manifest_only_package(manifest, Path(temp_dir))
+                self._write_zip(package_root, archive_path)
+        else:
+            self._write_zip(source_root, archive_path)
+        return _PackageBuild(
+            manifest=manifest,
+            archive_path=archive_path,
+            package_path=archive_path.relative_to(self._output_root).as_posix(),
+            sha256=_sha256(archive_path),
+            source=manifest.source,
+        )
+
+    def _archive_path(self, manifest: KnowledgePluginManifest) -> Path:
+        filename = f"{_safe_name(manifest.plugin_id)}-{manifest.version}.zip"
+        return (
+            self._output_root
+            / _safe_name(manifest.capability)
+            / _safe_name(manifest.plugin_id)
+            / manifest.version
+            / filename
+        )
+
+    @staticmethod
+    def _source_root(manifest: KnowledgePluginManifest) -> Path | None:
+        source = Path(manifest.source)
+        if manifest.source == "builtin" or not source.exists() or source.is_dir():
+            return source if source.is_dir() else None
+        return source.parent
+
+    @staticmethod
+    def _write_manifest_only_package(
+        manifest: KnowledgePluginManifest, temp_root: Path
+    ) -> Path:
+        package_root = temp_root / _safe_name(manifest.plugin_id)
+        package_root.mkdir(parents=True)
+        (package_root / "plugin.json").write_text(
+            json.dumps(_manifest_payload(manifest), indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        (package_root / "README.md").write_text(
+            f"# {manifest.name}\n\n{manifest.description or 'ArcHub platform module.'}\n",
+            encoding="utf-8",
+        )
+        return package_root
+
+    @staticmethod
+    def _write_zip(source_root: Path, archive_path: Path) -> None:
+        with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for path in sorted(source_root.rglob("*")):
+                if not path.is_file() or _ignored_package_path(path, source_root):
+                    continue
+                relative = path.relative_to(source_root).as_posix()
+                info = zipfile.ZipInfo(relative, _ZIP_DATE_TIME)
+                info.compress_type = zipfile.ZIP_DEFLATED
+                archive.writestr(info, path.read_bytes())
+
+    @staticmethod
+    def _marketplace_item(build: _PackageBuild) -> dict[str, Any]:
+        manifest = build.manifest
+        return {
+            "id": manifest.plugin_id,
+            "plugin_id": manifest.plugin_id,
+            "module_id": manifest.plugin_id,
+            "name": manifest.name,
+            "version": manifest.version,
+            "capability": manifest.capability,
+            "runtime": manifest.runtime,
+            "description": manifest.description,
+            "provider": manifest.provider,
+            "permissions": list(manifest.permissions),
+            "tags": list(manifest.tags),
+            "package": build.package_path,
+            "sha256": build.sha256,
+            "source": build.source,
+        }
 
 
 class ModuleDistributionInstaller:
@@ -270,6 +408,31 @@ class ModuleMarketplaceRepository:
 
 def _safe_name(value: str) -> str:
     return _MODULE_ID_RE.sub("-", value.strip()).strip(".-") or "module"
+
+
+def _manifest_payload(manifest: KnowledgePluginManifest) -> dict[str, Any]:
+    payload = manifest.as_dict()
+    payload["id"] = manifest.plugin_id
+    payload.pop("plugin_id", None)
+    payload.pop("source", None)
+    payload.pop("valid", None)
+    payload.pop("errors", None)
+    return payload
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _ignored_package_path(path: Path, root: Path) -> bool:
+    relative = path.relative_to(root)
+    if path.name in _IGNORED_PACKAGE_NAMES or path.suffix == ".pyc":
+        return True
+    return any(part in _IGNORED_PACKAGE_PARTS for part in relative.parts)
 
 
 def _is_relative_to(path: Path, parent: Path) -> bool:

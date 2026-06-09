@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from archub_cms.application.module_distribution_service import (
+    ModuleDistributionBuilder,
     ModuleDistributionInstaller,
     ModuleMarketplaceRepository,
 )
@@ -115,6 +116,24 @@ class PluginManagementService:
 
     def marketplace(self, repository: str | Path) -> dict[str, Any]:
         return ModuleMarketplaceRepository(repository).catalog()
+
+    def build_marketplace(
+        self,
+        output_root: str | Path,
+        *,
+        include_builtins: bool = True,
+        include_plugins: bool = True,
+        replace: bool = True,
+    ) -> dict[str, Any]:
+        manifests = [
+            manifest
+            for manifest in self._registry.manifests()
+            if (include_builtins or manifest.source != "builtin")
+            and (include_plugins or manifest.source == "builtin")
+        ]
+        return ModuleDistributionBuilder(output_root=output_root, replace=replace).build_all(
+            manifests
+        )
 
     def install_from_marketplace(
         self,

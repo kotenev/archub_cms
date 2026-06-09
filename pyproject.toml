@@ -48,6 +48,9 @@ postgres = ["psycopg[binary]>=3.1"]
 Documentation = "https://github.com/archub-cms/archub-cms"
 Repository = "https://github.com/archub-cms/archub-cms"
 
+[project.scripts]
+archub-marketplace-build = "archub_cms.tools.module_distributions:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

@@ -53,6 +53,33 @@ A marketplace repository is a local checkout with `marketplace.json`,
 `package`, `archive`, `path`, or `manifest_path` may point to a distribution
 inside the repository. `sha256` is optional but verified when present.
 
+## Building a Local Marketplace
+
+Use the generator to archive every discovered subsystem: built-in platform
+modules, adapters, REST API modules, and filesystem plugins.
+
+```bash
+archub-marketplace-build --output dist/archub-marketplace
+python -m archub_cms.tools.module_distributions --output dist/archub-marketplace --json
+```
+
+The generator writes a hierarchical catalog:
+
+```text
+dist/archub-marketplace/
+  marketplace.json
+  rest_api/archub.rest.platform/1.0.0/archub.rest.platform-1.0.0.zip
+  adapter/archub.adapter.plugin-store/1.0.0/archub.adapter.plugin-store-1.0.0.zip
+  workflow/archub.itsm.service_desk/1.0.0/archub.itsm.service_desk-1.0.0.zip
+```
+
+Options:
+
+- `--plugin-dir plugins` adds a source directory; repeat for multiple roots.
+- `--no-builtins` packages only filesystem plugins.
+- `--no-plugins` packages only built-in platform subsystem manifests.
+- `--no-replace` fails if a target archive already exists.
+
 ## REST API
 
 - `GET /api/platform/modules/manage`
