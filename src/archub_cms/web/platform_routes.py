@@ -164,6 +164,108 @@ def plugin_manage() -> dict[str, Any]:
     return get_archub_plugin_management_service().catalog()
 
 
+@platform_router.get("/modules/manage")
+def module_manage() -> dict[str, Any]:
+    return get_archub_plugin_management_service().catalog()
+
+
+def _install_from_file(payload: dict[str, Any]) -> dict[str, Any]:
+    path = str(payload.get("path") or payload.get("file") or "").strip()
+    if not path:
+        raise HTTPException(status_code=422, detail="path is required")
+    try:
+        return get_archub_plugin_management_service().install_from_file(
+            path,
+            actor=str(payload.get("actor") or ""),
+            enable=payload.get("enable"),
+            replace=bool(payload.get("replace")),
+            expected_sha256=str(payload.get("sha256") or ""),
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except FileExistsError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+def _marketplace_catalog(repository: str) -> dict[str, Any]:
+    if not repository.strip():
+        raise HTTPException(status_code=422, detail="repository is required")
+    try:
+        return get_archub_plugin_management_service().marketplace(repository)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+def _install_from_marketplace(payload: dict[str, Any]) -> dict[str, Any]:
+    repository = str(payload.get("repository") or "").strip()
+    module_id = str(payload.get("module_id") or payload.get("plugin_id") or payload.get("id") or "")
+    if not repository:
+        raise HTTPException(status_code=422, detail="repository is required")
+    if not module_id.strip():
+        raise HTTPException(status_code=422, detail="module_id is required")
+    try:
+        return get_archub_plugin_management_service().install_from_marketplace(
+            repository,
+            module_id,
+            version=str(payload.get("version") or ""),
+            actor=str(payload.get("actor") or ""),
+            enable=payload.get("enable"),
+            replace=bool(payload.get("replace")),
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except FileExistsError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@platform_router.post("/plugins/install/file")
+def plugin_install_file(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    return _install_from_file(payload)
+
+
+@platform_router.post("/modules/install/file")
+def module_install_file(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    return _install_from_file(payload)
+
+
+@platform_router.get("/plugins/marketplace")
+def plugin_marketplace(repository: str = Query(default="")) -> dict[str, Any]:
+    return _marketplace_catalog(repository)
+
+
+@platform_router.get("/modules/marketplace")
+def module_marketplace(repository: str = Query(default="")) -> dict[str, Any]:
+    return _marketplace_catalog(repository)
+
+
+@platform_router.post("/plugins/marketplace/install")
+def plugin_marketplace_install(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    return _install_from_marketplace(payload)
+
+
+@platform_router.post("/modules/marketplace/install")
+def module_marketplace_install(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+) -> dict[str, Any]:
+    return _install_from_marketplace(payload)
+
+
 @platform_router.post("/plugins/{plugin_id}/enable")
 def plugin_enable(
     plugin_id: str,

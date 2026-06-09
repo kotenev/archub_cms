@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import zipfile
 
 import pytest
 
@@ -20,6 +21,38 @@ from archub_cms.extensibility.loaders import (
 from archub_cms.kernel.events import get_event_bus
 from archub_cms.services.cms import get_archub_cms_service
 from archub_cms.settings import ArcHubSettings
+
+
+def _module_zip(
+    root,
+    *,
+    module_id: str,
+    capability: str = "platform_module",
+    runtime: str = "manifest",
+    version: str = "1.0.0",
+):
+    package_dir = root / f"{module_id}-src"
+    package_dir.mkdir(parents=True)
+    (package_dir / "plugin.json").write_text(
+        json.dumps(
+            {
+                "id": module_id,
+                "name": module_id,
+                "version": version,
+                "capability": capability,
+                "runtime": runtime,
+                "description": "Packaged test module",
+                "enabled_by_default": False,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (package_dir / "README.md").write_text("# Packaged module\n", encoding="utf-8")
+    archive = root / f"{module_id}.zip"
+    with zipfile.ZipFile(archive, "w") as zf:
+        for path in package_dir.rglob("*"):
+            zf.write(path, path.relative_to(package_dir.parent))
+    return archive
 
 
 @pytest.fixture(autouse=True)
@@ -82,6 +115,66 @@ def test_configure_persists_settings(managed):
 def test_unknown_plugin_errors(managed):
     with pytest.raises(KeyError):
         managed.enable("does.not.exist", actor="a")
+
+
+# --- distribution install + marketplace repository -----------------------
+
+
+def test_install_module_distribution_from_zip(tmp_path, monkeypatch):
+    plugin_root = tmp_path / "installed"
+    monkeypatch.setenv("ARCHUB_CMS_DB", str(tmp_path / "archub.db"))
+    monkeypatch.setenv("ARCHUB_PLUGIN_DIRS", str(plugin_root))
+    get_archub_cms_service.cache_clear()
+    get_archub_cms_service()
+    get_plugin_host(reload=True, settings=ArcHubSettings.from_env())
+    service = get_archub_plugin_management_service(settings=ArcHubSettings.from_env())
+    archive = _module_zip(tmp_path, module_id="acme.rest.helpdesk", capability="rest_api")
+
+    installed = service.install_from_file(archive, actor="admin", enable=True)
+
+    assert installed["plugin_id"] == "acme.rest.helpdesk"
+    assert installed["status"]["enabled"] is True
+    assert installed["status"]["capability"] == "rest_api"
+    assert (plugin_root / "acme.rest.helpdesk" / "plugin.json").exists()
+
+
+def test_install_module_from_marketplace_repository(tmp_path, monkeypatch):
+    plugin_root = tmp_path / "installed"
+    marketplace = tmp_path / "marketplace"
+    packages = marketplace / "packages"
+    packages.mkdir(parents=True)
+    archive = _module_zip(packages, module_id="acme.adapter.crm", capability="adapter")
+    (marketplace / "marketplace.json").write_text(
+        json.dumps(
+            {
+                "modules": [
+                    {
+                        "id": "acme.adapter.crm",
+                        "name": "CRM Adapter",
+                        "version": "1.0.0",
+                        "capability": "adapter",
+                        "package": f"packages/{archive.name}",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("ARCHUB_CMS_DB", str(tmp_path / "archub.db"))
+    monkeypatch.setenv("ARCHUB_PLUGIN_DIRS", str(plugin_root))
+    get_archub_cms_service.cache_clear()
+    get_archub_cms_service()
+    get_plugin_host(reload=True, settings=ArcHubSettings.from_env())
+    service = get_archub_plugin_management_service(settings=ArcHubSettings.from_env())
+
+    catalog = service.marketplace(marketplace)
+    installed = service.install_from_marketplace(marketplace, "acme.adapter.crm", enable=False)
+
+    assert catalog["total"] == 1
+    assert catalog["items"][0]["source"].endswith("acme.adapter.crm.zip")
+    assert installed["marketplace_item"]["capability"] == "adapter"
+    assert installed["status"]["enabled"] is False
+    assert (plugin_root / "acme.adapter.crm" / "README.md").exists()
 
 
 # --- HTTP / sandboxed loader (Forge-style) --------------------------------
@@ -198,3 +291,49 @@ def test_management_endpoints(tmp_path, monkeypatch):
         assert cfg.json()["settings"] == {"k": "v"}
 
         assert client.post("/api/platform/plugins/nope/enable", json={}).status_code == 404
+
+
+def test_module_distribution_endpoints(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from archub_cms.app import create_archub_app
+
+    plugin_root = tmp_path / "installed"
+    archive = _module_zip(tmp_path, module_id="acme.module.rest", capability="rest_api")
+    marketplace = tmp_path / "marketplace"
+    marketplace.mkdir()
+    (marketplace / "marketplace.json").write_text(
+        json.dumps(
+            {
+                "modules": [
+                    {
+                        "id": "acme.module.rest",
+                        "name": "REST Module",
+                        "version": "1.0.0",
+                        "capability": "rest_api",
+                        "package": str(archive),
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setenv("ARCHUB_CMS_DB", str(tmp_path / "web.db"))
+    monkeypatch.setenv("ARCHUB_PLUGIN_DIRS", str(plugin_root))
+    get_archub_cms_service.cache_clear()
+    get_plugin_host(reload=True, settings=ArcHubSettings.from_env())
+
+    with TestClient(create_archub_app()) as client:
+        market = client.get("/api/platform/modules/marketplace", params={"repository": marketplace})
+        assert market.status_code == 200 and market.json()["total"] == 1
+
+        installed = client.post(
+            "/api/platform/modules/install/file",
+            json={"path": str(archive), "enable": True},
+        )
+        assert installed.status_code == 200
+        assert installed.json()["status"]["capability"] == "rest_api"
+
+        managed = client.get("/api/platform/modules/manage").json()
+        assert "acme.module.rest" in {item["plugin_id"] for item in managed["items"]}

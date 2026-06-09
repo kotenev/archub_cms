@@ -44,6 +44,9 @@ PLUGIN_CAPABILITIES = (
     "dashboard_widget",
     "live_edit",
     "page_action",
+    "adapter",
+    "rest_api",
+    "platform_module",
 )
 _PLUGIN_ID_RE = re.compile(r"^[a-z][a-z0-9_.-]{2,127}$")
 _SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+(?:[-+][A-Za-z0-9_.-]+)?$")

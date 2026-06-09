@@ -216,6 +216,18 @@ def _builtin_plugins() -> tuple[KnowledgePluginManifest, ...]:
             "connector",
             "RAG corpus registry and rebuild hook.",
         ),
+        (
+            "archub.rest.platform",
+            "Platform REST API",
+            "rest_api",
+            "FastAPI JSON surface for platform modules.",
+        ),
+        (
+            "archub.adapter.plugin-store",
+            "Plugin Store Adapter",
+            "adapter",
+            "SQLite/PostgreSQL adapter boundary for executable plugins.",
+        ),
     )
     return tuple(
         KnowledgePluginManifest(

@@ -33,6 +33,7 @@ nav:
   - CMS Capability Matrix: architecture/capability-matrix.md
   - Enterprise Knowledge Platform: architecture/enterprise-knowledge-platform.md
   - Plugin Platform Adapter: architecture/plugin-platform-adapter.md
+  - Module Marketplace: architecture/module-marketplace.md
   - Content Modeling: architecture/content-modeling.md
   - Versioning & Cleanup: architecture/versioning-cleanup.md
   - Publishing & Workflow: architecture/publishing-workflow.md

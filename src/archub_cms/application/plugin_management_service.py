@@ -10,8 +10,13 @@ from __future__ import annotations
 
 __all__ = ["PluginManagementService", "get_archub_plugin_management_service"]
 
+from pathlib import Path
 from typing import Any
 
+from archub_cms.application.module_distribution_service import (
+    ModuleDistributionInstaller,
+    ModuleMarketplaceRepository,
+)
 from archub_cms.application.plugins import ArcHubPluginRegistry, get_archub_plugin_registry
 from archub_cms.extensibility.config_store import PluginConfigStore
 from archub_cms.extensibility.host import get_plugin_host
@@ -72,7 +77,80 @@ class PluginManagementService:
             "total": len(items),
             "loaded_total": len(loaded),
             "capability_counts": report["capability_counts"],
+            "install_root": str(self._installer().install_root),
         }
+
+    def install_from_file(
+        self,
+        path: str | Path,
+        *,
+        actor: str = "",
+        enable: bool | None = None,
+        replace: bool = False,
+        expected_sha256: str = "",
+    ) -> dict[str, Any]:
+        installed = self._installer().install(
+            path,
+            replace=replace,
+            expected_sha256=expected_sha256,
+        )
+        plugin_id = str(installed["plugin_id"])
+        if enable is not None:
+            self._config.set_enabled(plugin_id, enable, updated_by=actor)
+        self._reload()
+        self._bus.publish(
+            ArcHubDomainEvent(
+                "plugin.installed",
+                plugin_id,
+                actor,
+                {
+                    "source": str(path),
+                    "installed_path": installed["installed_path"],
+                    "capability": installed["capability"],
+                    "runtime": installed["runtime"],
+                },
+            )
+        )
+        return {**installed, "status": self.status(plugin_id)}
+
+    def marketplace(self, repository: str | Path) -> dict[str, Any]:
+        return ModuleMarketplaceRepository(repository).catalog()
+
+    def install_from_marketplace(
+        self,
+        repository: str | Path,
+        module_id: str,
+        *,
+        version: str = "",
+        actor: str = "",
+        enable: bool | None = None,
+        replace: bool = False,
+    ) -> dict[str, Any]:
+        marketplace = ModuleMarketplaceRepository(repository)
+        item = marketplace.package_for(module_id, version=version)
+        source = item.get("source")
+        if not source:
+            raise ValueError(f"marketplace item {module_id!r} does not declare a package")
+        installed = self.install_from_file(
+            str(source),
+            actor=actor,
+            enable=enable,
+            replace=replace,
+            expected_sha256=str(item.get("sha256") or ""),
+        )
+        self._bus.publish(
+            ArcHubDomainEvent(
+                "plugin.marketplace.installed",
+                str(installed["plugin_id"]),
+                actor,
+                {
+                    "repository": str(repository),
+                    "module_id": module_id,
+                    "version": str(item.get("version") or ""),
+                },
+            )
+        )
+        return {**installed, "marketplace_item": item}
 
     def enable(self, plugin_id: str, *, actor: str = "") -> dict[str, Any]:
         return self._set_enabled(plugin_id, True, actor=actor, event="plugin.enabled")
@@ -115,6 +193,9 @@ class PluginManagementService:
 
     def _reload(self) -> None:
         get_plugin_host(reload=True, settings=self._settings)
+
+    def _installer(self) -> ModuleDistributionInstaller:
+        return ModuleDistributionInstaller(install_roots=self._settings.plugin_dirs)
 
 
 def get_archub_plugin_management_service(
