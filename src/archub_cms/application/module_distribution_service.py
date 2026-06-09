@@ -168,7 +168,7 @@ class ModuleDistributionInstaller:
                     raise ValueError(f"unsafe zip member path: {info.filename}")
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 with archive.open(info) as src, destination.open("wb") as dst:
-                    shutil.copyfileobj(src, dst)
+                    shutil.copyfileobj(src, dst)  # type: ignore[arg-type]
 
     @staticmethod
     def _extract_tar(source: Path, target: Path) -> None:
@@ -187,7 +187,7 @@ class ModuleDistributionInstaller:
                 if src is None:
                     continue
                 with src, destination.open("wb") as dst:
-                    shutil.copyfileobj(src, dst)
+                    shutil.copyfileobj(src, dst)  # type: ignore[arg-type]
 
 
 class ModuleMarketplaceRepository:
