@@ -15,6 +15,7 @@ from typing import Any
 from archub_cms.application.plugins import ArcHubPluginRegistry, get_archub_plugin_registry
 from archub_cms.extensibility.config_store import PluginConfigStore
 from archub_cms.extensibility.host import get_plugin_host
+from archub_cms.extensibility.platform_adapter import PluginAuditLog
 from archub_cms.infrastructure.db.database import Database
 from archub_cms.kernel.events import ArcHubDomainEvent, EventBus, get_event_bus
 from archub_cms.settings import ArcHubSettings
@@ -33,7 +34,11 @@ class PluginManagementService:
     ) -> None:
         self._settings = settings or ArcHubSettings.from_env()
         self._registry = registry or get_archub_plugin_registry(self._settings)
-        self._config = config_store or PluginConfigStore(Database(self._settings.cms_db_path))
+        database = Database(self._settings.cms_db_path)
+        self._config = config_store or PluginConfigStore(
+            database,
+            audit_log=PluginAuditLog(database),
+        )
         self._bus = event_bus or get_event_bus()
 
     def catalog(self) -> dict[str, Any]:

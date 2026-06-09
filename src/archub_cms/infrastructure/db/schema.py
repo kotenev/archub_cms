@@ -80,6 +80,31 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
         "CREATE INDEX IF NOT EXISTS idx_archub_subscriptions_subscriber "
         "ON archub_subscriptions (subscriber)",
     ),
+    (
+        "0005_plugin_audit",
+        """
+        CREATE TABLE IF NOT EXISTS archub_plugin_audit (
+            audit_id TEXT PRIMARY KEY,
+            plugin_id TEXT NOT NULL,
+            action TEXT NOT NULL,
+            target TEXT NOT NULL DEFAULT '',
+            actor TEXT NOT NULL DEFAULT '',
+            backend TEXT NOT NULL DEFAULT '',
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            created_at REAL NOT NULL DEFAULT 0
+        )
+        """,
+    ),
+    (
+        "0005_plugin_audit_plugin_idx",
+        "CREATE INDEX IF NOT EXISTS idx_archub_plugin_audit_plugin "
+        "ON archub_plugin_audit (plugin_id, created_at)",
+    ),
+    (
+        "0005_plugin_audit_action_idx",
+        "CREATE INDEX IF NOT EXISTS idx_archub_plugin_audit_action "
+        "ON archub_plugin_audit (action)",
+    ),
 )
 
 

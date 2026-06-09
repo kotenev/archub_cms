@@ -43,7 +43,7 @@ class TestAggregateRoot:
 
         class Other(AggregateRoot):
             @classmethod
-            def reconstitute(cls, aggregate_id, state) -> "Other":
+            def reconstitute(cls, aggregate_id, state) -> Other:
                 return object.__new__(cls)  # type: ignore[return-value]
 
         c = AggregateRoot.__new__(Other)  # type: ignore[call-arg]

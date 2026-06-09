@@ -1,10 +1,10 @@
 """The :class:`ServiceDesk` application facade binding workflows to requests.
 
 It owns the registry of customizable :class:`WorkflowScheme` objects and a
-:class:`RequestRepository` (SQLite-backed by default; in-memory for tests), and
-applies a transition's post-functions to a request when it is moved. Three default
-schemes ship for a cloud provider: incident management, service-request fulfilment
-and change management.
+:class:`RequestRepository`. Persistent repositories are supplied by the platform
+adapter; the service falls back to in-memory storage only when used standalone in
+tests. Three default schemes ship for a cloud provider: incident management,
+service-request fulfilment and change management.
 """
 
 from __future__ import annotations
@@ -18,7 +18,6 @@ from typing import Any
 from archub_cms.extensibility.example_plugins.itsm.repository import (
     InMemoryRequestRepository,
     RequestRepository,
-    SqliteRequestRepository,
 )
 from archub_cms.extensibility.example_plugins.itsm.request import (
     CloudResource,
@@ -33,7 +32,6 @@ from archub_cms.extensibility.example_plugins.itsm.workflow import (
     WorkflowError,
     WorkflowScheme,
 )
-from archub_cms.infrastructure.db.database import Database
 
 
 class RequestNotFoundError(WorkflowError):
@@ -160,19 +158,13 @@ class ServiceDesk:
         clock: Callable[[], float] = time,
         schemes: dict[str, WorkflowScheme] | None = None,
         repository: RequestRepository | None = None,
-        database: Database | None = None,
     ) -> None:
         self.project_prefix = project_prefix
         self.provider = provider
         self.sla = sla or SlaPolicy()
         self._clock = clock
         self.schemes: dict[str, WorkflowScheme] = schemes or build_default_schemes()
-        if repository is not None:
-            self._repo: RequestRepository = repository
-        elif database is not None:
-            self._repo = SqliteRequestRepository(database)
-        else:
-            self._repo = InMemoryRequestRepository()
+        self._repo: RequestRepository = repository or InMemoryRequestRepository()
 
     @property
     def repository(self) -> RequestRepository:

@@ -48,6 +48,7 @@ from archub_cms.kernel.events import ArcHubDomainEvent, EventBus
 
 if TYPE_CHECKING:
     from archub_cms.domain.plugins import KnowledgePluginManifest
+    from archub_cms.extensibility.platform_adapter import PluginPlatformAdapter
 
 
 @dataclass(frozen=True)
@@ -84,17 +85,29 @@ class PluginContext:
         manifest: KnowledgePluginManifest,
         settings: dict[str, Any],
         event_bus: EventBus,
+        platform: PluginPlatformAdapter,
     ) -> None:
         self.manifest = manifest
         self.settings = dict(settings)
+        self.platform = platform
         self._event_bus = event_bus
         self._extensions: list[Any] = []
 
     def register(self, extension: Any) -> None:
         self._extensions.append(extension)
+        self.platform.audit(
+            "extension.registered",
+            target=type(extension).__name__,
+            metadata={"extension": type(extension).__name__},
+        )
 
     def subscribe(self, event_type: str, handler: Any) -> None:
         self._event_bus.subscribe(event_type, handler)
+        self.platform.audit(
+            "event.subscribed",
+            target=event_type,
+            metadata={"handler": type(handler).__name__},
+        )
 
     @property
     def registered(self) -> tuple[Any, ...]:

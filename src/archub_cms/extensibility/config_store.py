@@ -13,13 +13,15 @@ import json
 import time
 from typing import Any
 
+from archub_cms.extensibility.platform_adapter import PluginAuditLog
 from archub_cms.infrastructure.db.database import Database
 from archub_cms.infrastructure.db.schema import apply_extension_migrations
 
 
 class PluginConfigStore:
-    def __init__(self, database: Database) -> None:
+    def __init__(self, database: Database, *, audit_log: PluginAuditLog | None = None) -> None:
         self._db = database
+        self._audit = audit_log
         conn = self._db.connect()
         try:
             apply_extension_migrations(conn)
@@ -56,11 +58,18 @@ class PluginConfigStore:
 
     def set_enabled(self, plugin_id: str, enabled: bool, *, updated_by: str = "") -> None:
         self._upsert(plugin_id, enabled=enabled, updated_by=updated_by)
+        self._record(plugin_id, "plugin.config.enabled", updated_by, {"enabled": enabled})
 
     def set_settings(
         self, plugin_id: str, settings: dict[str, Any], *, updated_by: str = ""
     ) -> None:
         self._upsert(plugin_id, settings=settings, updated_by=updated_by)
+        self._record(
+            plugin_id,
+            "plugin.config.settings",
+            updated_by,
+            {"keys": sorted(settings)},
+        )
 
     def all(self) -> dict[str, dict[str, Any]]:
         conn = self._db.connect()
@@ -121,3 +130,20 @@ class PluginConfigStore:
             conn.commit()
         finally:
             conn.close()
+
+    def _record(
+        self,
+        plugin_id: str,
+        action: str,
+        actor: str,
+        metadata: dict[str, Any],
+    ) -> None:
+        if self._audit is None:
+            return
+        self._audit.record(
+            plugin_id=plugin_id,
+            action=action,
+            actor=actor,
+            backend="sqlite",
+            metadata=metadata,
+        )

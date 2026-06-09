@@ -29,6 +29,12 @@ from archub_cms.extensibility.extension_points import (
 from archub_cms.extensibility.host import PluginHost, get_plugin_host
 from archub_cms.extensibility.loaders import HttpToolLoader, InProcessLoader, PluginLoadError
 from archub_cms.extensibility.permissions import PermissionGate
+from archub_cms.extensibility.platform_adapter import (
+    PluginAuditLog,
+    PluginPlatformAdapter,
+    PostgresPluginStore,
+    SQLitePluginStore,
+)
 
 __all__ = [
     "EventHookExt",
@@ -37,11 +43,15 @@ __all__ = [
     "LLMToolExt",
     "PermissionGate",
     "Plugin",
+    "PluginAuditLog",
     "PluginConfigStore",
     "PluginContext",
     "PluginHost",
     "PluginLoadError",
+    "PluginPlatformAdapter",
+    "PostgresPluginStore",
     "SearchExt",
     "SearchHit",
+    "SQLitePluginStore",
     "get_plugin_host",
 ]

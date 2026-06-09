@@ -10,7 +10,7 @@ into an IT Service Management (ITSM) Service Desk for a cloud provider:
   Mermaid state diagrams (for inline rendering inside ArcHub knowledge pages).
 * :mod:`request` — the Service Desk domain in ITIL terms: requests (incident /
   service request / problem / change), priorities, SLA policies and cloud context.
-* :mod:`repository` — SQLite (and in-memory) persistence for requests.
+* :mod:`repository` — request repository port and in-memory storage for tests.
 * :mod:`service_desk` — the :class:`ServiceDesk` application facade that binds the
   workflow engine to the request repository and ships default cloud-provider schemes.
 * :mod:`plugin` — the plugin entrypoint and the extension implementations it
@@ -23,10 +23,7 @@ from __future__ import annotations
 from archub_cms.extensibility.example_plugins.itsm.bpmn import to_bpmn_xml, to_mermaid
 from archub_cms.extensibility.example_plugins.itsm.repository import (
     InMemoryRequestRepository,
-    PostgresDatabase,
-    PostgresRequestRepository,
     RequestRepository,
-    SqliteRequestRepository,
 )
 from archub_cms.extensibility.example_plugins.itsm.request import (
     CloudResource,
@@ -48,15 +45,12 @@ from archub_cms.extensibility.example_plugins.itsm.workflow import (
 __all__ = [
     "CloudResource",
     "InMemoryRequestRepository",
-    "PostgresDatabase",
-    "PostgresRequestRepository",
     "Priority",
     "Request",
     "RequestRepository",
     "RequestType",
     "ServiceDesk",
     "SlaPolicy",
-    "SqliteRequestRepository",
     "StatusCategory",
     "WorkflowError",
     "WorkflowScheme",

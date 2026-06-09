@@ -1,7 +1,8 @@
 """The ITSM Service Desk plugin entrypoint and the extensions it registers.
 
 ``setup`` builds one shared :class:`ServiceDesk` (seeded from plugin settings and
-backed by SQLite) and registers six extensions against ArcHub's SPI:
+backed by the platform persistence adapter) and registers six extensions against
+ArcHub's SPI:
 
 * :class:`ServiceDeskWorkflowAction` (``WorkflowActionExt``) — drive a request through
   its customizable, Jira-style ITIL workflow.
@@ -18,15 +19,10 @@ from __future__ import annotations
 
 __all__ = ["ITSMServiceDeskPlugin"]
 
-import os
 from typing import Any
 
 from archub_cms.extensibility.example_plugins.itsm.bpmn import to_bpmn_xml, to_mermaid
-from archub_cms.extensibility.example_plugins.itsm.repository import (
-    PostgresDatabase,
-    PostgresRequestRepository,
-    SqliteRequestRepository,
-)
+from archub_cms.extensibility.example_plugins.itsm.repository import RequestRepository
 from archub_cms.extensibility.example_plugins.itsm.request import (
     CloudResource,
     Priority,
@@ -35,10 +31,6 @@ from archub_cms.extensibility.example_plugins.itsm.request import (
 )
 from archub_cms.extensibility.example_plugins.itsm.service_desk import ServiceDesk
 from archub_cms.extensibility.example_plugins.itsm.workflow import WorkflowError
-from archub_cms.infrastructure.db.database import Database
-from archub_cms.settings import ArcHubSettings
-
-_POSTGRES_ALIASES = {"postgres", "postgresql", "pg"}
 
 # Keywords that nudge offline triage toward a type/priority (no network needed).
 _INCIDENT_WORDS = ("down", "outage", "error", "failed", "broken", "5xx", "crash", "unavailable")
@@ -58,12 +50,23 @@ class ITSMServiceDeskPlugin:
 
     def setup(self, context: Any) -> None:
         settings = getattr(context, "settings", {}) or {}
+        platform = getattr(context, "platform", None)
+        if platform is None:
+            raise RuntimeError("ITSM Service Desk plugin requires PluginPlatformAdapter")
         desk = ServiceDesk(
             project_prefix=str(settings.get("project_prefix") or "REQ"),
             provider=str(settings.get("provider") or "archub-cloud"),
-            repository=_build_repository(settings),
+            repository=_build_repository(settings, platform),
         )
         self.desk = desk
+        platform.audit(
+            "itsm.setup",
+            metadata={
+                "project_prefix": desk.project_prefix,
+                "provider": desk.provider,
+                "storage": str(settings.get("storage") or "sqlite"),
+            },
+        )
         context.register(ServiceDeskWorkflowAction(desk))
         context.register(BpmnDiagramMacro(desk))
         context.register(ServiceDeskWidget(desk))
@@ -72,31 +75,13 @@ class ITSMServiceDeskPlugin:
         context.register(TriageTool(desk))
 
 
-def _build_repository(
-    settings: dict[str, Any],
-) -> SqliteRequestRepository | PostgresRequestRepository:
-    """Pick the storage backend from plugin settings (SQLite by default).
+def _build_repository(settings: dict[str, Any], platform: Any) -> RequestRepository:
+    """Ask the platform adapter for the configured persistent repository."""
 
-    ``storage: postgres`` (with a ``dsn`` setting or the ``ARCHUB_ITSM_PG_DSN``
-    environment variable) selects PostgreSQL; anything else uses SQLite at
-    ``db_path`` (the shared ArcHub database by default).
-    """
-
-    storage = str(settings.get("storage") or "sqlite").strip().lower()
-    if storage in _POSTGRES_ALIASES:
-        dsn = str(
-            settings.get("dsn")
-            or settings.get("postgres_dsn")
-            or os.environ.get("ARCHUB_ITSM_PG_DSN")
-            or ""
-        )
-        if not dsn:
-            raise RuntimeError(
-                "ITSM storage 'postgres' requires a 'dsn' setting or ARCHUB_ITSM_PG_DSN"
-            )
-        return PostgresRequestRepository(PostgresDatabase(dsn))
-    db_path = str(settings.get("db_path") or ArcHubSettings.from_env().cms_db_path)
-    return SqliteRequestRepository(Database(db_path))
+    repository = platform.service_desk_repository(settings)
+    if not isinstance(repository, RequestRepository):
+        raise RuntimeError("platform returned an incompatible ITSM request repository")
+    return repository
 
 
 def _resource_from(payload: dict[str, Any], *, default_provider: str) -> CloudResource:

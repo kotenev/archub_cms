@@ -44,6 +44,7 @@ from archub_cms.extensibility.extension_points import (
 )
 from archub_cms.extensibility.loaders import PluginLoadError, select_loader
 from archub_cms.extensibility.permissions import PermissionDenied, PermissionGate
+from archub_cms.extensibility.platform_adapter import PluginAuditLog, PluginPlatformAdapter
 from archub_cms.infrastructure.db.database import Database
 from archub_cms.kernel.events import EventBus, get_event_bus
 from archub_cms.settings import ArcHubSettings
@@ -97,10 +98,13 @@ class PluginHost:
         event_bus: EventBus | None = None,
         permission_gate: PermissionGate | None = None,
         settings: ArcHubSettings | None = None,
+        audit_log: PluginAuditLog | None = None,
     ) -> None:
         self._settings = settings or ArcHubSettings.from_env()
+        self._database = Database(self._settings.cms_db_path)
         self._registry = registry or get_archub_plugin_registry(self._settings)
-        self._config = config_store or PluginConfigStore(Database(self._settings.cms_db_path))
+        self._audit = audit_log or PluginAuditLog(self._database)
+        self._config = config_store or PluginConfigStore(self._database, audit_log=self._audit)
         self._bus = event_bus or get_event_bus()
         self._gate = permission_gate or PermissionGate(None)
         self._hook_log = HookLog(self._bus)
@@ -133,6 +137,7 @@ class PluginHost:
         self._live_edit_providers: dict[str, LiveEditExt] = {}
         self._page_actions: dict[str, PageActionExt] = {}
         self._loaded_ids: set[str] = set()
+        self._extension_platforms: dict[int, PluginPlatformAdapter] = {}
 
     # -- lifecycle ---------------------------------------------------------
 
@@ -148,12 +153,27 @@ class PluginHost:
         return self
 
     def _load_one(self, manifest: KnowledgePluginManifest) -> None:
+        platform = PluginPlatformAdapter(
+            plugin_id=manifest.plugin_id,
+            settings=self._settings,
+            audit_log=self._audit,
+        )
+        platform.audit(
+            "plugin.load.attempt",
+            target=manifest.entrypoint,
+            metadata={"runtime": manifest.runtime, "capability": manifest.capability},
+        )
         try:
             self._gate.enforce(manifest.plugin_id, manifest.permissions)
             loader = select_loader(manifest)
             instance = loader.load(manifest)
         except (PermissionDenied, PluginLoadError) as exc:
             logger.warning("plugin %s not loaded: %s", manifest.plugin_id, exc)
+            platform.audit(
+                "plugin.load.failed",
+                target=manifest.entrypoint,
+                metadata={"error": str(exc), "error_type": type(exc).__name__},
+            )
             self._failures.append({"plugin_id": manifest.plugin_id, "error": str(exc)})
             return
 
@@ -161,13 +181,19 @@ class PluginHost:
             manifest=manifest,
             settings=self._config.get_settings(manifest.plugin_id),
             event_bus=self._bus,
+            platform=platform,
         )
         setup = getattr(instance, "setup", None)
         if callable(setup):
             try:
+                platform.audit("plugin.setup.attempt")
                 setup(context)
             except Exception as exc:  # isolate plugin setup failures
                 logger.exception("plugin %s setup failed", manifest.plugin_id)
+                platform.audit(
+                    "plugin.setup.failed",
+                    metadata={"error": str(exc), "error_type": type(exc).__name__},
+                )
                 self._failures.append({"plugin_id": manifest.plugin_id, "error": str(exc)})
                 return
             extensions = list(context.registered)
@@ -177,7 +203,13 @@ class PluginHost:
         record = LoadedPlugin(manifest=manifest, instance=instance, extensions=extensions)
         self._loaded.append(record)
         self._loaded_ids.add(manifest.plugin_id)
+        for extension in extensions:
+            self._extension_platforms[id(extension)] = platform
         self._classify(extensions)
+        platform.audit(
+            "plugin.loaded",
+            metadata={"extensions": [type(ext).__name__ for ext in extensions]},
+        )
 
     def _classify(self, extensions: list[Any]) -> None:
         for ext in extensions:
@@ -251,6 +283,10 @@ class PluginHost:
         return tuple(self._search_exts)
 
     @property
+    def audit_log(self) -> PluginAuditLog:
+        return self._audit
+
+    @property
     def llm_tools(self) -> dict[str, LLMToolExt]:
         return dict(self._llm_tools)
 
@@ -270,9 +306,16 @@ class PluginHost:
         hits: list[SearchHit] = []
         for ext in self._search_exts:
             try:
-                hits.extend(ext.search(query, limit=limit))
+                extension_hits = ext.search(query, limit=limit)
+                hits.extend(extension_hits)
+                self._audit_extension(
+                    ext,
+                    "search.query",
+                    metadata={"query": query, "limit": limit, "hits": len(extension_hits)},
+                )
             except Exception:  # one plugin must not break search
                 logger.exception("search extension failed")
+                self._audit_extension(ext, "search.query.failed", metadata={"query": query})
         hits.sort(key=lambda hit: hit.score, reverse=True)
         return hits[:limit]
 
@@ -283,8 +326,10 @@ class PluginHost:
         for renderer in self._renderers:
             try:
                 text = renderer.render(text, context=ctx)
+                self._audit_extension(renderer, "renderer.render")
             except Exception:  # a renderer must not break content delivery
                 logger.exception("renderer extension failed")
+                self._audit_extension(renderer, "renderer.render.failed")
         if self._macros:
             text = _MACRO_RE.sub(self._expand_macro, text)
         return text
@@ -295,9 +340,12 @@ class PluginHost:
         if macro is None:
             return match.group(0)  # leave unknown macros untouched
         try:
-            return macro.expand(_parse_macro_args(match.group(2)))
+            expanded = macro.expand(_parse_macro_args(match.group(2)))
+            self._audit_extension(macro, "macro.expand", target=name)
+            return expanded
         except Exception:  # a macro must not break rendering
             logger.exception("macro %s failed", name)
+            self._audit_extension(macro, "macro.expand.failed", target=name)
             return match.group(0)
 
     @property
@@ -401,8 +449,10 @@ class PluginHost:
         for ext in self._auth_exts:
             try:
                 identity = ext.authenticate(request)
+                self._audit_extension(ext, "auth.authenticate")
             except Exception:  # an auth plugin must not break the request
                 logger.exception("auth extension failed")
+                self._audit_extension(ext, "auth.authenticate.failed")
                 continue
             if identity is not None:
                 return identity
@@ -412,19 +462,59 @@ class PluginHost:
         tool = self._llm_tools.get(name)
         if tool is None:
             raise KeyError(f"no LLM tool named {name!r}")
-        return tool.run(arguments)
+        try:
+            result = tool.run(arguments)
+        except Exception:
+            self._audit_extension(tool, "llm_tool.run.failed", target=name)
+            raise
+        self._audit_extension(tool, "llm_tool.run", target=name)
+        return result
 
     def import_documents(self, importer: str, source: Any) -> list[dict[str, Any]]:
         ext = self._importers.get(importer)
         if ext is None:
             raise KeyError(f"no importer named {importer!r}")
-        return ext.import_documents(source)
+        try:
+            documents = ext.import_documents(source)
+        except Exception:
+            self._audit_extension(ext, "importer.run.failed", target=importer)
+            raise
+        self._audit_extension(
+            ext,
+            "importer.run",
+            target=importer,
+            metadata={"documents": len(documents)},
+        )
+        return documents
 
     def export_documents(self, exporter: str, documents: list[dict[str, Any]]) -> Any:
         ext = self._exporters.get(exporter)
         if ext is None:
             raise KeyError(f"no exporter named {exporter!r}")
-        return ext.export_documents(documents)
+        try:
+            exported = ext.export_documents(documents)
+        except Exception:
+            self._audit_extension(ext, "exporter.run.failed", target=exporter)
+            raise
+        self._audit_extension(
+            ext,
+            "exporter.run",
+            target=exporter,
+            metadata={"documents": len(documents)},
+        )
+        return exported
+
+    def _audit_extension(
+        self,
+        extension: Any,
+        action: str,
+        *,
+        target: str = "",
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        platform = self._extension_platforms.get(id(extension))
+        if platform is not None:
+            platform.audit(action, target=target, metadata=metadata)
 
     def report(self) -> dict[str, Any]:
         catalog = self._registry.catalog()

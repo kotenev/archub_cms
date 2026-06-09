@@ -16,9 +16,7 @@ import pytest
 
 from archub_cms.extensibility.example_plugins.itsm.bpmn import to_bpmn_xml, to_mermaid
 from archub_cms.extensibility.example_plugins.itsm.repository import (
-    PostgresDatabase,
-    PostgresRequestRepository,
-    SqliteRequestRepository,
+    RequestRepository,
 )
 from archub_cms.extensibility.example_plugins.itsm.request import (
     CloudResource,
@@ -36,9 +34,20 @@ from archub_cms.extensibility.example_plugins.itsm.workflow import (
     WorkflowScheme,
 )
 from archub_cms.extensibility.host import PluginHost
+from archub_cms.extensibility.platform_adapter import (
+    PluginAuditLog,
+    PluginPlatformAdapter,
+    PostgresPluginStore,
+    SQLitePluginStore,
+)
 from archub_cms.infrastructure.db.database import Database
+from archub_cms.infrastructure.plugins.itsm_request_repository import (
+    PostgresRequestRepository,
+    SqliteRequestRepository,
+)
 from archub_cms.kernel.events import get_event_bus
 from archub_cms.services.cms import get_archub_cms_service
+from archub_cms.settings import ArcHubSettings
 
 BPMN_NS = {
     "bpmn": "http://www.omg.org/spec/BPMN/20100524/MODEL",
@@ -173,6 +182,20 @@ def _desk(now: float = 1000.0) -> ServiceDesk:
     return ServiceDesk(clock=lambda: now)
 
 
+def _audit_log(tmp_path) -> PluginAuditLog:
+    return PluginAuditLog(Database(str(tmp_path / "plugin-audit.db")))
+
+
+def _sqlite_repo(tmp_path, *, db_name: str = "itsm.db") -> SqliteRequestRepository:
+    return SqliteRequestRepository(
+        SQLitePluginStore(
+            plugin_id="test.itsm",
+            database=Database(str(tmp_path / db_name)),
+            audit_log=_audit_log(tmp_path),
+        )
+    )
+
+
 def test_create_request_sets_initial_status_and_sla():
     desk = _desk()
     request = desk.create_request(
@@ -254,13 +277,28 @@ def test_queue_summary_counts_and_breaches():
 
 
 def test_sqlite_persistence_survives_new_instance(tmp_path):
-    db_path = str(tmp_path / "itsm.db")
-    desk = ServiceDesk(database=Database(db_path), clock=lambda: 1000.0)
+    db_path = tmp_path / "itsm.db"
+    audit_log = _audit_log(tmp_path)
+    repo = SqliteRequestRepository(
+        SQLitePluginStore(
+            plugin_id="test.itsm",
+            database=Database(db_path),
+            audit_log=audit_log,
+        )
+    )
+    desk = ServiceDesk(repository=repo, clock=lambda: 1000.0)
     request = desk.create_request(type=RequestType.INCIDENT, summary="DB down", reporter="ann")
     desk.transition(request.key, "triage", actor="ann", actor_role="agent")
 
     # A fresh ServiceDesk over the same database file must see the persisted request.
-    desk2 = ServiceDesk(database=Database(db_path), clock=lambda: 2000.0)
+    repo2 = SqliteRequestRepository(
+        SQLitePluginStore(
+            plugin_id="test.itsm",
+            database=Database(db_path),
+            audit_log=audit_log,
+        )
+    )
+    desk2 = ServiceDesk(repository=repo2, clock=lambda: 2000.0)
     loaded = desk2.get(request.key)
     assert loaded.status_id == "triaged"
     assert loaded.summary == "DB down"
@@ -269,20 +307,35 @@ def test_sqlite_persistence_survives_new_instance(tmp_path):
 
 
 def test_sqlite_key_sequence_is_monotonic(tmp_path):
-    db_path = str(tmp_path / "itsm.db")
-    desk = ServiceDesk(database=Database(db_path), project_prefix="INC", clock=lambda: 1.0)
+    db_path = tmp_path / "itsm.db"
+    audit_log = _audit_log(tmp_path)
+    repo = SqliteRequestRepository(
+        SQLitePluginStore(
+            plugin_id="test.itsm",
+            database=Database(db_path),
+            audit_log=audit_log,
+        )
+    )
+    desk = ServiceDesk(repository=repo, project_prefix="INC", clock=lambda: 1.0)
     a = desk.create_request(type=RequestType.INCIDENT, summary="one")
     b = desk.create_request(type=RequestType.INCIDENT, summary="two")
     assert a.key == "INC-1"
     assert b.key == "INC-2"
     # Sequence continues across a new ServiceDesk on the same file.
-    desk2 = ServiceDesk(database=Database(db_path), project_prefix="INC", clock=lambda: 2.0)
+    repo2 = SqliteRequestRepository(
+        SQLitePluginStore(
+            plugin_id="test.itsm",
+            database=Database(db_path),
+            audit_log=audit_log,
+        )
+    )
+    desk2 = ServiceDesk(repository=repo2, project_prefix="INC", clock=lambda: 2.0)
     c = desk2.create_request(type=RequestType.INCIDENT, summary="three")
     assert c.key == "INC-3"
 
 
 def test_sqlite_repository_lists_in_creation_order(tmp_path):
-    repo = SqliteRequestRepository(Database(str(tmp_path / "itsm.db")))
+    repo = _sqlite_repo(tmp_path)
     desk = ServiceDesk(repository=repo, clock=lambda: 5.0)
     desk.create_request(type=RequestType.INCIDENT, summary="first")
     desk.create_request(type=RequestType.CHANGE, summary="second")
@@ -302,40 +355,61 @@ _requires_pg = pytest.mark.skipif(
 )
 
 
-def test_postgres_database_holds_dsn():
-    db = PostgresDatabase("postgresql://localhost/itsm")
-    assert db.dsn == "postgresql://localhost/itsm"
+def test_postgres_store_holds_dsn(tmp_path):
+    store = PostgresPluginStore(
+        plugin_id="test.itsm",
+        dsn="postgresql://localhost/itsm",
+        audit_log=_audit_log(tmp_path),
+    )
+    assert store.dsn == "postgresql://localhost/itsm"
 
 
 @pytest.mark.skipif(_HAS_PSYCOPG, reason="psycopg installed; driver-missing path not applicable")
-def test_postgres_connect_without_driver_raises_helpful_error():
+def test_postgres_connect_without_driver_raises_helpful_error(tmp_path):
+    store = PostgresPluginStore(
+        plugin_id="test.itsm",
+        dsn="postgresql://localhost/itsm",
+        audit_log=_audit_log(tmp_path),
+    )
     with pytest.raises(RuntimeError, match="psycopg"):
-        PostgresDatabase("postgresql://localhost/itsm").connect()
+        store.connect()
 
 
 @pytest.fixture
-def pg_repo():
+def pg_repo(tmp_path):
     assert _PG_DSN is not None
-    db = PostgresDatabase(_PG_DSN)
-    conn = db.connect()
+    store = PostgresPluginStore(
+        plugin_id="test.itsm",
+        dsn=_PG_DSN,
+        audit_log=_audit_log(tmp_path),
+    )
+    conn = store.connect()
     try:
         conn.execute("DROP TABLE IF EXISTS itsm_request")
         conn.execute("DROP TABLE IF EXISTS itsm_request_seq")
         conn.commit()
     finally:
         conn.close()
-    return PostgresRequestRepository(db)
+    return PostgresRequestRepository(store)
 
 
 @_requires_pg
-def test_postgres_persistence_survives_new_instance(pg_repo):
+def test_postgres_persistence_survives_new_instance(pg_repo, tmp_path):
     assert _PG_DSN is not None
     desk = ServiceDesk(repository=pg_repo, clock=lambda: 1000.0)
     request = desk.create_request(type=RequestType.INCIDENT, summary="DB down", reporter="ann")
     desk.transition(request.key, "triage", actor="ann", actor_role="agent")
 
+    assert _PG_DSN is not None
     desk2 = ServiceDesk(
-        repository=PostgresRequestRepository(PostgresDatabase(_PG_DSN)), clock=lambda: 2000.0
+        repository=PostgresRequestRepository(
+            PostgresPluginStore(
+                plugin_id="test.itsm",
+                dsn=_PG_DSN,
+                audit_log=_audit_log(tmp_path),
+            )
+        ),
+        clock=lambda: 2000.0,
     )
     loaded = desk2.get(request.key)
     assert loaded.status_id == "triaged"
@@ -355,16 +429,28 @@ def test_postgres_key_sequence_is_monotonic(pg_repo):
 def test_build_repository_defaults_to_sqlite(tmp_path):
     from archub_cms.extensibility.example_plugins.itsm.plugin import _build_repository
 
-    repo = _build_repository({"db_path": str(tmp_path / "itsm.db")})
+    platform = PluginPlatformAdapter(
+        plugin_id="test.itsm",
+        settings=ArcHubSettings(cms_db_path=tmp_path / "archub.db"),
+    )
+    repo = _build_repository({"db_path": str(tmp_path / "itsm.db")}, platform)
     assert isinstance(repo, SqliteRequestRepository)
+    assert isinstance(repo, RequestRepository)
+    actions = {entry.action for entry in platform.audit_log.query(plugin_id="test.itsm")}
+    assert "adapter.sqlite.open" in actions
+    assert "itsm.schema.ensure" in actions
 
 
-def test_build_repository_postgres_requires_dsn(monkeypatch):
+def test_build_repository_postgres_requires_dsn(monkeypatch, tmp_path):
     from archub_cms.extensibility.example_plugins.itsm.plugin import _build_repository
 
     monkeypatch.delenv("ARCHUB_ITSM_PG_DSN", raising=False)
+    platform = PluginPlatformAdapter(
+        plugin_id="test.itsm",
+        settings=ArcHubSettings(cms_db_path=tmp_path / "archub.db"),
+    )
     with pytest.raises(RuntimeError, match="dsn"):
-        _build_repository({"storage": "postgres"})
+        _build_repository({"storage": "postgres"}, platform)
 
 
 # -- plugin wiring through the host ----------------------------------------
@@ -399,6 +485,26 @@ def test_plugin_loads_with_all_extensions(host):
 def test_plugin_uses_sqlite_repository(host):
     plugin = host.plugin_instance("archub.itsm.service_desk")
     assert isinstance(plugin.desk.repository, SqliteRequestRepository)
+
+
+def test_plugin_repository_actions_are_audited(host):
+    plugin = host.plugin_instance("archub.itsm.service_desk")
+    plugin.desk.create_request(type=RequestType.INCIDENT, summary="audit me")
+
+    actions = {
+        entry.action
+        for entry in host.audit_log.query(plugin_id="archub.itsm.service_desk", limit=100)
+    }
+    assert {
+        "plugin.load.attempt",
+        "plugin.setup.attempt",
+        "itsm.setup",
+        "extension.registered",
+        "adapter.sqlite.open",
+        "itsm.schema.ensure",
+        "itsm.request.next_key",
+        "itsm.request.save",
+    } <= actions
 
 
 def test_bpmn_macro_renders_through_host(host):
