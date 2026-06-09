@@ -315,6 +315,7 @@ def test_postgres_connect_without_driver_raises_helpful_error():
 
 @pytest.fixture
 def pg_repo():
+    assert _PG_DSN is not None
     db = PostgresDatabase(_PG_DSN)
     conn = db.connect()
     try:
@@ -328,6 +329,7 @@ def pg_repo():
 
 @_requires_pg
 def test_postgres_persistence_survives_new_instance(pg_repo):
+    assert _PG_DSN is not None
     desk = ServiceDesk(repository=pg_repo, clock=lambda: 1000.0)
     request = desk.create_request(type=RequestType.INCIDENT, summary="DB down", reporter="ann")
     desk.transition(request.key, "triage", actor="ann", actor_role="agent")
