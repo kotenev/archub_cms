@@ -278,9 +278,8 @@ class PostgresPluginStore:
 
     def connect(self) -> Any:
         try:
-            # noinspection PyUnresolvedReferences
-            import psycopg
-            from psycopg.rows import dict_row
+            import psycopg  # noinspection PyUnresolvedReferences
+            from psycopg.rows import dict_row  # noinspection PyUnresolvedReferences
         except ModuleNotFoundError as exc:
             raise RuntimeError(
                 "PostgreSQL plugin storage requires the 'psycopg' driver "
