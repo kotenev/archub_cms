@@ -677,3 +677,96 @@ def test_api_queue_summary(client):
     assert queue["total"] == 1
     assert queue["open"] == 1
     assert queue["by_priority"]["high"] == 1
+
+
+def test_api_itsm_rbac_roles_and_dashboard(client):
+    headers = {"Authorization": "Bearer demo-itsm-agent-token"}
+
+    roles = client.get("/api/platform/itsm/rbac/roles", headers=headers)
+    assert roles.status_code == 200
+    body = roles.json()
+    role_ids = {role["role_id"] for role in body["roles"]}
+    assert "itil:service_desk_agent" in role_ids
+    assert body["current_user"]["actor_role"] == "agent"
+
+    dashboard = client.get("/admin/itsm", headers=headers)
+    assert dashboard.status_code == 200
+    assert "ArcHub ITSM" in dashboard.text
+
+
+def test_api_itsm_requires_itil_role(client):
+    denied = client.get(
+        "/api/platform/itsm/queue",
+        headers={"X-ArcHub-User": "viewer", "X-ArcHub-Admin": "0"},
+    )
+    assert denied.status_code == 403
+
+
+def test_api_requester_can_create_but_not_assign(client):
+    headers = {"Authorization": "Bearer demo-itsm-requester-token"}
+
+    created = client.post(
+        "/api/platform/itsm/requests",
+        headers=headers,
+        json={"type": "incident", "summary": "Laptop is down"},
+    )
+    assert created.status_code == 201
+    assert created.json()["reporter"] == "requester"
+
+    assigned = client.post(
+        "/api/platform/itsm/requests/REQ-1/assign",
+        headers=headers,
+        json={"assignee": "agent"},
+    )
+    assert assigned.status_code == 403
+
+
+def test_api_agent_role_drives_workflow_actor_role(client):
+    agent_headers = {"Authorization": "Bearer demo-itsm-agent-token"}
+    client.post(
+        "/api/platform/itsm/requests",
+        headers={"Authorization": "Bearer demo-itsm-requester-token"},
+        json={"type": "incident", "summary": "API 5xx"},
+    )
+
+    triaged = client.post(
+        "/api/platform/itsm/requests/REQ-1/transitions",
+        headers=agent_headers,
+        json={"transition": "triage"},
+    )
+    assert triaged.status_code == 200
+
+    started = client.post(
+        "/api/platform/itsm/requests/REQ-1/transitions",
+        headers=agent_headers,
+        json={"transition": "start"},
+    )
+    assert started.status_code == 200
+    assert started.json()["status_id"] == "in_progress"
+    assert started.json()["assignee"] == "agent"
+
+
+def test_api_change_manager_can_create_and_approve_change(client):
+    headers = {"Authorization": "Bearer demo-itsm-change-manager-token"}
+
+    created = client.post(
+        "/api/platform/itsm/requests",
+        headers=headers,
+        json={"type": "change", "summary": "Upgrade cluster"},
+    )
+    assert created.status_code == 201
+
+    submitted = client.post(
+        "/api/platform/itsm/requests/REQ-1/transitions",
+        headers=headers,
+        json={"transition": "submit"},
+    )
+    assert submitted.status_code == 200
+
+    approved = client.post(
+        "/api/platform/itsm/requests/REQ-1/transitions",
+        headers=headers,
+        json={"transition": "approve", "approved": True},
+    )
+    assert approved.status_code == 200
+    assert approved.json()["status_id"] == "approved"

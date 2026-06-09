@@ -97,6 +97,7 @@ def _public_member_context(request: Request) -> tuple[str, bool, tuple[str, ...]
         groups.update({username, f"user:{username}"})
     if bool(getattr(user, "is_admin", False)):
         groups.add("admin")
+    groups.update(str(group).strip().lower() for group in getattr(user, "groups", ()) if group)
     return username, True, tuple(sorted(groups))
 
 

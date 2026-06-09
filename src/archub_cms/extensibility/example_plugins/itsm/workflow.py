@@ -59,7 +59,7 @@ ConditionFn = Callable[[Mapping[str, Any]], bool]
 CONDITION_REGISTRY: dict[str, ConditionFn] = {
     "assignee_set": lambda ctx: bool(ctx.get("assignee")),
     "resolution_set": lambda ctx: bool(ctx.get("resolution")),
-    "is_agent": lambda ctx: ctx.get("actor_role") in {"agent", "admin"},
+    "is_agent": lambda ctx: ctx.get("actor_role") in {"agent", "manager", "admin"},
     "is_manager": lambda ctx: ctx.get("actor_role") in {"manager", "admin"},
     "change_approved": lambda ctx: bool(ctx.get("approved")),
 }

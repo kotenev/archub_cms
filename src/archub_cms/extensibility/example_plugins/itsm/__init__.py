@@ -11,6 +11,7 @@ into an IT Service Management (ITSM) Service Desk for a cloud provider:
 * :mod:`request` — the Service Desk domain in ITIL terms: requests (incident /
   service request / problem / change), priorities, SLA policies and cloud context.
 * :mod:`repository` — request repository port and in-memory storage for tests.
+* :mod:`rbac` — ITIL-aligned platform roles and ITSM route permissions.
 * :mod:`service_desk` — the :class:`ServiceDesk` application facade that binds the
   workflow engine to the request repository and ships default cloud-provider schemes.
 * :mod:`plugin` — the plugin entrypoint and the extension implementations it
@@ -21,6 +22,15 @@ into an IT Service Management (ITSM) Service Desk for a cloud provider:
 from __future__ import annotations
 
 from archub_cms.extensibility.example_plugins.itsm.bpmn import to_bpmn_xml, to_mermaid
+from archub_cms.extensibility.example_plugins.itsm.rbac import (
+    ITILRole,
+    ITSMPermission,
+    actor_role_for_groups,
+    has_itsm_permission,
+    itil_role_report,
+    permissions_for_groups,
+    roles_for_groups,
+)
 from archub_cms.extensibility.example_plugins.itsm.repository import (
     InMemoryRequestRepository,
     RequestRepository,
@@ -45,6 +55,8 @@ from archub_cms.extensibility.example_plugins.itsm.workflow import (
 __all__ = [
     "CloudResource",
     "InMemoryRequestRepository",
+    "ITILRole",
+    "ITSMPermission",
     "Priority",
     "Request",
     "RequestRepository",
@@ -56,7 +68,12 @@ __all__ = [
     "WorkflowScheme",
     "WorkflowStatus",
     "WorkflowTransition",
+    "actor_role_for_groups",
+    "has_itsm_permission",
+    "itil_role_report",
+    "permissions_for_groups",
     "register_condition",
+    "roles_for_groups",
     "to_bpmn_xml",
     "to_mermaid",
 ]

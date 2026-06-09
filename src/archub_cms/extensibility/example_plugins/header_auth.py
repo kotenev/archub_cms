@@ -19,6 +19,26 @@ from archub_cms.ports import ArcHubUser
 _DEMO_TOKENS = {
     "demo-admin-token": {"username": "admin", "is_admin": True, "groups": ["staff"]},
     "demo-editor-token": {"username": "editor", "is_admin": False, "groups": ["editors"]},
+    "demo-itsm-requester-token": {
+        "username": "requester",
+        "is_admin": False,
+        "groups": ["itil:requester"],
+    },
+    "demo-itsm-agent-token": {
+        "username": "agent",
+        "is_admin": False,
+        "groups": ["itil:service_desk_agent"],
+    },
+    "demo-itsm-change-manager-token": {
+        "username": "change-manager",
+        "is_admin": False,
+        "groups": ["itil:change_manager", "itil:cab_member"],
+    },
+    "demo-itsm-admin-token": {
+        "username": "itsm-admin",
+        "is_admin": False,
+        "groups": ["itil:itsm_admin"],
+    },
 }
 
 
