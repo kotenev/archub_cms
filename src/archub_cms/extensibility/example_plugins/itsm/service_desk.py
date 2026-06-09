@@ -1,41 +1,46 @@
-"""The :class:`ServiceDesk` application facade binding workflows to tickets.
+"""The :class:`ServiceDesk` application facade binding workflows to requests.
 
-It owns the registry of customizable :class:`WorkflowScheme` objects and an
-in-process ticket store (plugins run sandboxed with no database handle, so the
-Service Desk keeps its own state), and applies a transition's post-functions to a
-ticket when it is moved. Three default schemes ship for a cloud provider:
-incident management, service requests and change management.
+It owns the registry of customizable :class:`WorkflowScheme` objects and a
+:class:`RequestRepository` (SQLite-backed by default; in-memory for tests), and
+applies a transition's post-functions to a request when it is moved. Three default
+schemes ship for a cloud provider: incident management, service-request fulfilment
+and change management.
 """
 
 from __future__ import annotations
 
 __all__ = ["ServiceDesk", "build_default_schemes"]
 
-import itertools
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from time import time
 from typing import Any
 
-from archub_cms.extensibility.example_plugins.itsm.tickets import (
+from archub_cms.extensibility.example_plugins.itsm.repository import (
+    InMemoryRequestRepository,
+    RequestRepository,
+    SqliteRequestRepository,
+)
+from archub_cms.extensibility.example_plugins.itsm.request import (
     CloudResource,
     Priority,
+    Request,
+    RequestEvent,
+    RequestType,
     SlaPolicy,
-    Ticket,
-    TicketEvent,
-    TicketType,
 )
 from archub_cms.extensibility.example_plugins.itsm.workflow import (
     StatusCategory,
     WorkflowError,
     WorkflowScheme,
 )
+from archub_cms.infrastructure.db.database import Database
 
-# Maps each ticket type to the workflow scheme that governs it by default.
+# Maps each request type to the workflow scheme that governs it by default.
 _TYPE_SCHEME = {
-    TicketType.INCIDENT: "incident",
-    TicketType.SERVICE_REQUEST: "service_request",
-    TicketType.PROBLEM: "incident",
-    TicketType.CHANGE: "change",
+    RequestType.INCIDENT: "incident",
+    RequestType.SERVICE_REQUEST: "service_request",
+    RequestType.PROBLEM: "incident",
+    RequestType.CHANGE: "change",
 }
 
 
@@ -139,24 +144,34 @@ def build_default_schemes() -> dict[str, WorkflowScheme]:
 
 
 class ServiceDesk:
-    """Owns workflow schemes + an in-process ticket store for one plugin instance."""
+    """Owns workflow schemes + a persistent request store for one plugin instance."""
 
     def __init__(
         self,
         *,
-        project_prefix: str = "SD",
+        project_prefix: str = "REQ",
         provider: str = "archub-cloud",
         sla: SlaPolicy | None = None,
         clock: Callable[[], float] = time,
         schemes: dict[str, WorkflowScheme] | None = None,
+        repository: RequestRepository | None = None,
+        database: Database | None = None,
     ) -> None:
         self.project_prefix = project_prefix
         self.provider = provider
         self.sla = sla or SlaPolicy()
         self._clock = clock
         self.schemes: dict[str, WorkflowScheme] = schemes or build_default_schemes()
-        self._tickets: dict[str, Ticket] = {}
-        self._counter = itertools.count(1)
+        if repository is not None:
+            self._repo: RequestRepository = repository
+        elif database is not None:
+            self._repo = SqliteRequestRepository(database)
+        else:
+            self._repo = InMemoryRequestRepository()
+
+    @property
+    def repository(self) -> RequestRepository:
+        return self._repo
 
     # -- scheme management -------------------------------------------------
 
@@ -167,31 +182,33 @@ class ServiceDesk:
         self.schemes[scheme.key] = scheme
         return problems
 
-    def scheme_for(self, ticket_type: TicketType) -> WorkflowScheme:
-        key = _TYPE_SCHEME.get(ticket_type, "incident")
+    def scheme_for(self, request_type: RequestType) -> WorkflowScheme:
+        key = _TYPE_SCHEME.get(request_type, "incident")
         scheme = self.schemes.get(key)
         if scheme is None:
-            raise WorkflowError(f"no workflow scheme {key!r} for ticket type {ticket_type.value!r}")
+            raise WorkflowError(
+                f"no workflow scheme {key!r} for request type {request_type.value!r}"
+            )
         return scheme
 
-    # -- ticket lifecycle --------------------------------------------------
+    # -- request lifecycle -------------------------------------------------
 
-    def create_ticket(
+    def create_request(
         self,
         *,
-        type: TicketType,
+        type: RequestType,
         summary: str,
         description: str = "",
         priority: Priority = Priority.MEDIUM,
         reporter: str = "",
         cloud: CloudResource | None = None,
         scheme_key: str = "",
-    ) -> Ticket:
+    ) -> Request:
         scheme = self.schemes[scheme_key] if scheme_key else self.scheme_for(type)
         now = self._clock()
-        key = f"{self.project_prefix}-{next(self._counter)}"
+        key = self._repo.next_key(self.project_prefix)
         resource = cloud or CloudResource(provider=self.provider)
-        ticket = Ticket(
+        request = Request(
             key=key,
             type=type,
             summary=summary,
@@ -206,34 +223,35 @@ class ServiceDesk:
             sla_response_due=now + self.sla.response_minutes(priority) * 60.0,
             sla_resolution_due=now + self.sla.resolution_minutes(priority) * 60.0,
         )
-        ticket.record(TicketEvent(at=now, actor=reporter or "system", kind="created", detail=key))
-        self._tickets[key] = ticket
-        return ticket
+        request.record(RequestEvent(at=now, actor=reporter or "system", kind="created", detail=key))
+        self._repo.save(request)
+        return request
 
-    def assign(self, key: str, assignee: str, *, actor: str = "") -> Ticket:
-        """Field edit: (re)assign a ticket outside of a transition, Jira-style."""
+    def assign(self, key: str, assignee: str, *, actor: str = "") -> Request:
+        """Field edit: (re)assign a request outside of a transition, Jira-style."""
 
-        ticket = self.get(key)
-        ticket.assignee = assignee
-        ticket.record(
-            TicketEvent(
+        request = self.get(key)
+        request.assignee = assignee
+        request.record(
+            RequestEvent(
                 at=self._clock(),
                 actor=actor or assignee or "system",
                 kind="assigned",
                 detail=assignee,
             )
         )
-        return ticket
+        self._repo.save(request)
+        return request
 
     def available_transitions(
         self, key: str, *, actor_role: str = ""
     ) -> tuple[dict[str, Any], ...]:
-        ticket = self.get(key)
-        scheme = self.schemes[ticket.scheme_key]
-        context = self._context(ticket, actor_role=actor_role)
+        request = self.get(key)
+        scheme = self.schemes[request.scheme_key]
+        context = self._context(request, actor_role=actor_role)
         return tuple(
             transition.as_dict()
-            for transition in scheme.available_transitions(ticket.status_id, context=context)
+            for transition in scheme.available_transitions(request.status_id, context=context)
         )
 
     def transition(
@@ -245,107 +263,109 @@ class ServiceDesk:
         actor_role: str = "",
         resolution: str = "",
         approved: bool = False,
-    ) -> Ticket:
-        ticket = self.get(key)
-        scheme = self.schemes[ticket.scheme_key]
+    ) -> Request:
+        request = self.get(key)
+        scheme = self.schemes[request.scheme_key]
         if resolution:
-            ticket.resolution = resolution
-        context = self._context(ticket, actor=actor, actor_role=actor_role, approved=approved)
-        outcome = scheme.apply(ticket.status_id, transition_id, context=context)
-        from_status = ticket.status_id
-        ticket.status_id = outcome.to_status
+            request.resolution = resolution
+        context = self._context(request, actor=actor, actor_role=actor_role, approved=approved)
+        outcome = scheme.apply(request.status_id, transition_id, context=context)
+        from_status = request.status_id
+        request.status_id = outcome.to_status
         now = self._clock()
-        self._apply_post_functions(ticket, outcome.post_functions, actor=actor, now=now)
-        ticket.record(
-            TicketEvent(
+        self._apply_post_functions(request, outcome.post_functions, actor=actor, now=now)
+        request.record(
+            RequestEvent(
                 at=now,
                 actor=actor or "system",
                 kind="transition",
                 detail=f"{from_status} -> {outcome.to_status} ({outcome.transition.name})",
             )
         )
-        return ticket
+        self._repo.save(request)
+        return request
 
     def _apply_post_functions(
-        self, ticket: Ticket, post_functions: tuple[str, ...], *, actor: str, now: float
+        self, request: Request, post_functions: tuple[str, ...], *, actor: str, now: float
     ) -> None:
         for name in post_functions:
             if name == "assign_to_actor" and actor:
-                ticket.assignee = actor
+                request.assignee = actor
             elif name == "clear_assignee":
-                ticket.assignee = ""
+                request.assignee = ""
             elif name == "stamp_resolved_at":
-                ticket.resolved_at = now
-            elif name == "set_resolution" and not ticket.resolution:
-                ticket.resolution = "Done"
+                request.resolved_at = now
+            elif name == "set_resolution" and not request.resolution:
+                request.resolution = "Done"
 
     def _context(
         self,
-        ticket: Ticket,
+        request: Request,
         *,
         actor: str = "",
         actor_role: str = "",
         approved: bool = False,
     ) -> dict[str, Any]:
         return {
-            "assignee": ticket.assignee,
-            "resolution": ticket.resolution,
+            "assignee": request.assignee,
+            "resolution": request.resolution,
             "actor": actor,
             "actor_role": actor_role,
             "approved": approved,
-            "priority": ticket.priority.value,
+            "priority": request.priority.value,
         }
 
     # -- queries -----------------------------------------------------------
 
-    def get(self, key: str) -> Ticket:
-        try:
-            return self._tickets[key]
-        except KeyError as exc:
-            raise WorkflowError(f"unknown ticket {key!r}") from exc
+    def get(self, key: str) -> Request:
+        request = self._repo.get(key)
+        if request is None:
+            raise WorkflowError(f"unknown request {key!r}")
+        return request
 
-    def list_tickets(
+    def list_requests(
         self,
         *,
-        type: TicketType | None = None,
+        type: RequestType | None = None,
         status_id: str = "",
         assignee: str | None = None,
-    ) -> list[Ticket]:
-        items = list(self._tickets.values())
+    ) -> list[Request]:
+        items = self._repo.list_all()
         if type is not None:
-            items = [t for t in items if t.type is type]
+            items = [r for r in items if r.type is type]
         if status_id:
-            items = [t for t in items if t.status_id == status_id]
+            items = [r for r in items if r.status_id == status_id]
         if assignee is not None:
-            items = [t for t in items if t.assignee == assignee]
-        return sorted(items, key=lambda t: t.created_at)
+            items = [r for r in items if r.assignee == assignee]
+        return items
 
-    def queue_summary(self, mapping: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    def queue_summary(self) -> dict[str, Any]:
         """Counts by status category + SLA breaches, for a dashboard widget."""
 
         now = self._clock()
+        requests = self._repo.list_all()
         by_category = {category.value: 0 for category in StatusCategory}
         by_priority: dict[str, int] = {}
         response_breaches = 0
         resolution_breaches = 0
         open_total = 0
-        for ticket in self._tickets.values():
-            scheme = self.schemes.get(ticket.scheme_key)
+        for request in requests:
+            scheme = self.schemes.get(request.scheme_key)
             category = (
-                scheme.status(ticket.status_id).category.value
-                if scheme and ticket.status_id in scheme.statuses
+                scheme.status(request.status_id).category.value
+                if scheme and request.status_id in scheme.statuses
                 else StatusCategory.TODO.value
             )
             by_category[category] = by_category.get(category, 0) + 1
-            by_priority[ticket.priority.value] = by_priority.get(ticket.priority.value, 0) + 1
+            by_priority[request.priority.value] = by_priority.get(request.priority.value, 0) + 1
             if category != StatusCategory.DONE.value:
                 open_total += 1
-            if ticket.response_breached(now):
+            if request.response_breached(now):
                 response_breaches += 1
-            if ticket.resolution_breached(now):
+            if request.resolution_breached(now):
                 resolution_breaches += 1
         return {
-            "total": len(self._tickets),
+            "total": len(requests),
             "open": open_total,
             "by_category": by_category,
             "by_priority": by_priority,

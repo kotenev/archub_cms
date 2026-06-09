@@ -8,10 +8,11 @@ into an IT Service Management (ITSM) Service Desk for a cloud provider:
   "from-any" transitions, conditions and post-functions).
 * :mod:`bpmn` — serialize any workflow scheme to BPMN 2.0 XML (for bpmn.io) and to
   Mermaid state diagrams (for inline rendering inside ArcHub knowledge pages).
-* :mod:`tickets` — the Service Desk domain: tickets (incident / service request /
-  problem / change), priorities, SLA policies and cloud-resource context.
+* :mod:`request` — the Service Desk domain in ITIL terms: requests (incident /
+  service request / problem / change), priorities, SLA policies and cloud context.
+* :mod:`repository` — SQLite (and in-memory) persistence for requests.
 * :mod:`service_desk` — the :class:`ServiceDesk` application facade that binds the
-  workflow engine to the ticket store and ships default cloud-provider schemes.
+  workflow engine to the request repository and ships default cloud-provider schemes.
 * :mod:`plugin` — the plugin entrypoint and the extension implementations it
   registers (workflow action, BPMN macro, dashboard widget, page action, cloud
   connector and an offline triage LLM tool).
@@ -20,14 +21,19 @@ into an IT Service Management (ITSM) Service Desk for a cloud provider:
 from __future__ import annotations
 
 from archub_cms.extensibility.example_plugins.itsm.bpmn import to_bpmn_xml, to_mermaid
-from archub_cms.extensibility.example_plugins.itsm.service_desk import ServiceDesk
-from archub_cms.extensibility.example_plugins.itsm.tickets import (
+from archub_cms.extensibility.example_plugins.itsm.repository import (
+    InMemoryRequestRepository,
+    RequestRepository,
+    SqliteRequestRepository,
+)
+from archub_cms.extensibility.example_plugins.itsm.request import (
     CloudResource,
     Priority,
+    Request,
+    RequestType,
     SlaPolicy,
-    Ticket,
-    TicketType,
 )
+from archub_cms.extensibility.example_plugins.itsm.service_desk import ServiceDesk
 from archub_cms.extensibility.example_plugins.itsm.workflow import (
     StatusCategory,
     WorkflowError,
@@ -39,12 +45,15 @@ from archub_cms.extensibility.example_plugins.itsm.workflow import (
 
 __all__ = [
     "CloudResource",
+    "InMemoryRequestRepository",
     "Priority",
+    "Request",
+    "RequestRepository",
+    "RequestType",
     "ServiceDesk",
     "SlaPolicy",
+    "SqliteRequestRepository",
     "StatusCategory",
-    "Ticket",
-    "TicketType",
     "WorkflowError",
     "WorkflowScheme",
     "WorkflowStatus",

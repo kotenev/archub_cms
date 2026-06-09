@@ -8,7 +8,7 @@ transitions), may declare **conditions** (named predicates that must all pass) a
 **post-functions** (named side-effects the application layer applies to the issue).
 
 The engine is deliberately framework- and storage-agnostic so the same scheme can
-drive a ticket, be validated for reachability, and be serialized to BPMN.
+drive a request, be validated for reachability, and be serialized to BPMN.
 """
 
 from __future__ import annotations

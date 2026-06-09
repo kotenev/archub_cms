@@ -1,8 +1,9 @@
-"""Tests for the ITSM Service Desk plugin: workflow engine, BPMN export, tickets.
+"""Tests for the ITSM Service Desk plugin: workflow engine, BPMN export, requests.
 
 Covers the customizable Jira-style workflow engine, the BPMN 2.0 / Mermaid
-serializers, the Service Desk ticket lifecycle with SLA + post-functions, and the
-plugin loading end-to-end through the PluginHost with all six extensions wired.
+serializers, the ITIL request lifecycle with SLA + post-functions, SQLite
+persistence, and the plugin loading end-to-end through the PluginHost with all six
+extensions wired.
 """
 
 from __future__ import annotations
@@ -12,15 +13,16 @@ from xml.etree import ElementTree as ET
 import pytest
 
 from archub_cms.extensibility.example_plugins.itsm.bpmn import to_bpmn_xml, to_mermaid
+from archub_cms.extensibility.example_plugins.itsm.repository import SqliteRequestRepository
+from archub_cms.extensibility.example_plugins.itsm.request import (
+    CloudResource,
+    Priority,
+    RequestType,
+    SlaPolicy,
+)
 from archub_cms.extensibility.example_plugins.itsm.service_desk import (
     ServiceDesk,
     build_default_schemes,
-)
-from archub_cms.extensibility.example_plugins.itsm.tickets import (
-    CloudResource,
-    Priority,
-    SlaPolicy,
-    TicketType,
 )
 from archub_cms.extensibility.example_plugins.itsm.workflow import (
     StatusCategory,
@@ -28,6 +30,7 @@ from archub_cms.extensibility.example_plugins.itsm.workflow import (
     WorkflowScheme,
 )
 from archub_cms.extensibility.host import PluginHost
+from archub_cms.infrastructure.db.database import Database
 from archub_cms.kernel.events import get_event_bus
 from archub_cms.services.cms import get_archub_cms_service
 
@@ -157,79 +160,80 @@ def test_mermaid_contains_states_and_transitions():
     assert "Start Progress" in mermaid
 
 
-# -- ticket lifecycle ------------------------------------------------------
+# -- request lifecycle -----------------------------------------------------
 
 
 def _desk(now: float = 1000.0) -> ServiceDesk:
     return ServiceDesk(clock=lambda: now)
 
 
-def test_create_ticket_sets_initial_status_and_sla():
+def test_create_request_sets_initial_status_and_sla():
     desk = _desk()
-    ticket = desk.create_ticket(
-        type=TicketType.INCIDENT, summary="DB down", priority=Priority.CRITICAL, reporter="ann"
+    request = desk.create_request(
+        type=RequestType.INCIDENT, summary="DB down", priority=Priority.CRITICAL, reporter="ann"
     )
-    assert ticket.key == "SD-1"
-    assert ticket.status_id == "open"
+    assert request.key == "REQ-1"
+    assert request.status_id == "open"
     # critical → 15 min response, 240 min resolution from the standard policy
-    assert ticket.sla_response_due == 1000.0 + 15 * 60
-    assert ticket.sla_resolution_due == 1000.0 + 240 * 60
-    assert ticket.history[0].kind == "created"
+    assert request.sla_response_due == 1000.0 + 15 * 60
+    assert request.sla_resolution_due == 1000.0 + 240 * 60
+    assert request.history[0].kind == "created"
 
 
 def test_full_incident_lifecycle_with_post_functions():
     desk = _desk()
-    ticket = desk.create_ticket(type=TicketType.INCIDENT, summary="API 5xx")
-    desk.transition(ticket.key, "triage", actor="ann", actor_role="agent")
+    request = desk.create_request(type=RequestType.INCIDENT, summary="API 5xx")
+    desk.transition(request.key, "triage", actor="ann", actor_role="agent")
     # 'start' is gated on is_agent and auto-assigns the actor.
-    desk.transition(ticket.key, "start", actor="bob", actor_role="agent")
-    assert ticket.status_id == "in_progress"
-    assert ticket.assignee == "bob"
+    desk.transition(request.key, "start", actor="bob", actor_role="agent")
     # 'resolve' requires a resolution; supplying it satisfies the condition.
-    desk.transition(ticket.key, "resolve", actor="bob", resolution="Restarted node")
-    assert ticket.status_id == "resolved"
-    assert ticket.resolved_at == 1000.0
-    assert ticket.resolution == "Restarted node"
+    resolved = desk.transition(request.key, "resolve", actor="bob", resolution="Restarted node")
+    assert resolved.status_id == "resolved"
+    assert resolved.assignee == "bob"
+    assert resolved.resolved_at == 1000.0
+    assert resolved.resolution == "Restarted node"
 
 
 def test_resolve_without_resolution_blocked():
     desk = _desk()
-    ticket = desk.create_ticket(type=TicketType.INCIDENT, summary="x")
-    desk.transition(ticket.key, "triage", actor="ann", actor_role="agent")
-    desk.transition(ticket.key, "start", actor="ann", actor_role="agent")
+    request = desk.create_request(type=RequestType.INCIDENT, summary="x")
+    desk.transition(request.key, "triage", actor="ann", actor_role="agent")
+    desk.transition(request.key, "start", actor="ann", actor_role="agent")
     with pytest.raises(WorkflowError):
-        desk.transition(ticket.key, "resolve", actor="ann")  # no resolution set
+        desk.transition(request.key, "resolve", actor="ann")  # no resolution set
 
 
 def test_global_cancel_from_any_status():
     desk = _desk()
-    ticket = desk.create_ticket(type=TicketType.INCIDENT, summary="x")
-    desk.transition(ticket.key, "cancel", actor="ann")
-    assert ticket.status_id == "cancelled"
+    request = desk.create_request(type=RequestType.INCIDENT, summary="x")
+    cancelled = desk.transition(request.key, "cancel", actor="ann")
+    assert cancelled.status_id == "cancelled"
 
 
 def test_assign_field_edit():
     desk = _desk()
-    ticket = desk.create_ticket(type=TicketType.INCIDENT, summary="x")
-    desk.assign(ticket.key, "carol", actor="lead")
-    assert ticket.assignee == "carol"
-    assert ticket.history[-1].kind == "assigned"
+    request = desk.create_request(type=RequestType.INCIDENT, summary="x")
+    updated = desk.assign(request.key, "carol", actor="lead")
+    assert updated.assignee == "carol"
+    assert updated.history[-1].kind == "assigned"
 
 
 def test_change_management_requires_approval():
     desk = _desk()
-    ticket = desk.create_ticket(type=TicketType.CHANGE, summary="Upgrade cluster")
-    desk.transition(ticket.key, "submit", actor="dev")
+    request = desk.create_request(type=RequestType.CHANGE, summary="Upgrade cluster")
+    desk.transition(request.key, "submit", actor="dev")
     with pytest.raises(WorkflowError):
-        desk.transition(ticket.key, "approve", actor="mgr", actor_role="manager")  # not approved
-    desk.transition(ticket.key, "approve", actor="mgr", actor_role="manager", approved=True)
-    assert ticket.status_id == "approved"
+        desk.transition(request.key, "approve", actor="mgr", actor_role="manager")  # not approved
+    approved = desk.transition(
+        request.key, "approve", actor="mgr", actor_role="manager", approved=True
+    )
+    assert approved.status_id == "approved"
 
 
 def test_queue_summary_counts_and_breaches():
     desk = ServiceDesk(clock=lambda: 1_000_000.0)
     desk.sla = SlaPolicy(targets={"medium": (1, 1)})  # 1-minute targets to force a breach
-    t = desk.create_ticket(type=TicketType.INCIDENT, summary="old", priority=Priority.MEDIUM)
+    desk.create_request(type=RequestType.INCIDENT, summary="old", priority=Priority.MEDIUM)
     # Advance the clock past the SLA windows.
     desk._clock = lambda: 1_000_000.0 + 10_000
     summary = desk.queue_summary()
@@ -238,7 +242,46 @@ def test_queue_summary_counts_and_breaches():
     assert summary["by_category"]["todo"] == 1
     assert summary["sla_response_breaches"] == 1
     assert summary["sla_resolution_breaches"] == 1
-    assert t.assignee == ""
+
+
+# -- SQLite persistence ----------------------------------------------------
+
+
+def test_sqlite_persistence_survives_new_instance(tmp_path):
+    db_path = str(tmp_path / "itsm.db")
+    desk = ServiceDesk(database=Database(db_path), clock=lambda: 1000.0)
+    request = desk.create_request(type=RequestType.INCIDENT, summary="DB down", reporter="ann")
+    desk.transition(request.key, "triage", actor="ann", actor_role="agent")
+
+    # A fresh ServiceDesk over the same database file must see the persisted request.
+    desk2 = ServiceDesk(database=Database(db_path), clock=lambda: 2000.0)
+    loaded = desk2.get(request.key)
+    assert loaded.status_id == "triaged"
+    assert loaded.summary == "DB down"
+    assert loaded.reporter == "ann"
+    assert any(event.kind == "transition" for event in loaded.history)
+
+
+def test_sqlite_key_sequence_is_monotonic(tmp_path):
+    db_path = str(tmp_path / "itsm.db")
+    desk = ServiceDesk(database=Database(db_path), project_prefix="INC", clock=lambda: 1.0)
+    a = desk.create_request(type=RequestType.INCIDENT, summary="one")
+    b = desk.create_request(type=RequestType.INCIDENT, summary="two")
+    assert a.key == "INC-1"
+    assert b.key == "INC-2"
+    # Sequence continues across a new ServiceDesk on the same file.
+    desk2 = ServiceDesk(database=Database(db_path), project_prefix="INC", clock=lambda: 2.0)
+    c = desk2.create_request(type=RequestType.INCIDENT, summary="three")
+    assert c.key == "INC-3"
+
+
+def test_sqlite_repository_lists_in_creation_order(tmp_path):
+    repo = SqliteRequestRepository(Database(str(tmp_path / "itsm.db")))
+    desk = ServiceDesk(repository=repo, clock=lambda: 5.0)
+    desk.create_request(type=RequestType.INCIDENT, summary="first")
+    desk.create_request(type=RequestType.CHANGE, summary="second")
+    keys = [r.key for r in repo.list_all()]
+    assert keys == ["REQ-1", "REQ-2"]
 
 
 # -- plugin wiring through the host ----------------------------------------
@@ -265,9 +308,14 @@ def test_plugin_loads_with_all_extensions(host):
     assert "itsm.transition" in host.workflow_actions
     assert "bpmn" in host.macros
     assert "itsm_queue" in host.dashboard_widgets
-    assert "itsm.raise_ticket" in host.page_actions
+    assert "itsm.log_request" in host.page_actions
     assert "itsm.cloud" in host.connectors
     assert "itsm.triage" in host.llm_tools
+
+
+def test_plugin_uses_sqlite_repository(host):
+    plugin = host.plugin_instance("archub.itsm.service_desk")
+    assert isinstance(plugin.desk.repository, SqliteRequestRepository)
 
 
 def test_bpmn_macro_renders_through_host(host):
@@ -276,15 +324,15 @@ def test_bpmn_macro_renders_through_host(host):
     assert "stateDiagram-v2" in rendered
 
 
-def test_workflow_action_drives_ticket(host):
+def test_workflow_action_drives_request(host):
     plugin = host.plugin_instance("archub.itsm.service_desk")
-    ticket = plugin.desk.create_ticket(type=TicketType.INCIDENT, summary="net down")
+    request = plugin.desk.create_request(type=RequestType.INCIDENT, summary="net down")
     action = host.workflow_actions["itsm.transition"]
-    ctx = {"ticket": ticket.key, "transition": "triage", "actor": "ann", "actor_role": "agent"}
+    ctx = {"request": request.key, "transition": "triage", "actor": "ann", "actor_role": "agent"}
     assert action.can_execute(ctx) is True
     result = action.execute(ctx)
     assert result["ok"] is True
-    assert result["ticket"]["status_id"] == "triaged"
+    assert result["request"]["status_id"] == "triaged"
 
 
 def test_cloud_connector_pulls_alerts_as_incidents(host):
@@ -299,7 +347,7 @@ def test_cloud_connector_pulls_alerts_as_incidents(host):
     )
     assert len(created) == 2
     assert created[0]["priority"] == "critical"
-    assert connector.sync_push([{"key": "SD-1"}, {"no_key": True}]) == 1
+    assert connector.sync_push([{"key": "REQ-1"}, {"no_key": True}]) == 1
 
 
 def test_triage_tool_classifies_offline(host):
@@ -308,13 +356,13 @@ def test_triage_tool_classifies_offline(host):
     assert "priority=critical" in out
 
 
-def test_raise_ticket_page_action(host):
-    action = host.page_actions["itsm.raise_ticket"]
+def test_log_request_page_action(host):
+    action = host.page_actions["itsm.log_request"]
     result = action.execute(
         {"title": "Need more quota", "type": "service_request", "actor": "dev", "service": "s3"}
     )
-    assert result["action"] == "ticket_created"
-    assert result["ticket"]["type"] == "service_request"
+    assert result["action"] == "request_logged"
+    assert result["request"]["type"] == "service_request"
 
 
 def test_cloud_resource_roundtrip():

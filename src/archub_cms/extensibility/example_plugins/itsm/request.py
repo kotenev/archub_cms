@@ -1,9 +1,10 @@
-"""The Service Desk domain: tickets, priorities, SLA policies and cloud context.
+"""The Service Desk domain in ITIL terms: requests, priorities, SLAs, cloud context.
 
-A :class:`Ticket` is the aggregate the workflow engine drives. It carries a
+A :class:`Request` is the ITIL *record* the workflow engine drives — an Incident,
+Service Request, Problem or Change logged at the service desk. It carries a
 cloud-provider :class:`CloudResource` context (so an incident can be raised against
 a specific managed service in a region) and SLA due-times derived from an
-:class:`SlaPolicy`, recording every state change in its :attr:`Ticket.history`.
+:class:`SlaPolicy`, recording every state change in its :attr:`Request.history`.
 """
 
 from __future__ import annotations
@@ -11,24 +12,22 @@ from __future__ import annotations
 __all__ = [
     "CloudResource",
     "Priority",
+    "Request",
+    "RequestEvent",
+    "RequestType",
     "SlaPolicy",
-    "Ticket",
-    "TicketEvent",
-    "TicketType",
 ]
 
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
-_MINUTE = 60.0
-
 # Priority ordering, low → critical, used for SLA lookups and triage scoring.
 _PRIORITY_ORDER = ("low", "medium", "high", "critical")
 
 
-class TicketType(StrEnum):
-    """ITIL-aligned Service Desk request types."""
+class RequestType(StrEnum):
+    """ITIL-aligned service-desk request types."""
 
     INCIDENT = "incident"
     SERVICE_REQUEST = "service_request"
@@ -49,7 +48,7 @@ class Priority(StrEnum):
 
 @dataclass(frozen=True)
 class CloudResource:
-    """The cloud-provider object a ticket concerns (provider / service / region)."""
+    """The cloud-provider object a request concerns (provider / service / region)."""
 
     provider: str = ""
     service: str = ""
@@ -88,8 +87,8 @@ class SlaPolicy:
 
 
 @dataclass(frozen=True)
-class TicketEvent:
-    """An immutable entry in a ticket's audit history."""
+class RequestEvent:
+    """An immutable entry in a request's audit history."""
 
     at: float
     actor: str
@@ -99,13 +98,22 @@ class TicketEvent:
     def as_dict(self) -> dict[str, Any]:
         return {"at": self.at, "actor": self.actor, "kind": self.kind, "detail": self.detail}
 
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> RequestEvent:
+        return cls(
+            at=float(payload.get("at") or 0.0),
+            actor=str(payload.get("actor") or ""),
+            kind=str(payload.get("kind") or ""),
+            detail=str(payload.get("detail") or ""),
+        )
+
 
 @dataclass
-class Ticket:
-    """A Service Desk ticket driven through a customizable workflow scheme."""
+class Request:
+    """A service-desk request driven through a customizable ITIL workflow scheme."""
 
     key: str
-    type: TicketType
+    type: RequestType
     summary: str
     scheme_key: str
     status_id: str
@@ -120,16 +128,16 @@ class Ticket:
     resolved_at: float | None = None
     sla_response_due: float | None = None
     sla_resolution_due: float | None = None
-    history: list[TicketEvent] = field(default_factory=list)
+    history: list[RequestEvent] = field(default_factory=list)
 
-    def record(self, event: TicketEvent) -> None:
+    def record(self, event: RequestEvent) -> None:
         self.history.append(event)
         self.updated_at = event.at
 
     def response_breached(self, now: float) -> bool:
         if self.sla_response_due is None:
             return False
-        # Considered met once an agent is assigned (first response proxy).
+        # Considered met once an agent is assigned (first-response proxy).
         return not self.assignee and now > self.sla_response_due
 
     def resolution_breached(self, now: float) -> bool:

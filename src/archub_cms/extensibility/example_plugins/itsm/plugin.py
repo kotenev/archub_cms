@@ -1,16 +1,16 @@
 """The ITSM Service Desk plugin entrypoint and the extensions it registers.
 
-``setup`` builds one shared :class:`ServiceDesk` (seeded from plugin settings) and
-registers six extensions against ArcHub's SPI:
+``setup`` builds one shared :class:`ServiceDesk` (seeded from plugin settings and
+backed by SQLite) and registers six extensions against ArcHub's SPI:
 
-* :class:`ServiceDeskWorkflowAction` (``WorkflowActionExt``) — drive a ticket through
-  its customizable, Jira-style workflow.
+* :class:`ServiceDeskWorkflowAction` (``WorkflowActionExt``) — drive a request through
+  its customizable, Jira-style ITIL workflow.
 * :class:`BpmnDiagramMacro` (``MacroExt``) — ``{{ bpmn scheme=incident }}`` embeds a
   Mermaid (or BPMN-XML) view of any workflow scheme into a knowledge page.
-* :class:`ServiceDeskWidget` (``DashboardWidgetExt``) — the live ticket queue/SLA tile.
-* :class:`RaiseTicketAction` (``PageActionExt``) — "Raise Service Desk ticket" from a page.
+* :class:`ServiceDeskWidget` (``DashboardWidgetExt``) — the live request queue/SLA tile.
+* :class:`LogRequestAction` (``PageActionExt``) — "Log Service Desk Request" from a page.
 * :class:`CloudAlertConnector` (``ConnectorExt``) — pull cloud alerts in as incidents,
-  push ticket updates back to the provider.
+  push request updates back to the provider.
 * :class:`TriageTool` (``LLMToolExt``) — offline heuristic that suggests type/priority.
 """
 
@@ -21,14 +21,16 @@ __all__ = ["ITSMServiceDeskPlugin"]
 from typing import Any
 
 from archub_cms.extensibility.example_plugins.itsm.bpmn import to_bpmn_xml, to_mermaid
-from archub_cms.extensibility.example_plugins.itsm.service_desk import ServiceDesk
-from archub_cms.extensibility.example_plugins.itsm.tickets import (
+from archub_cms.extensibility.example_plugins.itsm.request import (
     CloudResource,
     Priority,
-    Ticket,
-    TicketType,
+    Request,
+    RequestType,
 )
+from archub_cms.extensibility.example_plugins.itsm.service_desk import ServiceDesk
 from archub_cms.extensibility.example_plugins.itsm.workflow import WorkflowError
+from archub_cms.infrastructure.db.database import Database
+from archub_cms.settings import ArcHubSettings
 
 # Keywords that nudge offline triage toward a type/priority (no network needed).
 _INCIDENT_WORDS = ("down", "outage", "error", "failed", "broken", "5xx", "crash", "unavailable")
@@ -48,15 +50,17 @@ class ITSMServiceDeskPlugin:
 
     def setup(self, context: Any) -> None:
         settings = getattr(context, "settings", {}) or {}
+        db_path = str(settings.get("db_path") or ArcHubSettings.from_env().cms_db_path)
         desk = ServiceDesk(
-            project_prefix=str(settings.get("project_prefix") or "SD"),
+            project_prefix=str(settings.get("project_prefix") or "REQ"),
             provider=str(settings.get("provider") or "archub-cloud"),
+            database=Database(db_path),
         )
         self.desk = desk
         context.register(ServiceDeskWorkflowAction(desk))
         context.register(BpmnDiagramMacro(desk))
         context.register(ServiceDeskWidget(desk))
-        context.register(RaiseTicketAction(desk))
+        context.register(LogRequestAction(desk))
         context.register(CloudAlertConnector(desk))
         context.register(TriageTool(desk))
 
@@ -70,19 +74,19 @@ def _resource_from(payload: dict[str, Any], *, default_provider: str) -> CloudRe
     )
 
 
-def _ticket_summary(ticket: Ticket) -> dict[str, Any]:
+def _request_summary(request: Request) -> dict[str, Any]:
     return {
-        "key": ticket.key,
-        "type": ticket.type.value,
-        "status_id": ticket.status_id,
-        "priority": ticket.priority.value,
-        "assignee": ticket.assignee,
-        "summary": ticket.summary,
+        "key": request.key,
+        "type": request.type.value,
+        "status_id": request.status_id,
+        "priority": request.priority.value,
+        "assignee": request.assignee,
+        "summary": request.summary,
     }
 
 
 class ServiceDeskWorkflowAction:
-    """Drive a ticket through its workflow — the customizable transition action."""
+    """Drive a request through its workflow — the customizable transition action."""
 
     action_name = "itsm.transition"
 
@@ -90,7 +94,7 @@ class ServiceDeskWorkflowAction:
         self._desk = desk
 
     def can_execute(self, context: dict[str, Any]) -> bool:
-        key = str(context.get("ticket") or "")
+        key = str(context.get("request") or "")
         transition_id = str(context.get("transition") or "")
         if not key or not transition_id:
             return False
@@ -107,8 +111,8 @@ class ServiceDeskWorkflowAction:
 
     def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         try:
-            ticket = self._desk.transition(
-                str(context.get("ticket") or ""),
+            request = self._desk.transition(
+                str(context.get("request") or ""),
                 str(context.get("transition") or ""),
                 actor=str(context.get("actor") or ""),
                 actor_role=str(context.get("actor_role") or ""),
@@ -117,7 +121,7 @@ class ServiceDeskWorkflowAction:
             )
         except WorkflowError as exc:
             return {"ok": False, "error": str(exc)}
-        return {"ok": True, "ticket": _ticket_summary(ticket)}
+        return {"ok": True, "request": _request_summary(request)}
 
 
 class BpmnDiagramMacro:
@@ -140,7 +144,7 @@ class BpmnDiagramMacro:
 
 
 class ServiceDeskWidget:
-    """Dashboard tile: ticket queue counts and SLA breaches."""
+    """Dashboard tile: request queue counts and SLA breaches."""
 
     widget_type = "itsm_queue"
     widget_name = "Service Desk Queue"
@@ -157,11 +161,11 @@ class ServiceDeskWidget:
         }
 
 
-class RaiseTicketAction:
-    """Page context-menu action: raise a Service Desk ticket about this page."""
+class LogRequestAction:
+    """Page context-menu action: log a service-desk request about this page."""
 
-    action_id = "itsm.raise_ticket"
-    action_label = "Raise Service Desk Ticket"
+    action_id = "itsm.log_request"
+    action_label = "Log Service Desk Request"
     icon = "🎫"
 
     def __init__(self, desk: ServiceDesk) -> None:
@@ -172,25 +176,25 @@ class RaiseTicketAction:
 
     def execute(self, page_context: dict[str, Any]) -> dict[str, Any]:
         summary = str(
-            page_context.get("summary") or page_context.get("title") or "Service desk ticket"
+            page_context.get("summary") or page_context.get("title") or "Service desk request"
         )
         type_value = str(page_context.get("type") or "service_request")
         try:
-            ticket_type = TicketType(type_value)
+            request_type = RequestType(type_value)
         except ValueError:
-            ticket_type = TicketType.SERVICE_REQUEST
-        ticket = self._desk.create_ticket(
-            type=ticket_type,
+            request_type = RequestType.SERVICE_REQUEST
+        request = self._desk.create_request(
+            type=request_type,
             summary=summary,
             description=str(page_context.get("route_path") or ""),
             reporter=str(page_context.get("actor") or page_context.get("user") or ""),
             cloud=_resource_from(page_context, default_provider=self._desk.provider),
         )
-        return {"action": "ticket_created", "ticket": _ticket_summary(ticket)}
+        return {"action": "request_logged", "request": _request_summary(request)}
 
 
 class CloudAlertConnector:
-    """Bi-directional cloud-provider connector (alerts in, ticket updates out)."""
+    """Bi-directional cloud-provider connector (alerts in, request updates out)."""
 
     connector_id = "itsm.cloud"
     target_system = "cloud-monitoring"
@@ -199,7 +203,7 @@ class CloudAlertConnector:
         self._desk = desk
 
     def sync_pull(self, config: dict[str, Any]) -> list[dict[str, Any]]:
-        """Turn provider monitoring alerts into incident tickets."""
+        """Turn provider monitoring alerts into incident requests."""
 
         created: list[dict[str, Any]] = []
         for alert in config.get("alerts", ()):
@@ -212,25 +216,25 @@ class CloudAlertConnector:
                 "warning": Priority.MEDIUM,
                 "low": Priority.LOW,
             }.get(severity, Priority.MEDIUM)
-            ticket = self._desk.create_ticket(
-                type=TicketType.INCIDENT,
+            request = self._desk.create_request(
+                type=RequestType.INCIDENT,
                 summary=str(alert.get("title") or alert.get("summary") or "Cloud alert"),
                 description=str(alert.get("description") or ""),
                 priority=priority,
                 reporter=str(alert.get("source") or "cloud-monitoring"),
                 cloud=_resource_from(alert, default_provider=self._desk.provider),
             )
-            created.append(_ticket_summary(ticket))
+            created.append(_request_summary(request))
         return created
 
     def sync_push(self, items: list[dict[str, Any]]) -> int:
-        """Acknowledge pushing ticket updates to the provider (count delivered)."""
+        """Acknowledge pushing request updates to the provider (count delivered)."""
 
         return len([item for item in items if item.get("key")])
 
 
 class TriageTool:
-    """Offline triage: suggest a ticket type and priority from free text."""
+    """Offline triage: suggest a request type and priority from free text."""
 
     name = "itsm.triage"
 
@@ -239,23 +243,23 @@ class TriageTool:
 
     def run(self, arguments: dict[str, Any]) -> str:
         text = str(arguments.get("text") or arguments.get("description") or "").lower()
-        ticket_type = self._classify_type(text)
+        request_type = self._classify_type(text)
         priority = self._classify_priority(text)
-        scheme = self._desk.scheme_for(ticket_type)
+        scheme = self._desk.scheme_for(request_type)
         return (
-            f"type={ticket_type.value} priority={priority.value} "
+            f"type={request_type.value} priority={priority.value} "
             f"scheme={scheme.key} initial_status={scheme.initial_status_id}"
         )
 
     @staticmethod
-    def _classify_type(text: str) -> TicketType:
+    def _classify_type(text: str) -> RequestType:
         if any(word in text for word in _CHANGE_WORDS):
-            return TicketType.CHANGE
+            return RequestType.CHANGE
         if any(word in text for word in _INCIDENT_WORDS):
-            return TicketType.INCIDENT
+            return RequestType.INCIDENT
         if any(word in text for word in _REQUEST_WORDS):
-            return TicketType.SERVICE_REQUEST
-        return TicketType.INCIDENT
+            return RequestType.SERVICE_REQUEST
+        return RequestType.INCIDENT
 
     @staticmethod
     def _classify_priority(text: str) -> Priority:

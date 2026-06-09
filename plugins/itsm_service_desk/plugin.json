@@ -5,18 +5,18 @@
   "capability": "workflow",
   "runtime": "python",
   "entrypoint": "archub_cms.extensibility.example_plugins.itsm.plugin:ITSMServiceDeskPlugin",
-  "description": "Cloud-provider Service Desk: Jira-style customizable ticket workflows with BPMN visualization, SLA tracking, a queue dashboard widget, a cloud-alert connector and offline triage.",
+  "description": "Cloud-provider Service Desk: Jira-style customizable ITIL request workflows (incident / service request / problem / change) with BPMN visualization, SLA tracking, SQLite persistence, a queue dashboard widget, a cloud-alert connector and offline triage.",
   "provider": "archub",
   "permissions": [
     "workflow:read",
     "workflow:write",
-    "tickets:read",
-    "tickets:write",
+    "requests:read",
+    "requests:write",
     "connector:cloud"
   ],
-  "tags": ["itsm", "service-desk", "jira", "bpmn", "cloud", "sla"],
+  "tags": ["itsm", "itil", "service-desk", "jira", "bpmn", "cloud", "sla"],
   "settings_schema": {
-    "project_prefix": "SD",
+    "project_prefix": "REQ",
     "provider": "archub-cloud"
   },
   "enabled_by_default": true
