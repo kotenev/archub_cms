@@ -1,0 +1,266 @@
+"""The ITSM Service Desk plugin entrypoint and the extensions it registers.
+
+``setup`` builds one shared :class:`ServiceDesk` (seeded from plugin settings) and
+registers six extensions against ArcHub's SPI:
+
+* :class:`ServiceDeskWorkflowAction` (``WorkflowActionExt``) — drive a ticket through
+  its customizable, Jira-style workflow.
+* :class:`BpmnDiagramMacro` (``MacroExt``) — ``{{ bpmn scheme=incident }}`` embeds a
+  Mermaid (or BPMN-XML) view of any workflow scheme into a knowledge page.
+* :class:`ServiceDeskWidget` (``DashboardWidgetExt``) — the live ticket queue/SLA tile.
+* :class:`RaiseTicketAction` (``PageActionExt``) — "Raise Service Desk ticket" from a page.
+* :class:`CloudAlertConnector` (``ConnectorExt``) — pull cloud alerts in as incidents,
+  push ticket updates back to the provider.
+* :class:`TriageTool` (``LLMToolExt``) — offline heuristic that suggests type/priority.
+"""
+
+from __future__ import annotations
+
+__all__ = ["ITSMServiceDeskPlugin"]
+
+from typing import Any
+
+from archub_cms.extensibility.example_plugins.itsm.bpmn import to_bpmn_xml, to_mermaid
+from archub_cms.extensibility.example_plugins.itsm.service_desk import ServiceDesk
+from archub_cms.extensibility.example_plugins.itsm.tickets import (
+    CloudResource,
+    Priority,
+    Ticket,
+    TicketType,
+)
+from archub_cms.extensibility.example_plugins.itsm.workflow import WorkflowError
+
+# Keywords that nudge offline triage toward a type/priority (no network needed).
+_INCIDENT_WORDS = ("down", "outage", "error", "failed", "broken", "5xx", "crash", "unavailable")
+_REQUEST_WORDS = ("request", "access", "provision", "quota", "new ", "please", "need")
+_CHANGE_WORDS = ("deploy", "upgrade", "migrate", "release", "change", "rollout")
+_CRITICAL_WORDS = ("production", "prod", "outage", "data loss", "critical", "p1", "sev1")
+_HIGH_WORDS = ("degraded", "slow", "intermittent", "p2", "sev2")
+
+
+class ITSMServiceDeskPlugin:
+    """In-process ArcHub plugin exposing a cloud Service Desk with custom workflows."""
+
+    plugin_id = "archub.itsm.service_desk"
+
+    def __init__(self) -> None:
+        self.desk: ServiceDesk | None = None
+
+    def setup(self, context: Any) -> None:
+        settings = getattr(context, "settings", {}) or {}
+        self.desk = ServiceDesk(
+            project_prefix=str(settings.get("project_prefix") or "SD"),
+            provider=str(settings.get("provider") or "archub-cloud"),
+        )
+        desk = self.desk  # definite non-None after assignment
+        context.register(ServiceDeskWorkflowAction(desk))
+        context.register(BpmnDiagramMacro(desk))
+        context.register(ServiceDeskWidget(desk))
+        context.register(RaiseTicketAction(desk))
+        context.register(CloudAlertConnector(desk))
+        context.register(TriageTool(desk))
+
+
+def _resource_from(payload: dict[str, Any], *, default_provider: str) -> CloudResource:
+    return CloudResource(
+        provider=str(payload.get("provider") or default_provider),
+        service=str(payload.get("service") or ""),
+        region=str(payload.get("region") or ""),
+        resource_id=str(payload.get("resource_id") or payload.get("resource") or ""),
+    )
+
+
+def _ticket_summary(ticket: Ticket) -> dict[str, Any]:
+    return {
+        "key": ticket.key,
+        "type": ticket.type.value,
+        "status_id": ticket.status_id,
+        "priority": ticket.priority.value,
+        "assignee": ticket.assignee,
+        "summary": ticket.summary,
+    }
+
+
+class ServiceDeskWorkflowAction:
+    """Drive a ticket through its workflow — the customizable transition action."""
+
+    action_name = "itsm.transition"
+
+    def __init__(self, desk: ServiceDesk) -> None:
+        self._desk = desk
+
+    def can_execute(self, context: dict[str, Any]) -> bool:
+        key = str(context.get("ticket") or "")
+        transition_id = str(context.get("transition") or "")
+        if not key or not transition_id:
+            return False
+        try:
+            available = {
+                t["id"]
+                for t in self._desk.available_transitions(
+                    key, actor_role=str(context.get("actor_role") or "")
+                )
+            }
+        except WorkflowError:
+            return False
+        return transition_id in available
+
+    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
+        try:
+            ticket = self._desk.transition(
+                str(context.get("ticket") or ""),
+                str(context.get("transition") or ""),
+                actor=str(context.get("actor") or ""),
+                actor_role=str(context.get("actor_role") or ""),
+                resolution=str(context.get("resolution") or ""),
+                approved=bool(context.get("approved")),
+            )
+        except WorkflowError as exc:
+            return {"ok": False, "error": str(exc)}
+        return {"ok": True, "ticket": _ticket_summary(ticket)}
+
+
+class BpmnDiagramMacro:
+    """Render a workflow scheme as BPMN/Mermaid inside a knowledge page."""
+
+    macro_name = "bpmn"
+
+    def __init__(self, desk: ServiceDesk) -> None:
+        self._desk = desk
+
+    def expand(self, arguments: dict[str, Any]) -> str:
+        key = str(arguments.get("scheme") or "incident")
+        scheme = self._desk.schemes.get(key)
+        if scheme is None:
+            available = ", ".join(sorted(self._desk.schemes)) or "(none)"
+            return f"<!-- unknown workflow scheme '{key}'; available: {available} -->"
+        if str(arguments.get("format") or "mermaid").lower() == "bpmn":
+            return to_bpmn_xml(scheme)
+        return f"```mermaid\n{to_mermaid(scheme)}\n```"
+
+
+class ServiceDeskWidget:
+    """Dashboard tile: ticket queue counts and SLA breaches."""
+
+    widget_type = "itsm_queue"
+    widget_name = "Service Desk Queue"
+
+    def __init__(self, desk: ServiceDesk) -> None:
+        self._desk = desk
+
+    def render(self, config: dict[str, Any]) -> dict[str, Any]:
+        summary = self._desk.queue_summary()
+        return {
+            "widget_type": self.widget_type,
+            "widget_name": self.widget_name,
+            **summary,
+        }
+
+
+class RaiseTicketAction:
+    """Page context-menu action: raise a Service Desk ticket about this page."""
+
+    action_id = "itsm.raise_ticket"
+    action_label = "Raise Service Desk Ticket"
+    icon = "🎫"
+
+    def __init__(self, desk: ServiceDesk) -> None:
+        self._desk = desk
+
+    def is_available(self, page_context: dict[str, Any]) -> bool:
+        return True
+
+    def execute(self, page_context: dict[str, Any]) -> dict[str, Any]:
+        summary = str(
+            page_context.get("summary") or page_context.get("title") or "Service desk ticket"
+        )
+        type_value = str(page_context.get("type") or "service_request")
+        try:
+            ticket_type = TicketType(type_value)
+        except ValueError:
+            ticket_type = TicketType.SERVICE_REQUEST
+        ticket = self._desk.create_ticket(
+            type=ticket_type,
+            summary=summary,
+            description=str(page_context.get("route_path") or ""),
+            reporter=str(page_context.get("actor") or page_context.get("user") or ""),
+            cloud=_resource_from(page_context, default_provider=self._desk.provider),
+        )
+        return {"action": "ticket_created", "ticket": _ticket_summary(ticket)}
+
+
+class CloudAlertConnector:
+    """Bi-directional cloud-provider connector (alerts in, ticket updates out)."""
+
+    connector_id = "itsm.cloud"
+    target_system = "cloud-monitoring"
+
+    def __init__(self, desk: ServiceDesk) -> None:
+        self._desk = desk
+
+    def sync_pull(self, config: dict[str, Any]) -> list[dict[str, Any]]:
+        """Turn provider monitoring alerts into incident tickets."""
+
+        created: list[dict[str, Any]] = []
+        for alert in config.get("alerts", ()):
+            if not isinstance(alert, dict):
+                continue
+            severity = str(alert.get("severity") or "medium").lower()
+            priority = {
+                "critical": Priority.CRITICAL,
+                "high": Priority.HIGH,
+                "warning": Priority.MEDIUM,
+                "low": Priority.LOW,
+            }.get(severity, Priority.MEDIUM)
+            ticket = self._desk.create_ticket(
+                type=TicketType.INCIDENT,
+                summary=str(alert.get("title") or alert.get("summary") or "Cloud alert"),
+                description=str(alert.get("description") or ""),
+                priority=priority,
+                reporter=str(alert.get("source") or "cloud-monitoring"),
+                cloud=_resource_from(alert, default_provider=self._desk.provider),
+            )
+            created.append(_ticket_summary(ticket))
+        return created
+
+    def sync_push(self, items: list[dict[str, Any]]) -> int:
+        """Acknowledge pushing ticket updates to the provider (count delivered)."""
+
+        return len([item for item in items if item.get("key")])
+
+
+class TriageTool:
+    """Offline triage: suggest a ticket type and priority from free text."""
+
+    name = "itsm.triage"
+
+    def __init__(self, desk: ServiceDesk) -> None:
+        self._desk = desk
+
+    def run(self, arguments: dict[str, Any]) -> str:
+        text = str(arguments.get("text") or arguments.get("description") or "").lower()
+        ticket_type = self._classify_type(text)
+        priority = self._classify_priority(text)
+        scheme = self._desk.scheme_for(ticket_type)
+        return (
+            f"type={ticket_type.value} priority={priority.value} "
+            f"scheme={scheme.key} initial_status={scheme.initial_status_id}"
+        )
+
+    @staticmethod
+    def _classify_type(text: str) -> TicketType:
+        if any(word in text for word in _CHANGE_WORDS):
+            return TicketType.CHANGE
+        if any(word in text for word in _INCIDENT_WORDS):
+            return TicketType.INCIDENT
+        if any(word in text for word in _REQUEST_WORDS):
+            return TicketType.SERVICE_REQUEST
+        return TicketType.INCIDENT
+
+    @staticmethod
+    def _classify_priority(text: str) -> Priority:
+        if any(word in text for word in _CRITICAL_WORDS):
+            return Priority.CRITICAL
+        if any(word in text for word in _HIGH_WORDS):
+            return Priority.HIGH
+        return Priority.MEDIUM
