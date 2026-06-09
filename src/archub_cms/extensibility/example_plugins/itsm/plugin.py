@@ -18,9 +18,15 @@ from __future__ import annotations
 
 __all__ = ["ITSMServiceDeskPlugin"]
 
+import os
 from typing import Any
 
 from archub_cms.extensibility.example_plugins.itsm.bpmn import to_bpmn_xml, to_mermaid
+from archub_cms.extensibility.example_plugins.itsm.repository import (
+    PostgresDatabase,
+    PostgresRequestRepository,
+    SqliteRequestRepository,
+)
 from archub_cms.extensibility.example_plugins.itsm.request import (
     CloudResource,
     Priority,
@@ -31,6 +37,8 @@ from archub_cms.extensibility.example_plugins.itsm.service_desk import ServiceDe
 from archub_cms.extensibility.example_plugins.itsm.workflow import WorkflowError
 from archub_cms.infrastructure.db.database import Database
 from archub_cms.settings import ArcHubSettings
+
+_POSTGRES_ALIASES = {"postgres", "postgresql", "pg"}
 
 # Keywords that nudge offline triage toward a type/priority (no network needed).
 _INCIDENT_WORDS = ("down", "outage", "error", "failed", "broken", "5xx", "crash", "unavailable")
@@ -50,11 +58,10 @@ class ITSMServiceDeskPlugin:
 
     def setup(self, context: Any) -> None:
         settings = getattr(context, "settings", {}) or {}
-        db_path = str(settings.get("db_path") or ArcHubSettings.from_env().cms_db_path)
         desk = ServiceDesk(
             project_prefix=str(settings.get("project_prefix") or "REQ"),
             provider=str(settings.get("provider") or "archub-cloud"),
-            database=Database(db_path),
+            repository=_build_repository(settings),
         )
         self.desk = desk
         context.register(ServiceDeskWorkflowAction(desk))
@@ -63,6 +70,33 @@ class ITSMServiceDeskPlugin:
         context.register(LogRequestAction(desk))
         context.register(CloudAlertConnector(desk))
         context.register(TriageTool(desk))
+
+
+def _build_repository(
+    settings: dict[str, Any],
+) -> SqliteRequestRepository | PostgresRequestRepository:
+    """Pick the storage backend from plugin settings (SQLite by default).
+
+    ``storage: postgres`` (with a ``dsn`` setting or the ``ARCHUB_ITSM_PG_DSN``
+    environment variable) selects PostgreSQL; anything else uses SQLite at
+    ``db_path`` (the shared ArcHub database by default).
+    """
+
+    storage = str(settings.get("storage") or "sqlite").strip().lower()
+    if storage in _POSTGRES_ALIASES:
+        dsn = str(
+            settings.get("dsn")
+            or settings.get("postgres_dsn")
+            or os.environ.get("ARCHUB_ITSM_PG_DSN")
+            or ""
+        )
+        if not dsn:
+            raise RuntimeError(
+                "ITSM storage 'postgres' requires a 'dsn' setting or ARCHUB_ITSM_PG_DSN"
+            )
+        return PostgresRequestRepository(PostgresDatabase(dsn))
+    db_path = str(settings.get("db_path") or ArcHubSettings.from_env().cms_db_path)
+    return SqliteRequestRepository(Database(db_path))
 
 
 def _resource_from(payload: dict[str, Any], *, default_provider: str) -> CloudResource:

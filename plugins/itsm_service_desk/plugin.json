@@ -17,7 +17,9 @@
   "tags": ["itsm", "itil", "service-desk", "jira", "bpmn", "cloud", "sla"],
   "settings_schema": {
     "project_prefix": "REQ",
-    "provider": "archub-cloud"
+    "provider": "archub-cloud",
+    "storage": "sqlite",
+    "dsn": ""
   },
   "enabled_by_default": true
 }

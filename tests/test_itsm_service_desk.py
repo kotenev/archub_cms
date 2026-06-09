@@ -8,12 +8,18 @@ extensions wired.
 
 from __future__ import annotations
 
+import importlib.util
+import os
 from xml.etree import ElementTree as ET
 
 import pytest
 
 from archub_cms.extensibility.example_plugins.itsm.bpmn import to_bpmn_xml, to_mermaid
-from archub_cms.extensibility.example_plugins.itsm.repository import SqliteRequestRepository
+from archub_cms.extensibility.example_plugins.itsm.repository import (
+    PostgresDatabase,
+    PostgresRequestRepository,
+    SqliteRequestRepository,
+)
 from archub_cms.extensibility.example_plugins.itsm.request import (
     CloudResource,
     Priority,
@@ -282,6 +288,81 @@ def test_sqlite_repository_lists_in_creation_order(tmp_path):
     desk.create_request(type=RequestType.CHANGE, summary="second")
     keys = [r.key for r in repo.list_all()]
     assert keys == ["REQ-1", "REQ-2"]
+
+
+# -- PostgreSQL storage ----------------------------------------------------
+# Integration tests run only when ARCHUB_ITSM_PG_DSN points at a reachable
+# PostgreSQL and the optional ``psycopg`` driver is installed; otherwise they skip.
+
+_PG_DSN = os.environ.get("ARCHUB_ITSM_PG_DSN")
+_HAS_PSYCOPG = importlib.util.find_spec("psycopg") is not None
+_requires_pg = pytest.mark.skipif(
+    not (_PG_DSN and _HAS_PSYCOPG),
+    reason="set ARCHUB_ITSM_PG_DSN and install psycopg to run PostgreSQL tests",
+)
+
+
+def test_postgres_database_holds_dsn():
+    db = PostgresDatabase("postgresql://localhost/itsm")
+    assert db.dsn == "postgresql://localhost/itsm"
+
+
+@pytest.mark.skipif(_HAS_PSYCOPG, reason="psycopg installed; driver-missing path not applicable")
+def test_postgres_connect_without_driver_raises_helpful_error():
+    with pytest.raises(RuntimeError, match="psycopg"):
+        PostgresDatabase("postgresql://localhost/itsm").connect()
+
+
+@pytest.fixture
+def pg_repo():
+    db = PostgresDatabase(_PG_DSN)
+    conn = db.connect()
+    try:
+        conn.execute("DROP TABLE IF EXISTS itsm_request")
+        conn.execute("DROP TABLE IF EXISTS itsm_request_seq")
+        conn.commit()
+    finally:
+        conn.close()
+    return PostgresRequestRepository(db)
+
+
+@_requires_pg
+def test_postgres_persistence_survives_new_instance(pg_repo):
+    desk = ServiceDesk(repository=pg_repo, clock=lambda: 1000.0)
+    request = desk.create_request(type=RequestType.INCIDENT, summary="DB down", reporter="ann")
+    desk.transition(request.key, "triage", actor="ann", actor_role="agent")
+
+    desk2 = ServiceDesk(
+        repository=PostgresRequestRepository(PostgresDatabase(_PG_DSN)), clock=lambda: 2000.0
+    )
+    loaded = desk2.get(request.key)
+    assert loaded.status_id == "triaged"
+    assert loaded.summary == "DB down"
+    assert loaded.reporter == "ann"
+    assert any(event.kind == "transition" for event in loaded.history)
+
+
+@_requires_pg
+def test_postgres_key_sequence_is_monotonic(pg_repo):
+    desk = ServiceDesk(repository=pg_repo, project_prefix="INC", clock=lambda: 1.0)
+    a = desk.create_request(type=RequestType.INCIDENT, summary="one")
+    b = desk.create_request(type=RequestType.INCIDENT, summary="two")
+    assert (a.key, b.key) == ("INC-1", "INC-2")
+
+
+def test_build_repository_defaults_to_sqlite(tmp_path):
+    from archub_cms.extensibility.example_plugins.itsm.plugin import _build_repository
+
+    repo = _build_repository({"db_path": str(tmp_path / "itsm.db")})
+    assert isinstance(repo, SqliteRequestRepository)
+
+
+def test_build_repository_postgres_requires_dsn(monkeypatch):
+    from archub_cms.extensibility.example_plugins.itsm.plugin import _build_repository
+
+    monkeypatch.delenv("ARCHUB_ITSM_PG_DSN", raising=False)
+    with pytest.raises(RuntimeError, match="dsn"):
+        _build_repository({"storage": "postgres"})
 
 
 # -- plugin wiring through the host ----------------------------------------

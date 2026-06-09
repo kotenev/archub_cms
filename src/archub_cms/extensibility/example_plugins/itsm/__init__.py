@@ -23,6 +23,8 @@ from __future__ import annotations
 from archub_cms.extensibility.example_plugins.itsm.bpmn import to_bpmn_xml, to_mermaid
 from archub_cms.extensibility.example_plugins.itsm.repository import (
     InMemoryRequestRepository,
+    PostgresDatabase,
+    PostgresRequestRepository,
     RequestRepository,
     SqliteRequestRepository,
 )
@@ -46,6 +48,8 @@ from archub_cms.extensibility.example_plugins.itsm.workflow import (
 __all__ = [
     "CloudResource",
     "InMemoryRequestRepository",
+    "PostgresDatabase",
+    "PostgresRequestRepository",
     "Priority",
     "Request",
     "RequestRepository",
