@@ -15,6 +15,7 @@ __all__ = [
     "SQLitePluginStore",
 ]
 
+import importlib
 import json
 import os
 import secrets
@@ -134,10 +135,7 @@ class PluginAuditLog:
             clauses.append("action = ?")
             params.append(action)
         where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
-        sql = (
-            "SELECT * FROM archub_plugin_audit"
-            f"{where} ORDER BY created_at DESC LIMIT ?"
-        )
+        sql = f"SELECT * FROM archub_plugin_audit{where} ORDER BY created_at DESC LIMIT ?"
         params.append(limit)
         conn = self._db.connect()
         try:
@@ -277,9 +275,11 @@ class PostgresPluginStore:
         return self._dsn
 
     def connect(self) -> Any:
+        # Resolved dynamically so the optional 'psycopg' driver is not a static
+        # import dependency (keeps PyCharm/linters quiet when it is not installed).
         try:
-            import psycopg  # noinspection PyUnresolvedReferences
-            from psycopg.rows import dict_row  # noinspection PyUnresolvedReferences
+            psycopg = importlib.import_module("psycopg")
+            dict_row = importlib.import_module("psycopg.rows").dict_row
         except ModuleNotFoundError as exc:
             raise RuntimeError(
                 "PostgreSQL plugin storage requires the 'psycopg' driver "
