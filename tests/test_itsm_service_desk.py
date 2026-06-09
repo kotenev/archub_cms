@@ -451,3 +451,123 @@ def test_log_request_page_action(host):
 def test_cloud_resource_roundtrip():
     res = CloudResource(provider="aws", service="ec2", region="us-east-1", resource_id="i-123")
     assert res.as_dict()["resource_id"] == "i-123"
+
+
+# -- REST API endpoints ----------------------------------------------------
+
+
+@pytest.fixture
+def client(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from archub_cms.app import create_archub_app
+    from archub_cms.extensibility.host import get_plugin_host
+
+    monkeypatch.setenv("ARCHUB_CMS_DB", str(tmp_path / "web.db"))
+    get_archub_cms_service.cache_clear()
+    get_plugin_host(reload=True)
+    with TestClient(create_archub_app()) as test_client:
+        yield test_client
+
+
+def test_api_create_and_get_request(client):
+    created = client.post(
+        "/api/platform/itsm/requests",
+        json={"type": "incident", "summary": "DB down", "priority": "critical", "reporter": "ann"},
+    )
+    assert created.status_code == 201
+    body = created.json()
+    assert body["key"] == "REQ-1"
+    assert body["status_id"] == "open"
+    assert body["priority"] == "critical"
+
+    fetched = client.get("/api/platform/itsm/requests/REQ-1")
+    assert fetched.status_code == 200
+    assert fetched.json()["summary"] == "DB down"
+
+
+def test_api_create_request_validation(client):
+    assert client.post("/api/platform/itsm/requests", json={"type": "incident"}).status_code == 422
+    bad_type = client.post("/api/platform/itsm/requests", json={"type": "bogus", "summary": "x"})
+    assert bad_type.status_code == 422
+
+
+def test_api_list_and_filter_requests(client):
+    client.post("/api/platform/itsm/requests", json={"type": "incident", "summary": "a"})
+    client.post("/api/platform/itsm/requests", json={"type": "change", "summary": "b"})
+    everything = client.get("/api/platform/itsm/requests").json()
+    assert everything["total"] == 2
+    only_changes = client.get("/api/platform/itsm/requests", params={"type": "change"}).json()
+    assert only_changes["total"] == 1
+    assert only_changes["requests"][0]["type"] == "change"
+
+
+def test_api_transitions_lifecycle(client):
+    client.post("/api/platform/itsm/requests", json={"type": "incident", "summary": "API 5xx"})
+
+    available = client.get("/api/platform/itsm/requests/REQ-1/transitions").json()
+    assert "triage" in {t["id"] for t in available["transitions"]}
+
+    moved = client.post(
+        "/api/platform/itsm/requests/REQ-1/transitions",
+        json={"transition": "triage", "actor": "ann", "actor_role": "agent"},
+    )
+    assert moved.status_code == 200
+    assert moved.json()["status_id"] == "triaged"
+
+
+def test_api_illegal_transition_conflicts(client):
+    client.post("/api/platform/itsm/requests", json={"type": "incident", "summary": "x"})
+    bad = client.post(
+        "/api/platform/itsm/requests/REQ-1/transitions", json={"transition": "resolve"}
+    )
+    assert bad.status_code == 409
+
+
+def test_api_unknown_request_is_404(client):
+    assert client.get("/api/platform/itsm/requests/NOPE").status_code == 404
+    missing = client.post(
+        "/api/platform/itsm/requests/NOPE/transitions", json={"transition": "triage"}
+    )
+    assert missing.status_code == 404
+
+
+def test_api_assign_request(client):
+    client.post("/api/platform/itsm/requests", json={"type": "incident", "summary": "x"})
+    assigned = client.post(
+        "/api/platform/itsm/requests/REQ-1/assign", json={"assignee": "carol", "actor": "lead"}
+    )
+    assert assigned.status_code == 200
+    assert assigned.json()["assignee"] == "carol"
+
+
+def test_api_schemes_and_bpmn(client):
+    schemes = client.get("/api/platform/itsm/schemes").json()
+    assert schemes["total"] == 3
+
+    detail = client.get("/api/platform/itsm/schemes/incident")
+    assert detail.status_code == 200
+    assert detail.json()["valid"] is True
+
+    bpmn = client.get("/api/platform/itsm/schemes/incident/bpmn")
+    assert bpmn.status_code == 200
+    assert bpmn.headers["content-type"].startswith("application/xml")
+    assert "<bpmn:definitions" in bpmn.text
+
+    mermaid = client.get(
+        "/api/platform/itsm/schemes/incident/bpmn", params={"format": "mermaid"}
+    ).json()
+    assert mermaid["diagram"].startswith("stateDiagram-v2")
+
+    assert client.get("/api/platform/itsm/schemes/nope").status_code == 404
+
+
+def test_api_queue_summary(client):
+    client.post(
+        "/api/platform/itsm/requests",
+        json={"type": "incident", "summary": "x", "priority": "high"},
+    )
+    queue = client.get("/api/platform/itsm/queue").json()
+    assert queue["total"] == 1
+    assert queue["open"] == 1
+    assert queue["by_priority"]["high"] == 1

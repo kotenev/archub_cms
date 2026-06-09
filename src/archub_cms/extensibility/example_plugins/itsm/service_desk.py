@@ -9,7 +9,7 @@ and change management.
 
 from __future__ import annotations
 
-__all__ = ["ServiceDesk", "build_default_schemes"]
+__all__ = ["RequestNotFoundError", "ServiceDesk", "build_default_schemes"]
 
 from collections.abc import Callable
 from time import time
@@ -34,6 +34,11 @@ from archub_cms.extensibility.example_plugins.itsm.workflow import (
     WorkflowScheme,
 )
 from archub_cms.infrastructure.db.database import Database
+
+
+class RequestNotFoundError(WorkflowError):
+    """Raised when a request key does not exist (mapped to HTTP 404 by the API)."""
+
 
 # Maps each request type to the workflow scheme that governs it by default.
 _TYPE_SCHEME = {
@@ -320,7 +325,7 @@ class ServiceDesk:
     def get(self, key: str) -> Request:
         request = self._repo.get(key)
         if request is None:
-            raise WorkflowError(f"unknown request {key!r}")
+            raise RequestNotFoundError(f"unknown request {key!r}")
         return request
 
     def list_requests(
