@@ -48,11 +48,11 @@ class ITSMServiceDeskPlugin:
 
     def setup(self, context: Any) -> None:
         settings = getattr(context, "settings", {}) or {}
-        self.desk = ServiceDesk(
+        desk = ServiceDesk(
             project_prefix=str(settings.get("project_prefix") or "SD"),
             provider=str(settings.get("provider") or "archub-cloud"),
         )
-        desk = self.desk  # definite non-None after assignment
+        self.desk = desk
         context.register(ServiceDeskWorkflowAction(desk))
         context.register(BpmnDiagramMacro(desk))
         context.register(ServiceDeskWidget(desk))
