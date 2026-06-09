@@ -71,18 +71,22 @@ flowchart TB
 
     subgraph Extensibility["extensibility/ — Plugin runtime"]
         PluginHost[PluginHost\nlifecycle manager]
-        ExtPoints[11 Extension Points\nSearch, LLMTool, Renderer,\nMacro, Importer, Exporter,\nAuth, Storage, Notification...]
+        ExtPoints[25 Extension Points\nSearch, LLMTool, Renderer,\nMacro, WorkflowAction, Connector,\nDashboardWidget, Storage...]
         PermGate[PermissionGate]
+        PlatformAdapter[PluginPlatformAdapter\nSQLite/Postgres stores + audit]
     end
 
     subgraph Infra["infrastructure/ — Persistence"]
         DB[Database connection factory]
-        Repos[17 SQLite repositories]
+        Repos[31 SQLite repositories]
+        PluginRepos[Platform plugin repositories\ninfrastructure/plugins]
         FTS[FTS5 full-text index]
     end
 
     subgraph Data["Data stores"]
         SQLite[(SQLite\nARCHUB_CMS_DB)]
+        PluginAudit[(archub_plugin_audit)]
+        PluginData[(Plugin data tables\nSQLite or PostgreSQL)]
         Files[Runtime export files\nARCHUB_RUNTIME_EXPORT_DIR]
     end
 
@@ -106,7 +110,11 @@ flowchart TB
     Domain --> Kernel
     Extensibility --> Kernel
     PluginHost --> ExtPoints
+    PluginHost --> PlatformAdapter
 
     Domain --> Infra
     Infra --> SQLite
+    PlatformAdapter --> PluginRepos
+    PluginRepos --> PluginData
+    PlatformAdapter --> PluginAudit
     Infra --> Files

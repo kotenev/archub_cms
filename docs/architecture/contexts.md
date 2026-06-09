@@ -1,7 +1,7 @@
 # ArcHub platform architecture — bounded contexts
 
 ArcHub started as a single 8,582-line `ArcHubCMSService` (`services/cms.py`) and has
-been refactored into a DDD platform: 17 bounded contexts on a shared kernel +
+been refactored into a DDD platform: 20 bounded contexts on a shared kernel +
 infrastructure, an executable plugin runtime, and a composition root. The legacy
 service is untouched and remains the SQLite persistence engine that context
 adapters delegate to (pinned by `tests/test_cms_characterization.py`).
@@ -10,15 +10,15 @@ adapters delegate to (pinned by `tests/test_cms_characterization.py`).
 
 ```
 kernel/            EventBus, UnitOfWork, Result, Specification
-infrastructure/    db/ (connection + migrations), sqlite/ (repository adapters)
+infrastructure/    db/ (connection + migrations), sqlite/ + plugins/ adapters
 domain/<context>/  aggregates, value objects, domain events, repository PORTS
 application/<ctx>_service.py   CQRS-lite services; emit events; orchestrate repos
-extensibility/     PluginHost + SPI (11 extension-point types) + loaders
+extensibility/     PluginHost + SPI (25 extension-point types) + platform adapter
 web/platform_routes.py   /api/platform/* HTTP surface
 application/platform.py   ArcHubPlatform composition root + capabilities()
 ```
 
-## Bounded contexts (17)
+## Bounded contexts (20)
 
 | Context | Domain | Application service(s) | Key API prefix |
 |---|---|---|---|
@@ -39,6 +39,9 @@ application/platform.py   ArcHubPlatform composition root + capabilities()
 | webhooks | Outbox + notification channels | `webhooks_service` | `/webhooks/*` |
 | search | federated + faceted | `search_service` | `/search` |
 | subscriptions | watchers + derived inbox | `subscription_service` | `/subscriptions/*` |
+| blueprints | starter content templates | `blueprint_service` | `/blueprints/*` |
+| locks | edit reservation | `lock_service` | `/locks/*` |
+| trash | recycle bin | `trash_service` | `/trash/*` |
 
 Plus: **agentic** tool-use answering (`agent_service`, `/knowledge/agent-answer`) and
 the **composition root** (`ArcHubPlatform`, `/capabilities`, `/index`).
@@ -50,12 +53,17 @@ Ports/Adapters · CQRS-lite · Specification · Strategy (LLM/embedding/storage
 providers) · Plugin/SPI · Result · State Machine (workflow) · Outbox (webhooks) ·
 Composition Root.
 
-## Plugin extension points (11)
+## Plugin extension points (25)
 
 EventHook · Search · Renderer · Macro · Importer · Exporter · LLMTool · Auth ·
-Storage · Notification — plus declarative manifest capabilities. Two runtimes:
-in-process Python entrypoints and HTTP/sandboxed tools. Lifecycle (enable/disable/
-configure) via `plugin_management_service`.
+Storage · Notification · Theme · ScheduledJob · AnalyticsProvider ·
+WorkflowAction · ContentTransformer · SearchIndexer · SecurityPolicy · Editor ·
+Connector · ChatHandler · DashboardWidget · ExportFormat · ImportFormat ·
+LiveEdit · PageAction — plus declarative manifest capabilities. Two runtimes:
+in-process Python entrypoints and HTTP/sandboxed tools. Lifecycle
+(enable/disable/configure) is handled by `plugin_management_service`; persistent
+plugin state is written through `PluginPlatformAdapter` and audited in
+`archub_plugin_audit`.
 
 ## Legacy facade consolidation map
 

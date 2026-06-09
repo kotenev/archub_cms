@@ -59,8 +59,9 @@ package "Application Services — application/" {
     component "embeddings" as Embeddings
 }
 
-package "Infrastructure — infrastructure/sqlite/" {
-    component "17 Repository adapters" as Repos
+package "Infrastructure — infrastructure/" {
+    component "31 SQLite repository adapters" as Repos
+    component "Plugin SQL repositories\ninfrastructure/plugins" as PluginRepos
     component "Database + schema" as InfraDB
 }
 
@@ -76,7 +77,8 @@ package "Kernel — kernel/" {
 }
 
 package "Extensibility — extensibility/" {
-    component "PluginHost + 11 Ext Points" as Extensibility
+    component "PluginHost + 25 Ext Points" as Extensibility
+    component "PluginPlatformAdapter\nplugin persistence + audit" as PluginAdapter
 }
 
 Routes --> Platform
@@ -112,5 +114,7 @@ Repos --> InfraDB
 
 Monolith ..> Platform : legacy compat\npinned by characterization tests
 Extensibility --> Kernel
+Extensibility --> PluginAdapter
+PluginAdapter --> PluginRepos
 Extensibility ..> Platform : plugin contributions
 @enduml

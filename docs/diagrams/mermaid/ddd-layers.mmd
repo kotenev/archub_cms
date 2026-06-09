@@ -56,14 +56,16 @@ flowchart TB
     subgraph ExtLayer["Extensibility — extensibility/"]
         direction LR
         PluginHost[PluginHost]
-        ExtPts[11 Extension Points]
+        ExtPts[25 Extension Points]
         PermGate[PermissionGate]
+        PlatformAdapter[PluginPlatformAdapter\nplugin stores + audit]
     end
 
     subgraph InfraLayer["Infrastructure — infrastructure/"]
         direction LR
         DB[Database factory]
-        Repos[17 SQLite repos]
+        Repos[31 SQLite repos]
+        PluginRepos[infrastructure/plugins\nSQL plugin repos]
         Schema[Schema + migrations]
     end
 
@@ -73,4 +75,5 @@ flowchart TB
     AppLayer --> KernelLayer
     DomainLayer --> InfraLayer
     ExtLayer --> KernelLayer
+    ExtLayer --> InfraLayer
     PortsLayer -.->|host implements| AppLayer

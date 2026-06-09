@@ -20,6 +20,8 @@ rel-platform-agent,Composition,Owns agent service,ArcHubPlatform wires the agent
 rel-platform-search,Composition,Owns search service,ArcHubPlatform wires the search service.,app-platform,app-search-svc
 rel-platform-collab,Composition,Owns collaboration service,ArcHubPlatform wires the collaboration service.,app-platform,app-collab-svc
 rel-platform-plugins,Composition,Owns plugin host,ArcHubPlatform wires the plugin host.,app-platform,app-plugin-host
+rel-plugin-host-adapter,Composition,Creates plugin adapter,Plugin host creates a platform adapter for each loaded plugin.,app-plugin-host,app-plugin-adapter
+rel-plugin-adapter-repos,Composition,Owns plugin SQL repositories,Plugin platform adapter constructs platform-owned plugin repositories.,app-plugin-adapter,app-plugin-sql-repos
 rel-cms-content,Assignment,Persists for content service,Legacy CMS provides SQLite persistence for content.,app-cms-legacy,app-content-svc
 rel-cms-modeling,Assignment,Persists for modeling service,Legacy CMS provides SQLite persistence for modeling.,app-cms-legacy,app-modeling-svc
 rel-cms-delivery,Assignment,Persists for delivery service,Legacy CMS provides SQLite persistence for delivery.,app-cms-legacy,app-delivery-svc
@@ -31,3 +33,5 @@ rel-search-fts,Access,Searches FTS5,Search service reads and writes the FTS5 ind
 rel-consumer-snapshot,Used By,Consumes snapshots,Runtime consumers use exported files.,data-snapshot,business-runtime-consumer
 rel-plugin-dev-host,Association,Develops plugins,Plugin developers create plugin manifests consumed by the host.,business-plugin-developer,app-plugin-host
 rel-plugin-host-config,Access,Manages config,Plugin host reads and writes per-plugin config store.,app-plugin-host,data-plugin-config
+rel-plugin-adapter-audit,Access,Records plugin audit,Plugin platform adapter records lifecycle adapter repository and host-mediated plugin actions.,app-plugin-adapter,data-plugin-audit
+rel-plugin-repos-data,Access,Persists plugin data,Platform plugin SQL repositories read and write plugin-owned tables.,app-plugin-sql-repos,data-plugin-data

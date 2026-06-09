@@ -109,7 +109,7 @@ class PluginAuditLog:
                     entry.target,
                     entry.actor,
                     entry.backend,
-                    _json(entry.metadata),
+                    _json(dict(entry.metadata)),  # type: ignore[arg-type]
                     entry.created_at,
                 ),
             )
@@ -278,6 +278,7 @@ class PostgresPluginStore:
 
     def connect(self) -> Any:
         try:
+            # noinspection PyUnresolvedReferences
             import psycopg
             from psycopg.rows import dict_row
         except ModuleNotFoundError as exc:

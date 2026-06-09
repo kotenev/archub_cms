@@ -41,7 +41,9 @@ workspace "ArcHub CMS" "Architecture model for the standalone ArcHub CMS package
             ingestionSvc = container "Ingestion Service" "Bulk markdown corpus import via ImporterExt plugins." "Python"
             resilientLLM = container "Resilient LLM Provider" "Circuit-breaker wrapping online/offline LLM failover." "Python"
 
-            pluginHost = container "Plugin Host" "Lifecycle manager: discover → permission-check → load → wire. 11 extension points." "Python"
+            pluginHost = container "Plugin Host" "Lifecycle manager: discover → permission-check → load → wire. 25 extension point protocols." "Python"
+            pluginAdapter = container "Plugin Platform Adapter" "Per-plugin capability boundary for audited SQLite/PostgreSQL stores and platform-owned repositories." "Python"
+            pluginSqlRepos = container "Plugin SQL Repositories" "Infrastructure repositories for executable plugins; use platform stores instead of plugin-owned DB connections." "Python"
 
             eventBus = container "Event Bus" "Synchronous in-process pub/sub with wildcard subscriptions." "Python"
             unitOfWork = container "Unit of Work" "Transaction boundary with post-commit event publishing." "Python"
@@ -51,7 +53,13 @@ workspace "ArcHub CMS" "Architecture model for the standalone ArcHub CMS package
             ports = container "Host Integration Ports" "Auth, Template, Runtime, LLM, Embedding, Search, Cache, Audit Protocol contracts." "Python protocols"
             assets = container "Templates and Static Assets" "Packaged Jinja templates, CSS, and JavaScript." "Jinja/CSS/JavaScript"
 
-            db = container "SQLite CMS Store" "Editorial state, published payloads, versions, permissions, workflow, tokens, redirects, domains, activity, plugin config." "SQLite" {
+            db = container "SQLite CMS Store" "Editorial state, published payloads, versions, permissions, workflow, tokens, redirects, domains, activity, plugin config, plugin audit." "SQLite" {
+                tags "Database"
+            }
+            pluginData = container "Plugin Data Store" "Plugin-owned tables persisted through platform SQLite or PostgreSQL adapters." "SQLite/PostgreSQL" {
+                tags "Database"
+            }
+            pluginAudit = container "Plugin Audit Log" "archub_plugin_audit records lifecycle, configuration, adapter, repository, and host-mediated plugin actions." "SQLite" {
                 tags "Database"
             }
             ftsIndex = container "FTS5 Index" "SQLite FTS5 full-text search index." "SQLite" {
@@ -106,6 +114,11 @@ workspace "ArcHub CMS" "Architecture model for the standalone ArcHub CMS package
         publishingSvc -> exports "Writes runtime snapshots" "Filesystem"
         pluginHost -> pluginFiles "Discovers manifests" "Filesystem"
         pluginHost -> db "Plugin config" "SQLite"
+        pluginHost -> pluginAdapter "Creates per-plugin adapter" "Python calls"
+        pluginAdapter -> pluginSqlRepos "Constructs platform-owned repositories" "Python calls"
+        pluginAdapter -> pluginAudit "Records plugin actions" "SQLite"
+        pluginAudit -> db "Stored in archub_plugin_audit" "SQLite table"
+        pluginSqlRepos -> pluginData "Reads and writes plugin tables" "SQL"
         routes -> assets "Renders templates" "Jinja2"
 
         runtimeConsumer -> exports "Consumes snapshots or indexes" "Filesystem"
@@ -155,6 +168,8 @@ workspace "ArcHub CMS" "Architecture model for the standalone ArcHub CMS package
                 ingestionSvc
                 resilientLLM
                 pluginHost
+                pluginAdapter
+                pluginSqlRepos
                 cmsLegacy
                 eventBus
                 unitOfWork
@@ -179,7 +194,11 @@ workspace "ArcHub CMS" "Architecture model for the standalone ArcHub CMS package
             include
                 pluginDev
                 pluginHost
+                pluginAdapter
+                pluginSqlRepos
                 pluginFiles
+                pluginAudit
+                pluginData
                 eventBus
                 agentSvc
                 searchSvc

@@ -66,7 +66,7 @@ package "domain/ — 20 bounded contexts" {
     component "knowledge\nKnowledgeSpace + Graph" as KnowledgeDomain
     component "collaboration\nComment + Mention + Reaction" as CollabDomain
     component "search\nSearchQuery + Facets" as SearchDomain
-    component "17 other contexts" as OtherDomains
+    component "13 other contexts" as OtherDomains
 }
 
 package "kernel/ — Shared primitives" {
@@ -79,18 +79,22 @@ package "kernel/ — Shared primitives" {
 
 package "extensibility/ — Plugin runtime" {
     component "PluginHost\nlifecycle manager" as PluginHost
-    component "11 Extension Points\nEventHook, Search, LLMTool,\nRenderer, Macro, Importer,\nExporter, Auth, Storage,\nNotification..." as ExtPts
+    component "25 Extension Points\nEventHook, Search, LLMTool,\nRenderer, Macro, WorkflowAction,\nConnector, DashboardWidget,\nStorage, Notification..." as ExtPts
     component "PermissionGate" as PermGate
     component "PluginConfigStore" as ConfigStore
+    component "PluginPlatformAdapter\nSQLite/Postgres stores + audit" as PluginAdapter
 }
 
 package "infrastructure/ — Persistence" {
     component "Database\nconnection factory" as DB
-    component "17 SQLite repositories" as Repos
+    component "31 SQLite repositories" as Repos
+    component "Platform plugin repositories\ninfrastructure/plugins" as PluginRepos
     component "Schema + migrations" as Schema
 }
 
 database "SQLite\nARCHUB_CMS_DB" as SQLite
+database "Plugin data tables\nSQLite or PostgreSQL" as PluginData
+database "archub_plugin_audit" as PluginAudit
 folder "Runtime export\nARCHUB_RUNTIME_EXPORT_DIR" as Files
 folder "Plugin manifests\nARCHUB_PLUGIN_DIRS" as PluginFiles
 artifact "Templates + static\nJinja/CSS/JS" as Assets
@@ -148,6 +152,10 @@ PluginHost --> PluginFiles
 PluginHost --> ExtPts
 PluginHost --> PermGate
 PluginHost --> ConfigStore
+PluginHost --> PluginAdapter
+PluginAdapter --> PluginRepos
+PluginAdapter --> PluginAudit
+PluginRepos --> PluginData
 ExtPts ..> Services : plugin contributions
 Routes --> Assets : render HTML
 @enduml

@@ -9,8 +9,8 @@ import the model into their preferred tool.
 
 | Format | Files | Use |
 |---|---|---|
-| Mermaid | `docs/diagrams/mermaid/*.mmd` | Quick rendered diagrams in MkDocs and GitHub previews. |
-| PlantUML | `docs/diagrams/plantuml/*.puml` | System context, container, DDD layers, modularization, publishing, delivery, media, package, plugin, agent, platform, and maintenance diagrams. |
+| Mermaid | `docs/diagrams/mermaid/*.mmd` | Quick rendered diagrams in MkDocs and GitHub previews, including plugin persistence flow. |
+| PlantUML | `docs/diagrams/plantuml/*.puml` | System context, container, DDD layers, modularization, publishing, delivery, media, package, plugin, agent, platform, audit, and maintenance diagrams. |
 | Archi/ArchiMate | `docs/diagrams/archi/*` | ArchiMate layer view and CSV import model for Archi users. |
 | Structurizr | `docs/diagrams/structurizr/workspace.dsl` | C4-style model for system context, container, platform services, web routes, and plugin system views. |
 
@@ -82,11 +82,13 @@ flowchart TB
     end
 
     subgraph Ext["extensibility/ — Plugin runtime"]
-        PluginHost[PluginHost + 11 Extension Points]
+        PluginHost[PluginHost + 25 Extension Points]
+        PluginAdapter[PluginPlatformAdapter\nSQLite/Postgres stores + audit]
     end
 
     subgraph Infra["infrastructure/ — Persistence"]
-        Repos[17 SQLite repositories]
+        Repos[31 SQLite repositories]
+        PluginRepos[Platform plugin repositories\ninfrastructure/plugins]
         FTS[FTS5 full-text index]
     end
 
@@ -96,6 +98,38 @@ flowchart TB
     App --> Kernel
     Domain --> Infra
     Ext --> Kernel
+    Ext --> PluginRepos
+```
+
+### Plugin Platform Adapter
+
+```mermaid
+sequenceDiagram
+    participant Host as PluginHost
+    participant Context as PluginContext
+    participant Adapter as PluginPlatformAdapter
+    participant Store as SQLite/Postgres PluginStore
+    participant Repo as Platform SQL Repository
+    participant Plugin as Executable Plugin
+    participant Audit as PluginAuditLog
+    participant DB as SQLite/Postgres
+
+    Host->>Adapter: create(plugin_id, audit_log)
+    Host->>Audit: plugin.load.attempt
+    Host->>Context: pass manifest, settings, platform
+    Plugin->>Adapter: request platform repository/store
+    Adapter->>Store: choose backend from settings
+    Store->>Audit: adapter.*.open
+    Adapter->>Repo: construct infrastructure repository
+    Repo->>Store: transaction(schema.ensure)
+    Store->>DB: apply plugin tables
+    Store->>Audit: schema.ensure
+    Plugin->>Context: register extensions
+    Context->>Audit: extension.registered
+    Plugin->>Repo: command/query through repository port
+    Repo->>Store: transaction/read(action)
+    Store->>DB: execute SQL
+    Store->>Audit: action or action.failed
 ```
 
 ### Bounded Contexts
@@ -151,7 +185,9 @@ plugin host, event bus, unit of work, legacy CMS service, host integration ports
 templates/static assets, SQLite store, FTS5 index, runtime snapshot files, and
 plugin manifests. It shows external actors: content editors, public visitors,
 host applications, plugin developers, agent/LLM clients, and downstream
-runtime/indexing processes.
+runtime/indexing processes. The plugin-system view also includes the
+`PluginPlatformAdapter`, plugin SQL repositories, plugin audit log, and plugin
+data store.
 
 Four views are defined:
 - **SystemContext** — external actors and ArcHub CMS boundary
@@ -171,7 +207,8 @@ The ArchiMate model describes three layers:
   plugin host, legacy CMS service, admin dashboard, platform JSON API,
   collaboration API, and host integration ports.
 - **Technology/data**: FastAPI process, SQLite database, FTS5 index, static assets,
-  runtime snapshot filesystem, and plugin config store.
+  runtime snapshot filesystem, plugin config store, plugin audit log, and plugin
+  data store.
 
 Use `docs/diagrams/archi/elements.csv` and
 `docs/diagrams/archi/relationships.csv` as a compact Archi import starting
@@ -231,9 +268,11 @@ point, or render the ArchiMate PlantUML source directly.
 
 ### Plugin and platform diagrams
 
-- `plugin-system-architecture.puml`: PluginHost lifecycle, 11 extension point
-  protocols, permission gate, config store, and loaders.
+- `plugin-system-architecture.puml`: PluginHost lifecycle, 25 extension point
+  protocols, permission gate, config store, platform adapter, audit log, and loaders.
 - `plugin-manifest-lifecycle.puml`: manifest validation and runtime binding.
+- `plugin-platform-adapter.puml`: executable plugin persistence boundary,
+  SQLite/PostgreSQL adapter selection, SQL repository calls, and audit logging.
 
 ### Service boundary diagrams
 

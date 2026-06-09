@@ -17,10 +17,11 @@ rectangle "ArcHub CMS\nPython package" as ArcHub {
     rectangle "Collaboration API\n/api/platform/collaboration" as CollabAPI
     rectangle "ArcHubPlatform\ncomposition root" as PlatformRoot
     rectangle "20 bounded-context\napplication services" as Services
-    rectangle "Plugin host\n11 extension points" as Plugins
+    rectangle "Plugin host\n25 extension points\nplatform persistence adapter" as Plugins
 }
 
 database "SQLite CMS store\nARCHUB_CMS_DB" as SQLite
+database "Plugin audit log\narchub_plugin_audit" as PluginAudit
 folder "Runtime snapshot files\nARCHUB_RUNTIME_EXPORT_DIR" as Export
 folder "Plugin manifests\nARCHUB_PLUGIN_DIRS" as PluginFiles
 
@@ -36,6 +37,7 @@ CollabAPI --> Services
 PlatformRoot --> Services
 Plugins --> Services
 Services --> SQLite : read/write state
+Plugins --> PluginAudit : audit lifecycle,\nconfig and persistence
 Services --> Export : write runtime snapshots
 RuntimeConsumer --> Export : consume content\nor rebuild indexes
 Plugins --> PluginFiles : discover and load

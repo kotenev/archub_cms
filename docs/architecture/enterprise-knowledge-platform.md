@@ -45,7 +45,11 @@ call the application boundary, not SQLite or content tree internals.
 
 Plugins are discovered from `ARCHUB_PLUGIN_DIRS` or `plugins/`. A plugin is a
 JSON manifest named `plugin.json` or `*.archub-plugin.json`. ArcHub validates
-the manifest but does not execute plugin code by default.
+the manifest, enforces declared permissions, and loads executable plugins
+through `PluginHost` when they use the `python`, `http`, or `external` runtime.
+In-process plugins receive `PluginContext`, not raw database handles; persistent
+plugin state must go through `context.platform` so adapter and repository
+actions are recorded in `archub_plugin_audit`.
 
 Supported capability categories include `auth`, `storage`, `renderer`,
 `search`, `llm_provider`, `llm_tool`, `sync`, `importer`, `exporter`, `macro`,

@@ -25,6 +25,7 @@ flowchart LR
     cms --> runtime[Runtime snapshot files]
     rag[RAG/indexing process] -->|consume or rebuild| runtime
     plugins -->|extension points| contexts
+    plugins -->|audited persistence| plugin_audit[(Plugin audit + data stores)]
     agent[Agent / LLM consumer] -->|tool-augmented answers| routes
 ```
 
@@ -76,7 +77,7 @@ flowchart TB
     subgraph InfraLayer["Infrastructure — infrastructure/"]
         direction LR
         DB[Database factory]
-        Repos[17 SQLite repos]
+        Repos[31 SQLite repos]
         Schema[Schema + migrations]
     end
 
@@ -123,7 +124,7 @@ flowchart TB
 | Application layer | 20+ bounded-context CQRS services wired by `ArcHubPlatform`. | `application/*.py` |
 | Domain layer | Aggregates, value objects, domain events, repository ports for each context. | `domain/*/` |
 | Kernel | Shared primitives: EventBus, UnitOfWork, Result, Specification, CircuitBreaker. | `kernel/*.py` |
-| Extensibility | Plugin host with 11 extension point protocols. | `extensibility/*.py` |
+| Extensibility | Plugin host with 25 extension point protocols, platform adapter, and plugin audit log. | `extensibility/*.py` |
 | Integration ports | Stable host extension contracts. | `ports.py` |
 | RAG integration | Corpus registry and external-indexer hook. | `integrations/rag.py` |
 
@@ -132,13 +133,14 @@ flowchart TB
 - **Bounded Contexts** — 20 domain subdirectories with isolated aggregates and repository ports
 - **Hexagonal Ports & Adapters** — Protocol-based repos + `ports.py` host contracts
 - **CQRS-lite** — Separate Query/Command service pairs (e.g. `WorkflowQueryService` + `WorkflowCommandService`)
-- **Repository Pattern** — `@runtime_checkable` Protocol ports per context, 17 SQLite implementations
+- **Repository Pattern** — `@runtime_checkable` Protocol ports per context, 31 SQLite implementations
 - **Unit of Work** — `SqliteUnitOfWork` with post-commit event publishing
 - **Domain Events + Event Bus** — `EventBus` with exact + wildcard subscriptions
 - **Specification Pattern** — Composable predicates with `&`, `|`, `~` operators
 - **Strategy Pattern** — `EmbeddingPort`, `LLMProviderPort`, `SearchPort` pluggable implementations
 - **Circuit Breaker** — `ResilientLLMProvider` wraps online/offline LLM failover
-- **Plugin/SPI** — 11 extension point protocols, `PluginHost` lifecycle, permission gating
+- **Plugin/SPI** — 25 extension point protocols, `PluginHost` lifecycle, permission gating
+- **Audited Plugin Persistence** — executable plugins write only through `PluginPlatformAdapter` and platform-owned SQL repositories
 - **Composition Root** — `ArcHubPlatform` facade wiring all contexts
 - **State Machine** — `Workflow` with explicit transition table
 - **Outbox Pattern** — Webhooks with delivery records and dispatch
@@ -166,6 +168,8 @@ mentions, and reactions.
 - [Enterprise Knowledge Platform](architecture/enterprise-knowledge-platform.md)
   documents the DDD knowledge-base context, plugin manifests, graph export, and
   offline/online LLM ports.
+- [Plugin Platform Adapter](architecture/plugin-platform-adapter.md) documents
+  the SQLite/PostgreSQL plugin persistence boundary and `archub_plugin_audit`.
 - [Content Modeling](architecture/content-modeling.md) documents schema-driven
   data types, templates, document types, compositions, and blueprints.
 - [Versioning & Cleanup](architecture/versioning-cleanup.md) documents content
@@ -241,7 +245,7 @@ sequenceDiagram
 
 ## Plugin System
 
-The plugin system supports 11 extension point protocols:
+The plugin system supports 25 extension point protocols:
 
 | Extension Point | Purpose |
 |---|---|
@@ -255,12 +259,29 @@ The plugin system supports 11 extension point protocols:
 | `AuthExt` | Resolve identity from request |
 | `StorageExt` | Read/write blob storage |
 | `NotificationExt` | Outbound channels (Slack, email) |
+| `ThemeExt` | Theme/layout overrides |
+| `ScheduledJobExt` | Plugin-defined scheduled jobs |
+| `AnalyticsProviderExt` | Analytics collectors and reports |
+| `WorkflowActionExt` | Custom workflow actions/triggers |
+| `ContentTransformerExt` | Publish/render pipeline transformations |
+| `SearchIndexerExt` | External search index synchronization |
+| `SecurityPolicyExt` | Governance checks for publish/access |
+| `EditorExt` | Custom editor surfaces |
+| `ConnectorExt` | External system connectors |
+| `ChatHandlerExt` | Custom chat handlers |
+| `DashboardWidgetExt` | Admin dashboard widgets |
+| `ExportFormatExt` | Format-specific export providers |
+| `ImportFormatExt` | Format-specific import providers |
+| `LiveEditExt` | Collaborative/live edit providers |
+| `PageActionExt` | Page context actions |
 | `Plugin` | Base protocol |
 
 Plugins are discovered from `ARCHUB_PLUGIN_DIRS` or `plugins/`. A plugin is a
 JSON manifest named `plugin.json` or `*.archub-plugin.json`. The `PluginHost`
 lifecycle is: discover → permission-check → load → wire. Two loader runtimes:
-in-process Python entrypoints and sandboxed HTTP tools.
+in-process Python entrypoints and sandboxed HTTP tools. In-process plugins do
+not receive database handles; persistent plugin state must go through
+`context.platform` and the platform-owned adapter/repository layer.
 
 ## Extension Boundary
 
@@ -282,5 +303,5 @@ packages directly.
   `Last-Modified`, and cache-control headers.
 - **Governance:** Permissions, public access rules, locks, workflow, previews,
   versions, audit activity, and webhooks are part of the core service.
-- **Extensibility:** 11 plugin extension points with manifest validation,
-  permission gating, and config store.
+- **Extensibility:** 25 plugin extension points with manifest validation,
+  permission gating, audited config, and platform-owned persistence adapters.

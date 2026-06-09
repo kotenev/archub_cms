@@ -85,19 +85,23 @@ package "Kernel — kernel/" as KernelLayer {
 
 package "Extensibility — extensibility/" as ExtLayer {
     component "PluginHost\nlifecycle: discover → check → load → wire" as PluginHost
-    component "11 Extension Points\nEventHook, Search, LLMTool,\nRenderer, Macro, Importer,\nExporter, Auth, Storage,\nNotification, Plugin" as ExtPts
+    component "25 Extension Points\nEventHook, Search, LLMTool,\nRenderer, Macro, WorkflowAction,\nConnector, DashboardWidget,\nStorage, Notification, Plugin" as ExtPts
     component "PermissionGate\nmanifest enforcement" as PermGate
     component "PluginConfigStore\nSQLite per-plugin settings" as ConfigStore
+    component "PluginPlatformAdapter\nSQLite/Postgres stores\n+ audit boundary" as PluginAdapter
     component "InProcessLoader\nHttpToolLoader" as Loaders
 }
 
 package "Infrastructure — infrastructure/" as InfraLayer {
     component "Database\nconnection factory\nauto-mkdir" as DB
     component "schema.py\nDDL + migrations" as Schema
+    component "infrastructure/plugins\nplatform-owned plugin SQL repos" as PluginRepos
     component "content_repository\nblueprint_repository\ncollaboration_repository\ncomment_repository\ndelivery_repository\nembedding_repository\nfts_index\ngovernance_repository\nlocalization_repository\nlock_repository\nmedia_repository\nmodeling_repository\nruntime_repository\nsubscription_repository\ntrash_repository\nversioning_repository\nwebhook_repository" as Repos
 }
 
 database "SQLite\nARCHUB_CMS_DB" as SQLite
+database "Plugin data tables\nSQLite or PostgreSQL" as PluginData
+database "archub_plugin_audit" as PluginAudit
 folder "Runtime export\nARCHUB_RUNTIME_EXPORT_DIR" as Files
 folder "Plugin dirs\nARCHUB_PLUGIN_DIRS" as PluginFiles
 
@@ -160,7 +164,11 @@ PluginHost --> PluginFiles
 PluginHost --> ExtPts
 PluginHost --> PermGate
 PluginHost --> ConfigStore
+PluginHost --> PluginAdapter
 PluginHost --> Loaders
+PluginAdapter --> PluginRepos
+PluginAdapter --> PluginAudit
+PluginRepos --> PluginData
 ExtPts ..> ContentApp : plugin contributions
 
 AuthPort -.-> Platform

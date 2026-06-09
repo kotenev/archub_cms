@@ -24,7 +24,9 @@ app-governance-svc,Application Component,Governance service,CQRS for AccessRule 
 app-agent-svc,Application Component,Agent service,Tool-augmented answering via LLMToolExt plugins.
 app-search-svc,Application Component,Search + FTS5 service,Federated faceted search with BM25 full-text index.
 app-collab-svc,Application Component,Collaboration service,Comments mentions reactions with threaded discussions.
-app-plugin-host,Application Component,Plugin host,Discover permission-check load and wire 11 extension point types.
+app-plugin-host,Application Component,Plugin host,Discover permission-check load and wire 25 extension point protocols.
+app-plugin-adapter,Application Component,Plugin platform adapter,Per-plugin capability boundary for audited SQLite/PostgreSQL stores and platform-owned repositories.
+app-plugin-sql-repos,Application Component,Plugin SQL repositories,Infrastructure repositories for executable plugins that use platform stores instead of plugin-owned DB connections.
 app-cms-legacy,Application Component,ArcHubCMSService legacy,Legacy monolithic service still used as SQLite persistence engine.
 app-ports,Application Interface,Host integration ports,Auth Template Runtime LLM Embedding Search Cache and Audit contracts.
 tech-process,Node,FastAPI process,Standalone or host FastAPI runtime process.
@@ -33,3 +35,5 @@ data-assets,Artifact,Templates and static assets,Packaged Jinja templates CSS an
 data-snapshot,Data Object,Runtime snapshot files,ARCHUB_RUNTIME_EXPORT_DIR exported published runtime materials.
 data-fts,Data Object,FTS5 full-text index,SQLite FTS5 index for BM25 full-text search.
 data-plugin-config,Data Object,Plugin config store,SQLite-backed per-plugin enable/disable and settings JSON.
+data-plugin-audit,Data Object,Plugin audit log,archub_plugin_audit lifecycle configuration adapter repository and host-mediated actions.
+data-plugin-data,Data Object,Plugin data store,Plugin-owned tables persisted through platform SQLite or PostgreSQL adapters.

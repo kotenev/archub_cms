@@ -7,7 +7,7 @@ participant "Cron / worker /\nFastAPI lifespan" as Host
 participant "ArcHubMaintenanceService" as Maintenance
 participant "ArcHubCMSService" as CMS
 database "SQLite" as DB
-folder "Runtime export dir" as Runtime
+participant "Runtime export dir" as Runtime
 queue "Webhook endpoints" as Webhooks
 
 Host -> Maintenance : run_once(actor)

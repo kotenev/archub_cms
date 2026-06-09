@@ -42,6 +42,7 @@ def _service_desk() -> ServiceDesk:
             status_code=503,
             detail="ITSM Service Desk plugin is not enabled",
         )
+    assert isinstance(desk, ServiceDesk)
     return desk
 
 
