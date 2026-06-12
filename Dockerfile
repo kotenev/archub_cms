@@ -16,13 +16,13 @@ WORKDIR /app
 COPY pyproject.toml README.md LICENSE ./
 COPY src ./src
 COPY plugins ./plugins
-RUN python -m pip install --upgrade pip \
-    && python -m pip install ".[server,postgres]"
+RUN python -m pip install --no-cache-dir --upgrade pip \
+    && python -m pip install --no-cache-dir ".[server,postgres]" \
+    && mkdir -p /data \
+    && useradd --create-home --uid 10001 archub \
+    && chown -R archub:archub /data /app
 
 # Run as a non-root user with a writable data volume.
-RUN useradd --create-home --uid 10001 archub \
-    && mkdir -p /data \
-    && chown -R archub:archub /data /app
 USER archub
 
 VOLUME ["/data"]
