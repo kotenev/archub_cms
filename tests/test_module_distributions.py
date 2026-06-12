@@ -88,9 +88,14 @@ def test_distribution_builder_writes_hierarchical_marketplace(tmp_path):
         assert {"plugin.json", "tool.py"} <= names
         assert not any("__pycache__" in name for name in names)
     with zipfile.ZipFile(builtin_archive) as archive:
+        names = set(archive.namelist())
         payload = json.loads(archive.read("plugin.json"))
         assert payload["id"] == "archub.rest.demo"
-        assert "README.md" in archive.namelist()
+        assert "README.md" in names
+        assert "Cargo.toml" in names
+        assert "rust/archub-core/Cargo.toml" in names
+        assert "rust/archub-rest-api/Cargo.toml" in names
+        assert "rust/archub-rest-api/src/lib.rs" in names
 
     catalog = ModuleMarketplaceRepository(tmp_path / "marketplace").catalog()
     assert catalog["total"] == 2
@@ -100,6 +105,24 @@ def test_distribution_builder_writes_hierarchical_marketplace(tmp_path):
     assert restored_builtin["core"] is True
     assert restored_builtin["language"] == "rust"
     assert restored_builtin["rust_crate"] == "archub-rest-api"
+
+    installed_builtin = ModuleDistributionInstaller(install_roots=(tmp_path / "installed",)).install(
+        builtin_archive
+    )
+    assert installed_builtin["plugin_id"] == "archub.rest.demo"
+    assert installed_builtin["core"] is True
+    assert installed_builtin["language"] == "rust"
+    assert installed_builtin["rust_crate"] == "archub-rest-api"
+    assert (tmp_path / "installed" / "archub.rest.demo" / "Cargo.toml").exists()
+    assert (
+        tmp_path
+        / "installed"
+        / "archub.rest.demo"
+        / "rust"
+        / "archub-rest-api"
+        / "src"
+        / "lib.rs"
+    ).exists()
 
     installed = ModuleDistributionInstaller(install_roots=(tmp_path / "installed",)).install(
         plugin_archive

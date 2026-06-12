@@ -81,6 +81,11 @@ dist/archub-marketplace/
   workflow/archub.itsm.service_desk/1.0.0/archub.itsm.service_desk-1.0.0.zip
 ```
 
+Built-in Rust core modules are packaged with `plugin.json`, `README.md`, a
+minimal `Cargo.toml`, `rust/archub-core`, and the module's own `rust/<crate>`
+directory. This keeps marketplace archives installable as ArcHub modules while
+preserving the Rust implementation contract needed for offline builds.
+
 Options:
 
 - `--plugin-dir plugins` adds a source directory; repeat for multiple roots.

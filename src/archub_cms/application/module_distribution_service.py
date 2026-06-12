@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from archub_cms.application.core_plugins import rust_crate_path
 from archub_cms.domain.plugins import KnowledgePluginManifest
 
 _MODULE_ID_RE = re.compile(r"[^a-zA-Z0-9_.-]+")
@@ -89,7 +90,10 @@ class ModuleDistributionBuilder:
         source_root = self._source_root(manifest)
         if source_root is None:
             with tempfile.TemporaryDirectory(prefix="archub-module-build-") as temp_dir:
-                package_root = self._write_manifest_only_package(manifest, Path(temp_dir))
+                if _is_builtin_rust_core(manifest):
+                    package_root = self._write_rust_core_package(manifest, Path(temp_dir))
+                else:
+                    package_root = self._write_manifest_only_package(manifest, Path(temp_dir))
                 self._write_zip(package_root, archive_path)
         else:
             self._write_zip(source_root, archive_path)
@@ -132,6 +136,34 @@ class ModuleDistributionBuilder:
             f"# {manifest.name}\n\n{manifest.description or 'ArcHub platform module.'}\n",
             encoding="utf-8",
         )
+        return package_root
+
+    @staticmethod
+    def _write_rust_core_package(
+        manifest: KnowledgePluginManifest, temp_root: Path
+    ) -> Path:
+        crate_root = rust_crate_path(manifest.rust_crate)
+        if crate_root is None:
+            raise FileNotFoundError(f"rust crate not found: {manifest.rust_crate}")
+        package_root = ModuleDistributionBuilder._write_manifest_only_package(manifest, temp_root)
+        members = ["rust/archub-core"]
+        if manifest.rust_crate != "archub-core":
+            members.append(f"rust/{manifest.rust_crate}")
+        (package_root / "Cargo.toml").write_text(
+            _rust_package_workspace(members),
+            encoding="utf-8",
+        )
+        for member in members:
+            source = rust_crate_path(Path(member).name)
+            if source is None:
+                raise FileNotFoundError(f"rust crate not found: {Path(member).name}")
+            target = package_root / member
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(
+                source,
+                target,
+                ignore=shutil.ignore_patterns("target", ".git", "__pycache__", "*.pyc"),
+            )
         return package_root
 
     @staticmethod
@@ -223,6 +255,10 @@ class ModuleDistributionInstaller:
             "version": manifest.version,
             "capability": manifest.capability,
             "runtime": manifest.runtime,
+            "core": manifest.core,
+            "language": manifest.language,
+            "rust_crate": manifest.rust_crate,
+            "provides": list(manifest.provides),
             "installed_path": str(installed_path),
             "source": str(source_path),
         }
@@ -426,6 +462,26 @@ def _manifest_payload(manifest: KnowledgePluginManifest) -> dict[str, Any]:
     payload.pop("valid", None)
     payload.pop("errors", None)
     return payload
+
+
+def _is_builtin_rust_core(manifest: KnowledgePluginManifest) -> bool:
+    return manifest.source == "builtin" and manifest.core and manifest.runtime == "rust"
+
+
+def _rust_package_workspace(members: list[str]) -> str:
+    member_lines = "\n".join(f'    "{member}",' for member in sorted(set(members)))
+    return (
+        "[workspace]\n"
+        "members = [\n"
+        f"{member_lines}\n"
+        ']\n'
+        'resolver = "2"\n\n'
+        "[workspace.package]\n"
+        'version = "0.1.0"\n'
+        'edition = "2021"\n'
+        'license = "Apache-2.0"\n'
+        'authors = ["ArcHub contributors"]\n'
+    )
 
 
 def _sha256(path: Path) -> str:

@@ -122,6 +122,8 @@ class PluginManagementService:
                     "installed_path": installed["installed_path"],
                     "capability": installed["capability"],
                     "runtime": installed["runtime"],
+                    "core": installed.get("core", False),
+                    "rust_crate": installed.get("rust_crate", ""),
                 },
             )
         )

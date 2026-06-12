@@ -13,6 +13,7 @@ from archub_cms.application.plugins import ArcHubPluginRegistry
 from archub_cms.domain.plugins import KnowledgePluginManifest
 from archub_cms.extensibility.host import PluginHost
 from archub_cms.services.cms import get_archub_cms_service
+from archub_cms.tools.core_plugins import main as core_plugins_main
 
 
 def test_manifest_accepts_rust_core_plugin_metadata():
@@ -62,6 +63,8 @@ def test_platform_capabilities_report_core_plugins(tmp_path, monkeypatch):
     assert caps["core_plugins"]["cms"]["rust_crate"] == "archub-cms-core"
     assert caps["core_plugins"]["rust_workspace"]["missing_total"] == 0
     assert caps["core_plugins"]["rust_workspace"]["coverage_percent"] == 100.0
+    assert caps["core_plugins"]["rust_workspace"]["undeclared_total"] == 0
+    assert caps["core_plugins"]["rust_workspace"]["contract_percent"] == 100.0
 
 
 def test_marketplace_builder_packages_cms_core_plugin(tmp_path):
@@ -114,7 +117,9 @@ def test_rust_workspace_inventory_covers_builtin_core_plugins():
     assert "archub-cms-core" in inventory["crate_names"]
     assert "archub-governance-core" in inventory["crate_names"]
     assert coverage["missing_total"] == 0
+    assert coverage["undeclared_total"] == 0
     assert coverage["covered_total"] == coverage["core_plugin_total"]
+    assert coverage["declared_total"] == coverage["core_plugin_total"]
     by_crate = {item["rust_crate"]: item for item in coverage["by_crate"]}
     assert "archub.cms.core" in by_crate["archub-cms-core"]["plugins"]
     assert "archub.workflow.publish" in by_crate["archub-workflow-core"]["plugins"]
@@ -139,4 +144,15 @@ def test_core_plugin_endpoints_expose_workspace_coverage(tmp_path, monkeypatch):
     payload = core_plugins.json()
     assert payload["total"] >= 24
     assert payload["rust_workspace"]["missing_total"] == 0
-    assert workspace.json()["covered_total"] == workspace.json()["core_plugin_total"]
+    workspace_payload = workspace.json()
+    assert workspace_payload["covered_total"] == workspace_payload["core_plugin_total"]
+    assert workspace_payload["declared_total"] == workspace_payload["core_plugin_total"]
+
+
+def test_core_plugin_cli_reports_contract_coverage(capsys):
+    code = core_plugins_main(["--fail-on-missing"])
+
+    captured = capsys.readouterr()
+    assert code == 0
+    assert "Core plugins:" in captured.out
+    assert "Rust-declared" in captured.out

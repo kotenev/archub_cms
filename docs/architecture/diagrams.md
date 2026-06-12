@@ -273,6 +273,8 @@ point, or render the ArchiMate PlantUML source directly.
 - `plugin-manifest-lifecycle.puml`: manifest validation and runtime binding.
 - `plugin-platform-adapter.puml`: executable plugin persistence boundary,
   SQLite/PostgreSQL adapter selection, SQL repository calls, and audit logging.
+- `core-plugin-distribution.puml`: Rust core plugin manifest, workspace
+  coverage, marketplace packaging, and install flow.
 
 ### Service boundary diagrams
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 __all__ = [
     "core_plugin_coverage",
+    "rust_crate_path",
     "rust_workspace_inventory",
 ]
 
@@ -44,11 +45,27 @@ def rust_workspace_inventory(root: Path | str | None = None) -> dict[str, Any]:
         manifest = workspace_root / member / "Cargo.toml"
         if not manifest.exists():
             missing_members.append(member)
-            crates.append({"name": "", "path": member, "manifest": str(manifest), "exists": False})
+            crates.append(
+                {
+                    "name": "",
+                    "path": member,
+                    "manifest": str(manifest),
+                    "crate_root": str(manifest.parent),
+                    "exists": False,
+                }
+            )
             continue
         crate_payload = tomllib.loads(manifest.read_text(encoding="utf-8"))
         name = str(crate_payload.get("package", {}).get("name") or "").strip()
-        crates.append({"name": name, "path": member, "manifest": str(manifest), "exists": True})
+        crates.append(
+            {
+                "name": name,
+                "path": member,
+                "manifest": str(manifest),
+                "crate_root": str(manifest.parent),
+                "exists": True,
+            }
+        )
 
     crate_names = sorted(item["name"] for item in crates if item.get("name"))
     return {
@@ -60,6 +77,18 @@ def rust_workspace_inventory(root: Path | str | None = None) -> dict[str, Any]:
         "crates": crates,
         "missing_members": missing_members,
     }
+
+
+def rust_crate_path(crate_name: str, root: Path | str | None = None) -> Path | None:
+    """Resolve a workspace crate name to its local source directory."""
+
+    clean = crate_name.strip()
+    if not clean:
+        return None
+    for item in rust_workspace_inventory(root)["crates"]:
+        if item.get("name") == clean and item.get("exists"):
+            return Path(str(item["crate_root"]))
+    return None
 
 
 def core_plugin_coverage(
@@ -78,13 +107,19 @@ def core_plugin_coverage(
     ]
     by_crate: dict[str, list[str]] = defaultdict(list)
     missing: list[dict[str, str]] = []
+    undeclared: list[dict[str, str]] = []
     for manifest in rust_core:
         by_crate[manifest.rust_crate].append(manifest.plugin_id)
-        if manifest.rust_crate not in crate_names:
+        crate_root = rust_crate_path(manifest.rust_crate, root)
+        if manifest.rust_crate not in crate_names or crate_root is None:
             missing.append({"plugin_id": manifest.plugin_id, "rust_crate": manifest.rust_crate})
+        elif not _crate_declares_plugin(crate_root, manifest.plugin_id):
+            undeclared.append({"plugin_id": manifest.plugin_id, "rust_crate": manifest.rust_crate})
 
     covered_total = len(rust_core) - len(missing)
     coverage_percent = round((covered_total / len(rust_core)) * 100, 2) if rust_core else 100.0
+    declared_total = covered_total - len(undeclared)
+    contract_percent = round((declared_total / len(rust_core)) * 100, 2) if rust_core else 100.0
     return {
         "workspace": inventory,
         "core_plugin_total": len(rust_core),
@@ -92,6 +127,10 @@ def core_plugin_coverage(
         "missing_total": len(missing),
         "coverage_percent": coverage_percent,
         "missing": missing,
+        "declared_total": declared_total,
+        "undeclared_total": len(undeclared),
+        "contract_percent": contract_percent,
+        "undeclared": undeclared,
         "by_crate": [
             {"rust_crate": crate, "total": len(plugin_ids), "plugins": sorted(plugin_ids)}
             for crate, plugin_ids in sorted(by_crate.items())
@@ -107,3 +146,16 @@ def _workspace_root(root: Path | None = None) -> Path:
         if (candidate / "Cargo.toml").exists():
             return candidate
     return Path.cwd().resolve()
+
+
+def _crate_declares_plugin(crate_root: Path, plugin_id: str) -> bool:
+    src_root = crate_root / "src"
+    if not src_root.exists():
+        return False
+    for path in src_root.rglob("*.rs"):
+        try:
+            if plugin_id in path.read_text(encoding="utf-8"):
+                return True
+        except OSError:
+            continue
+    return False

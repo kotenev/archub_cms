@@ -73,12 +73,29 @@ before replacing Python service internals.
 The Python compatibility shell inventories `Cargo.toml` and exposes
 `core_plugins.rust_workspace` from `/api/platform/capabilities`. A core plugin is
 considered covered when its manifest has `runtime: "rust"` and `rust_crate`
-points to a workspace crate. CI tests keep `missing_total` at zero.
+points to a workspace crate. It is considered declared when the target crate
+source contains the plugin id. CI tests keep `missing_total` and
+`undeclared_total` at zero.
 
 Dedicated read models are also available:
 
 - `GET /api/platform/core-plugins`
 - `GET /api/platform/core-plugins/rust-workspace`
+
+Local audit command:
+
+```bash
+archub-core-plugins --fail-on-missing
+archub-core-plugins --json
+```
+
+## PlantUML
+
+```bash
+plantuml -tsvg docs/diagrams/plantuml/core-plugin-distribution.puml
+```
+
+- `docs/diagrams/plantuml/core-plugin-distribution.puml`
 
 ## Migration Rule
 

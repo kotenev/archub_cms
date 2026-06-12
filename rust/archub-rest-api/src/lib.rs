@@ -21,6 +21,16 @@ pub const PLATFORM_ROUTES: &[RouteDescriptor] = &[
         capability: "modules.read",
     },
     RouteDescriptor {
+        method: "GET",
+        path: "/api/platform/core-plugins",
+        capability: "core_plugins.read",
+    },
+    RouteDescriptor {
+        method: "GET",
+        path: "/api/platform/core-plugins/rust-workspace",
+        capability: "core_plugins.read",
+    },
+    RouteDescriptor {
         method: "POST",
         path: "/api/platform/modules/install/file",
         capability: "modules.install",
@@ -52,6 +62,9 @@ mod tests {
         assert!(PLATFORM_ROUTES
             .iter()
             .any(|route| route.path == "/api/platform/modules/install/file"));
+        assert!(PLATFORM_ROUTES
+            .iter()
+            .any(|route| route.path == "/api/platform/core-plugins/rust-workspace"));
     }
 
     #[test]
