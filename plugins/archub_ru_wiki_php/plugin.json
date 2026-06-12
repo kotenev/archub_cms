@@ -1,0 +1,44 @@
+{
+  "id": "archub.ru.wiki.php",
+  "name": "ArcHub.ru Enterprise Wiki PHP",
+  "version": "1.0.0",
+  "capability": "knowledge",
+  "runtime": "external",
+  "entrypoint": "http://127.0.0.1:8097/api/arc-tool",
+  "description": "Symfony 8 / PHP 8.4 external wiki module for ArcHub.ru: spaces, pages, diagrams.net-compatible diagrams, macros, search, graph and Confluence-style collaboration demo.",
+  "provider": "archub",
+  "permissions": [
+    "content:read",
+    "content:write",
+    "media:read",
+    "media:write",
+    "search:read",
+    "events:subscribe"
+  ],
+  "tags": [
+    "php",
+    "symfony",
+    "wiki",
+    "confluence",
+    "drawio",
+    "diagrams",
+    "archub.ru"
+  ],
+  "settings_schema": {
+    "base_url": "http://127.0.0.1:8097",
+    "shared_secret_env": "ARCHUB_WIKI_SHARED_SECRET",
+    "storage": "sqlite",
+    "drawio_mode": "mxfile-compatible"
+  },
+  "enabled_by_default": false,
+  "language": "php",
+  "provides": [
+    "wiki.spaces",
+    "wiki.pages",
+    "wiki.macros",
+    "wiki.search",
+    "wiki.graph",
+    "wiki.audit",
+    "wiki.drawio"
+  ]
+}

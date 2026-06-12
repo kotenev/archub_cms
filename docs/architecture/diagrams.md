@@ -275,6 +275,8 @@ point, or render the ArchiMate PlantUML source directly.
   SQLite/PostgreSQL adapter selection, SQL repository calls, and audit logging.
 - `core-plugin-distribution.puml`: Rust core plugin manifest, workspace
   coverage, marketplace packaging, and install flow.
+- `php-wiki-plugin.puml`: ArcHub.ru external PHP wiki plugin, Symfony service
+  boundary, Draw.io-compatible diagram surface, and ArcHub plugin bridge.
 
 ### Service boundary diagrams
 
