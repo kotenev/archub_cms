@@ -1,0 +1,30 @@
+@startuml
+!include <C4/C4_Context>
+LAYOUT_WITH_LEGEND()
+title System Context — ArcHub Platform
+
+Person(editor, "Content Editor", "Authors documents, models content, publishes")
+Person(agent_user, "ITSM Agent / Manager", "Logs and works incidents, changes, problems; approves; models workflows")
+Person(requester, "Requester / Customer", "Raises service requests, reads the knowledge base")
+Person(visitor, "Public Visitor", "Reads published content via the delivery API")
+Person(plugin_dev, "Plugin Developer", "Ships manifests + extensions on the SPI")
+
+System(archub, "ArcHub Platform", "FastAPI app: headless CMS, knowledge base + RAG, ITSM/ITIL suite, plugin runtime")
+
+System_Ext(host, "Host FastAPI App", "Optional: mounts ArcHub routers / embeds the package")
+System_Ext(llm, "LLM & Embedding Provider", "OpenAI-compatible endpoint (online); offline-extractive when absent")
+System_Ext(pg, "PostgreSQL", "Optional storage backend for the ITSM plugin")
+System_Ext(integrations, "Integrations", "Webhooks, Slack/Jira/GitHub connectors, cloud monitoring alerts")
+System_Ext(bpmn_tools, "BPMN Tooling", "bpmn.io / Camunda Modeler — import/export BPMN 2.0")
+
+Rel(editor, archub, "Authors & publishes", "HTTPS / backoffice")
+Rel(agent_user, archub, "Works tickets, models BPMN workflows", "HTTPS / /admin/itsm")
+Rel(requester, archub, "Raises requests, reads KB", "HTTPS")
+Rel(visitor, archub, "Reads published content", "HTTPS / delivery API")
+Rel(plugin_dev, archub, "Publishes plugins (manifest + entrypoint)", "Python / HTTP")
+Rel(archub, llm, "Grounded answers & embeddings", "HTTPS")
+Rel(archub, pg, "Persists ITSM data (optional)", "SQL")
+Rel(archub, integrations, "Emits signed events, syncs", "HTTPS")
+Rel(archub, bpmn_tools, "Exchanges BPMN 2.0 XML", "file / paste")
+Rel(host, archub, "Embeds routers & ports", "Python")
+@enduml

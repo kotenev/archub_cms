@@ -1,0 +1,22 @@
+# Keep the build context small and reproducible.
+.git
+.gitignore
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.ruff_cache
+.mypy_cache
+node_modules
+data
+site
+dist
+build
+*.egg-info
+docs
+tests
+session-*.md
+.idea
+.vscode

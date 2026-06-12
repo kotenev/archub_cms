@@ -16,9 +16,19 @@ The demo seeds a SQLite database at `data/archub_cms.db`.
 
 Open:
 
-- `http://127.0.0.1:8088/admin/archub`
-- `http://127.0.0.1:8088/cms`
-- `http://127.0.0.1:8088/api/docs`
+- `http://127.0.0.1:8088/admin/archub` — CMS backoffice
+- `http://127.0.0.1:8088/admin/itsm` — ITSM Service Desk
+- `http://127.0.0.1:8088/admin/itsm/workflow` — visual BPMN workflow editor (offline)
+- `http://127.0.0.1:8088/cms` — published site
+- `http://127.0.0.1:8088/api/docs` — OpenAPI
+
+!!! info "Deeper guides"
+    - [Local deployment](deployment/local.md) (embedding, production) and
+      [Docker & Compose](deployment/docker.md).
+    - The full [Configuration](reference/configuration.md) reference and
+      [HTTP API](reference/api.md) catalog.
+    - [Capabilities overview](capabilities/index.md) and the
+      [C4 architecture model](architecture/c4-model.md).
 
 ## Configuration
 
