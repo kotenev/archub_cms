@@ -6,6 +6,7 @@ import json
 import zipfile
 from pathlib import Path
 
+from archub_cms.application.core_plugins import core_plugin_coverage, rust_workspace_inventory
 from archub_cms.application.module_distribution_service import ModuleDistributionBuilder
 from archub_cms.application.platform import ArcHubPlatform
 from archub_cms.application.plugins import ArcHubPluginRegistry
@@ -55,10 +56,12 @@ def test_platform_capabilities_report_core_plugins(tmp_path, monkeypatch):
     caps = platform.capabilities()
 
     assert caps["product"] == "ArcHub platform"
-    assert caps["core_plugins"]["total"] >= 20
+    assert caps["core_plugins"]["total"] >= 24
     assert caps["core_plugins"]["rust_total"] == caps["core_plugins"]["total"]
     assert caps["core_plugins"]["cms"]["plugin_id"] == "archub.cms.core"
     assert caps["core_plugins"]["cms"]["rust_crate"] == "archub-cms-core"
+    assert caps["core_plugins"]["rust_workspace"]["missing_total"] == 0
+    assert caps["core_plugins"]["rust_workspace"]["coverage_percent"] == 100.0
 
 
 def test_marketplace_builder_packages_cms_core_plugin(tmp_path):
@@ -88,5 +91,52 @@ def test_rust_workspace_scaffolds_core_crates():
         "rust/archub-cms-core/Cargo.toml",
         "rust/archub-adapters/Cargo.toml",
         "rust/archub-rest-api/Cargo.toml",
+        "rust/archub-search-core/Cargo.toml",
+        "rust/archub-llm-core/Cargo.toml",
+        "rust/archub-workflow-core/Cargo.toml",
+        "rust/archub-governance-core/Cargo.toml",
+        "rust/archub-automation-core/Cargo.toml",
+        "rust/archub-knowledge-core/Cargo.toml",
+        "rust/archub-media-core/Cargo.toml",
+        "rust/archub-collaboration-core/Cargo.toml",
     ):
         assert (root / crate).exists()
+
+
+def test_rust_workspace_inventory_covers_builtin_core_plugins():
+    registry = ArcHubPluginRegistry(plugin_dirs=())
+
+    inventory = rust_workspace_inventory()
+    coverage = core_plugin_coverage(registry.manifests())
+
+    assert inventory["exists"] is True
+    assert inventory["members_total"] >= 12
+    assert "archub-cms-core" in inventory["crate_names"]
+    assert "archub-governance-core" in inventory["crate_names"]
+    assert coverage["missing_total"] == 0
+    assert coverage["covered_total"] == coverage["core_plugin_total"]
+    by_crate = {item["rust_crate"]: item for item in coverage["by_crate"]}
+    assert "archub.cms.core" in by_crate["archub-cms-core"]["plugins"]
+    assert "archub.workflow.publish" in by_crate["archub-workflow-core"]["plugins"]
+
+
+def test_core_plugin_endpoints_expose_workspace_coverage(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from archub_cms.app import create_archub_app
+    from archub_cms.extensibility.host import get_plugin_host
+
+    monkeypatch.setenv("ARCHUB_CMS_DB", str(tmp_path / "archub.db"))
+    get_archub_cms_service.cache_clear()
+    get_plugin_host(reload=True)
+
+    with TestClient(create_archub_app()) as client:
+        core_plugins = client.get("/api/platform/core-plugins")
+        workspace = client.get("/api/platform/core-plugins/rust-workspace")
+
+    assert core_plugins.status_code == 200
+    assert workspace.status_code == 200
+    payload = core_plugins.json()
+    assert payload["total"] >= 24
+    assert payload["rust_workspace"]["missing_total"] == 0
+    assert workspace.json()["covered_total"] == workspace.json()["core_plugin_total"]

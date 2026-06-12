@@ -406,6 +406,10 @@ class ModuleMarketplaceRepository:
             "package": package,
             "sha256": str(item.get("sha256") or "").strip(),
             "tags": list(item.get("tags") or ()),
+            "core": bool(item.get("core", False)),
+            "language": str(item.get("language") or "").strip(),
+            "rust_crate": str(item.get("rust_crate") or "").strip(),
+            "provides": list(item.get("provides") or ()),
             "source": str((self._root / package).resolve()) if package else "",
         }
 

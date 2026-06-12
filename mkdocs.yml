@@ -1,5 +1,5 @@
-site_name: ArcHub CMS
-site_description: Standalone headless CMS, content builder and delivery API.
+site_name: ArcHub
+site_description: Modular knowledge platform with CMS, plugins, adapters and delivery APIs.
 site_url: https://archub-cms.github.io/archub_cms/
 repo_url: https://github.com/archub-cms/archub_cms
 repo_name: archub-cms/archub_cms

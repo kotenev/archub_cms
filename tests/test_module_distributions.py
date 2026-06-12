@@ -94,6 +94,12 @@ def test_distribution_builder_writes_hierarchical_marketplace(tmp_path):
 
     catalog = ModuleMarketplaceRepository(tmp_path / "marketplace").catalog()
     assert catalog["total"] == 2
+    restored_builtin = next(
+        item for item in catalog["items"] if item["plugin_id"] == "archub.rest.demo"
+    )
+    assert restored_builtin["core"] is True
+    assert restored_builtin["language"] == "rust"
+    assert restored_builtin["rust_crate"] == "archub-rest-api"
 
     installed = ModuleDistributionInstaller(install_roots=(tmp_path / "installed",)).install(
         plugin_archive

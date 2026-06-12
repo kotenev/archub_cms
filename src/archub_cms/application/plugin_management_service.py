@@ -13,6 +13,7 @@ __all__ = ["PluginManagementService", "get_archub_plugin_management_service"]
 from pathlib import Path
 from typing import Any
 
+from archub_cms.application.core_plugins import core_plugin_coverage
 from archub_cms.application.module_distribution_service import (
     ModuleDistributionBuilder,
     ModuleDistributionInstaller,
@@ -52,8 +53,11 @@ class PluginManagementService:
         report = host.report()
         loaded = {item["plugin_id"] for item in report["loaded"]}
         failed = {item["plugin_id"]: item["error"] for item in report["failures"]}
+        manifests = self._registry.manifests()
+        coverage = core_plugin_coverage(manifests)
+        available_crates = set(coverage["workspace"]["crate_names"])
         items: list[dict[str, Any]] = []
-        for manifest in self._registry.manifests():
+        for manifest in manifests:
             executable = manifest.runtime in _EXECUTABLE_RUNTIMES
             items.append(
                 {
@@ -74,6 +78,9 @@ class PluginManagementService:
                     "core": manifest.core,
                     "language": manifest.language,
                     "rust_crate": manifest.rust_crate,
+                    "rust_crate_available": (
+                        not manifest.rust_crate or manifest.rust_crate in available_crates
+                    ),
                     "provides": list(manifest.provides),
                 }
             )
@@ -84,6 +91,7 @@ class PluginManagementService:
             "loaded_total": len(loaded),
             "capability_counts": report["capability_counts"],
             "install_root": str(self._installer().install_root),
+            "rust_workspace": coverage,
         }
 
     def install_from_file(

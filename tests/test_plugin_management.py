@@ -83,7 +83,9 @@ def test_catalog_merges_manifest_config_and_host(managed):
     # builtin Rust core modules are listed but not executed by the Python plugin host
     builtin = next(i for i in catalog["items"] if i["plugin_id"] == "archub.cms.core")
     assert builtin["core"] and builtin["runtime"] == "rust"
+    assert builtin["rust_crate_available"] is True
     assert not builtin["executable"] and not builtin["loaded"]
+    assert catalog["rust_workspace"]["missing_total"] == 0
 
 
 def test_enable_disable_round_trip_changes_loading(managed):

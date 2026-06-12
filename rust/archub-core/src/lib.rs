@@ -39,6 +39,66 @@ pub trait CorePlugin {
     }
 }
 
+#[derive(Debug, Default)]
+pub struct PlatformKernelPlugin;
+
+impl CorePlugin for PlatformKernelPlugin {
+    fn manifest(&self) -> CorePluginManifest {
+        CorePluginManifest {
+            id: "archub.platform.kernel",
+            name: "ArcHub Platform Kernel",
+            version: "1.0.0",
+            capability: "platform_module",
+            provides: &["kernel", "events", "mediator", "saga"],
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct HostAuthBridgePlugin;
+
+impl CorePlugin for HostAuthBridgePlugin {
+    fn manifest(&self) -> CorePluginManifest {
+        CorePluginManifest {
+            id: "archub.auth.host",
+            name: "Host Auth Bridge",
+            version: "1.0.0",
+            capability: "auth",
+            provides: &["auth.port"],
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct JinjaRendererPlugin;
+
+impl CorePlugin for JinjaRendererPlugin {
+    fn manifest(&self) -> CorePluginManifest {
+        CorePluginManifest {
+            id: "archub.renderer.jinja",
+            name: "Jinja Renderer",
+            version: "1.0.0",
+            capability: "renderer",
+            provides: &["rendering"],
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct MaterialDocsThemePlugin;
+
+impl CorePlugin for MaterialDocsThemePlugin {
+    fn manifest(&self) -> CorePluginManifest {
+        CorePluginManifest {
+            id: "archub.theme.material",
+            name: "Material Docs Theme",
+            version: "1.0.0",
+            capability: "theme",
+            provides: &["theme.material"],
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -62,5 +122,16 @@ mod tests {
         let plugin = TestPlugin;
         assert_eq!(plugin.manifest().id, "archub.test");
         assert_eq!(plugin.health().state, CorePluginState::Ready);
+    }
+
+    #[test]
+    fn builtin_platform_manifests_are_stable() {
+        assert_eq!(PlatformKernelPlugin.manifest().id, "archub.platform.kernel");
+        assert_eq!(HostAuthBridgePlugin.manifest().capability, "auth");
+        assert_eq!(JinjaRendererPlugin.manifest().capability, "renderer");
+        assert_eq!(
+            MaterialDocsThemePlugin.manifest().id,
+            "archub.theme.material"
+        );
     }
 }

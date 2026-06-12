@@ -391,6 +391,7 @@ class ArcHubPlatform:
         report = self._host.report()
         module_catalog = self.plugins.catalog()
         core_modules = [item for item in module_catalog["items"] if item.get("core")]
+        rust_workspace = module_catalog.get("rust_workspace", {})
         return {
             "product": "ArcHub platform",
             "version": "2.0.0",
@@ -405,6 +406,7 @@ class ArcHubPlatform:
                     None,
                 ),
                 "items": core_modules,
+                "rust_workspace": rust_workspace,
             },
             "plugins": {
                 "loaded": report["loaded_total"],

@@ -164,6 +164,22 @@ def plugin_manage() -> dict[str, Any]:
     return get_archub_plugin_management_service().catalog()
 
 
+@platform_router.get("/core-plugins")
+def core_plugins() -> dict[str, Any]:
+    catalog = get_archub_plugin_management_service().catalog()
+    items = [item for item in catalog["items"] if item.get("core")]
+    return {
+        "items": items,
+        "total": len(items),
+        "rust_workspace": catalog["rust_workspace"],
+    }
+
+
+@platform_router.get("/core-plugins/rust-workspace")
+def core_plugin_rust_workspace() -> dict[str, Any]:
+    return get_archub_plugin_management_service().catalog()["rust_workspace"]
+
+
 @platform_router.get("/modules/manage")
 def module_manage() -> dict[str, Any]:
     return get_archub_plugin_management_service().catalog()

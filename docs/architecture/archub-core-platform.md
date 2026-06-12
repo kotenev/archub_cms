@@ -25,13 +25,25 @@ behavior module by module.
 |---|---|---|---|
 | `archub.platform.kernel` | `platform_module` | `archub-core` | events, mediator, saga, health |
 | `archub.cms.core` | `cms` | `archub-cms-core` | content, modeling, publishing, delivery, runtime |
+| `archub.knowledge.spaces` | `knowledge` | `archub-knowledge-core` | spaces, tags, graph, bookmarks, templates |
+| `archub.media.assets` | `media` | `archub-media-core` | assets, DAM, blob store |
+| `archub.collaboration.threads` | `collaboration` | `archub-collaboration-core` | comments, mentions, reactions |
+| `archub.collaboration.live-edit` | `live_edit` | `archub-collaboration-core` | presence, conflict detection |
 | `archub.adapter.sqlite` | `adapter` | `archub-adapters` | SQLite repositories |
 | `archub.adapter.plugin-store` | `adapter` | `archub-adapters` | plugin store, plugin audit |
 | `archub.rest.platform` | `rest_api` | `archub-rest-api` | platform/module REST surface |
+| `archub.search.lexical` | `search` | `archub-search-core` | lexical search, facets, index |
+| `archub.llm.extractive` | `llm_provider` | `archub-llm-core` | offline grounded answers |
+| `archub.llm.openai-compatible` | `llm_provider` | `archub-llm-core` | online chat completions |
+| `archub.workflow.publish` | `workflow` | `archub-workflow-core` | approval, schedule, publish |
+| `archub.governance.rbac` | `governance` | `archub-governance-core` | RBAC, ITIL roles |
+| `archub.compliance.audit` | `compliance` | `archub-governance-core` | immutable audit trail |
+| `archub.automation.maintenance` | `automation` | `archub-automation-core` | scheduler, maintenance jobs |
+| `archub.notification.webhook` | `notification` | `archub-automation-core` | signed webhook delivery |
+| `archub.analytics.health` | `analytics` | `archub-automation-core` | content health scoring |
 
-Other built-in capabilities such as search, LLM providers, governance, workflow,
-analytics, and export/import are also represented as Rust core manifests so they
-can be packaged to the marketplace consistently.
+CMS-adjacent plugins such as Markdown import, vault export, runtime sync,
+structured editor, and content macros live in `archub-cms-core`.
 
 ## Rust Workspace
 
@@ -42,11 +54,31 @@ rust/
   archub-cms-core/   CMS content and publishing core skeleton
   archub-adapters/   storage/audit/plugin-store adapter traits
   archub-rest-api/   REST route descriptors and API module contract
+  archub-search-core/
+  archub-llm-core/
+  archub-workflow-core/
+  archub-governance-core/
+  archub-automation-core/
+  archub-knowledge-core/
+  archub-media-core/
+  archub-collaboration-core/
 ```
 
 The workspace intentionally avoids third-party crates at this stage. This keeps
 `cargo check --workspace` offline and makes the migration contract explicit
 before replacing Python service internals.
+
+## Workspace Coverage
+
+The Python compatibility shell inventories `Cargo.toml` and exposes
+`core_plugins.rust_workspace` from `/api/platform/capabilities`. A core plugin is
+considered covered when its manifest has `runtime: "rust"` and `rust_crate`
+points to a workspace crate. CI tests keep `missing_total` at zero.
+
+Dedicated read models are also available:
+
+- `GET /api/platform/core-plugins`
+- `GET /api/platform/core-plugins/rust-workspace`
 
 ## Migration Rule
 

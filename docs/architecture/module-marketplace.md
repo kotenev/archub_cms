@@ -31,7 +31,12 @@ Example manifest:
 ```
 
 Supported module capabilities include all plugin extension categories plus
-`cms`, `adapter`, `rest_api`, and `platform_module`.
+`knowledge`, `media`, `collaboration`, `cms`, `adapter`, `rest_api`, and
+`platform_module`.
+
+Marketplace indexes preserve core metadata (`core`, `language`, `rust_crate`,
+and `provides`) so repository clients can distinguish trusted platform modules
+from external executable plugins before installation.
 
 ## Marketplace Repository
 
