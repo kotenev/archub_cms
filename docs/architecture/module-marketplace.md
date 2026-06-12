@@ -21,14 +21,17 @@ Example manifest:
   "name": "Helpdesk REST API",
   "version": "1.0.0",
   "capability": "rest_api",
-  "runtime": "manifest",
+  "runtime": "rust",
+  "core": true,
+  "language": "rust",
+  "rust_crate": "archub-rest-api",
   "description": "Adds a helpdesk API surface.",
   "enabled_by_default": false
 }
 ```
 
 Supported module capabilities include all plugin extension categories plus
-`adapter`, `rest_api`, and `platform_module`.
+`cms`, `adapter`, `rest_api`, and `platform_module`.
 
 ## Marketplace Repository
 

@@ -32,6 +32,7 @@ nav:
   - Advanced CMS Refactor: architecture/advanced-cms-refactor.md
   - CMS Capability Matrix: architecture/capability-matrix.md
   - Enterprise Knowledge Platform: architecture/enterprise-knowledge-platform.md
+  - ArcHub Core Platform: architecture/archub-core-platform.md
   - Plugin Platform Adapter: architecture/plugin-platform-adapter.md
   - Module Marketplace: architecture/module-marketplace.md
   - Content Modeling: architecture/content-modeling.md

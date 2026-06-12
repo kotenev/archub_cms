@@ -44,6 +44,7 @@ PLUGIN_CAPABILITIES = (
     "dashboard_widget",
     "live_edit",
     "page_action",
+    "cms",
     "adapter",
     "rest_api",
     "platform_module",
@@ -69,6 +70,10 @@ class KnowledgePluginManifest:
     settings_schema: dict[str, Any] = field(default_factory=dict)
     enabled_by_default: bool = False
     source: str = "builtin"
+    core: bool = False
+    language: str = "python"
+    rust_crate: str = ""
+    provides: tuple[str, ...] = ()
 
     def validate(self) -> tuple[str, ...]:
         errors: list[str] = []
@@ -80,8 +85,10 @@ class KnowledgePluginManifest:
             errors.append("version must use semantic versioning")
         if self.capability not in PLUGIN_CAPABILITIES:
             errors.append(f"unknown capability: {self.capability}")
-        if self.runtime not in {"manifest", "python", "http", "external", "host"}:
+        if self.runtime not in {"manifest", "python", "http", "external", "host", "rust"}:
             errors.append(f"unknown runtime: {self.runtime}")
+        if self.core and self.runtime == "rust" and not self.rust_crate.strip():
+            errors.append("rust core plugins must declare rust_crate")
         return tuple(errors)
 
     @property
@@ -103,6 +110,10 @@ class KnowledgePluginManifest:
             "settings_schema": dict(self.settings_schema),
             "enabled_by_default": self.enabled_by_default,
             "source": self.source,
+            "core": self.core,
+            "language": self.language,
+            "rust_crate": self.rust_crate,
+            "provides": list(self.provides),
             "valid": self.valid,
             "errors": list(self.validate()),
         }
@@ -132,4 +143,8 @@ class KnowledgePluginManifest:
             ),
             enabled_by_default=bool(payload.get("enabled_by_default", False)),
             source=source,
+            core=bool(payload.get("core", False)),
+            language=str(payload.get("language") or "python").strip() or "python",
+            rust_crate=str(payload.get("rust_crate") or "").strip(),
+            provides=tuple(str(item) for item in payload.get("provides", ()) if str(item)),
         )

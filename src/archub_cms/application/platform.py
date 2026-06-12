@@ -389,12 +389,23 @@ class ArcHubPlatform:
 
     def capabilities(self) -> dict[str, Any]:
         report = self._host.report()
+        module_catalog = self.plugins.catalog()
+        core_modules = [item for item in module_catalog["items"] if item.get("core")]
         return {
-            "product": "ArcHub knowledge platform",
+            "product": "ArcHub platform",
             "version": "2.0.0",
             "bounded_contexts": [{"name": name, "description": desc} for name, desc in _CONTEXTS],
             "context_count": len(_CONTEXTS),
             "architectural_patterns": list(_PATTERNS),
+            "core_plugins": {
+                "total": len(core_modules),
+                "rust_total": len([item for item in core_modules if item.get("runtime") == "rust"]),
+                "cms": next(
+                    (item for item in core_modules if item.get("plugin_id") == "archub.cms.core"),
+                    None,
+                ),
+                "items": core_modules,
+            },
             "plugins": {
                 "loaded": report["loaded_total"],
                 "extension_points": {

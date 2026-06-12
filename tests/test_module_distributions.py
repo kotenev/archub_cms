@@ -52,10 +52,13 @@ def test_distribution_builder_writes_hierarchical_marketplace(tmp_path):
         name="Demo REST API",
         version="2.0.0",
         capability="rest_api",
-        runtime="host",
+        runtime="rust",
         description="Built-in REST surface.",
         provider="archub",
         source="builtin",
+        core=True,
+        language="rust",
+        rust_crate="archub-rest-api",
     )
     registry = ArcHubPluginRegistry(plugin_dirs=(plugin_root,), builtins=(builtin,))
 

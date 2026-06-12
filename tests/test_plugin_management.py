@@ -80,8 +80,9 @@ def test_catalog_merges_manifest_config_and_host(managed):
     assert catalog["loaded_total"] >= 8
     backlinks = next(i for i in catalog["items"] if i["plugin_id"] == "example.backlinks")
     assert backlinks["enabled"] and backlinks["loaded"] and backlinks["executable"]
-    # builtin host-runtime advertisements are listed but not executable/loaded
-    builtin = next(i for i in catalog["items"] if i["runtime"] == "host")
+    # builtin Rust core modules are listed but not executed by the Python plugin host
+    builtin = next(i for i in catalog["items"] if i["plugin_id"] == "archub.cms.core")
+    assert builtin["core"] and builtin["runtime"] == "rust"
     assert not builtin["executable"] and not builtin["loaded"]
 
 

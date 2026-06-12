@@ -9,10 +9,9 @@ than a generic 500.
 
 from __future__ import annotations
 
-__all__ = ["itsm_router", "itsm_web_router"]
-
+import os
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse
@@ -823,5 +822,6 @@ def itsm_workflow_asset(name: str) -> FileResponse:
     resolved = path(name) if callable(path) else None
     if resolved is None:
         raise HTTPException(status_code=404, detail=f"unknown editor asset {name!r}")
+    file_path = cast(str | os.PathLike[str], resolved)
     media = getattr(editor, "asset_media_type", lambda _n: None)(name) or "application/octet-stream"
-    return FileResponse(resolved, media_type=media)
+    return FileResponse(file_path, media_type=media)

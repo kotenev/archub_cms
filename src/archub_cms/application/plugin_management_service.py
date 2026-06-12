@@ -70,6 +70,11 @@ class PluginManagementService:
                     "error": failed.get(manifest.plugin_id, ""),
                     "settings": self._config.get_settings(manifest.plugin_id),
                     "permissions": list(manifest.permissions),
+                    "version": manifest.version,
+                    "core": manifest.core,
+                    "language": manifest.language,
+                    "rust_crate": manifest.rust_crate,
+                    "provides": list(manifest.provides),
                 }
             )
         items.sort(key=lambda item: (item["capability"], item["plugin_id"]))

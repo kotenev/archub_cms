@@ -26,7 +26,7 @@ def test_dashboard_renders_html(client):
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("text/html")
     body = resp.text
-    assert "ArcHub knowledge platform" in body
+    assert "ArcHub platform" in body
     assert "Bounded contexts" in body
     assert "Plugin runtime" in body
     assert "Content health" in body
