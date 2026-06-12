@@ -649,7 +649,22 @@ def test_api_assign_request(client):
 
 def test_api_schemes_and_bpmn(client):
     schemes = client.get("/api/platform/itsm/schemes").json()
-    assert schemes["total"] == 3
+    keys = {s["key"] for s in schemes["schemes"]}
+    # The best-practice ITIL library ships by default.
+    assert {
+        "incident",
+        "major_incident",
+        "problem",
+        "service_request",
+        "change",
+        "standard_change",
+        "emergency_change",
+        "release",
+        "event",
+        "knowledge",
+    } <= keys
+    assert schemes["total"] == len(keys)
+    assert all(s["valid"] for s in schemes["schemes"])
 
     detail = client.get("/api/platform/itsm/schemes/incident")
     assert detail.status_code == 200
@@ -808,6 +823,55 @@ def test_bpmn_roundtrip_is_lossless_for_default_schemes():
             assert back.transitions[tid].to_status == transition.to_status
             assert back.transitions[tid].is_global == transition.is_global
         assert back.is_valid
+
+
+def test_itil_default_scheme_library_is_complete_and_valid():
+    schemes = build_default_schemes()
+    expected = {
+        "incident",
+        "major_incident",
+        "problem",
+        "service_request",
+        "change",
+        "standard_change",
+        "emergency_change",
+        "release",
+        "event",
+        "knowledge",
+    }
+    assert expected <= set(schemes)
+    for key, scheme in schemes.items():
+        assert scheme.validate() == [], (key, scheme.validate())
+
+
+def test_problem_requests_use_the_problem_scheme():
+    desk = ServiceDesk(repository=InMemoryRequestRepository(), clock=lambda: 1.0)
+    request = desk.create_request(type=RequestType.PROBLEM, summary="recurring outages")
+    assert request.scheme_key == "problem"
+    assert request.status_id == "new"
+
+
+def test_problem_management_lifecycle():
+    desk = ServiceDesk(repository=InMemoryRequestRepository(), clock=lambda: 1.0)
+    req = desk.create_request(type=RequestType.PROBLEM, summary="root cause unknown")
+    desk.transition(req.key, "investigate", actor="ann", actor_role="agent")
+    desk.transition(req.key, "identify", actor="ann", actor_role="agent")
+    desk.transition(req.key, "raise_change", actor="mgr", actor_role="manager")
+    resolved = desk.transition(req.key, "resolve", actor="ann", resolution="patch deployed")
+    assert resolved.status_id == "resolved"
+    assert desk.transition(req.key, "close", actor="ann").status_id == "closed"
+
+
+def test_emergency_change_requires_ecab_approval():
+    desk = ServiceDesk(repository=InMemoryRequestRepository(), clock=lambda: 1.0)
+    req = desk.create_request(
+        type=RequestType.CHANGE, summary="prod hotfix", scheme_key="emergency_change"
+    )
+    desk.transition(req.key, "submit", actor="dev")
+    with pytest.raises(WorkflowError):  # ECAB approval gate not satisfied
+        desk.transition(req.key, "approve", actor="mgr", actor_role="manager")
+    approved = desk.transition(req.key, "approve", actor="mgr", actor_role="manager", approved=True)
+    assert approved.status_id == "approved"
 
 
 def test_workflow_scheme_from_dict_roundtrip():

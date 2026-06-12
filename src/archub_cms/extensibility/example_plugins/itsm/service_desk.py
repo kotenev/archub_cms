@@ -3,8 +3,10 @@
 It owns the registry of customizable :class:`WorkflowScheme` objects and a
 :class:`RequestRepository`. Persistent repositories are supplied by the platform
 adapter; the service falls back to in-memory storage only when used standalone in
-tests. Three default schemes ship for a cloud provider: incident management,
-service-request fulfilment and change management.
+tests. A library of best-practice ITIL workflow schemes ships by default
+(:func:`build_default_schemes`) covering incident, major incident, problem,
+service request, normal/standard/emergency change, release, event and knowledge
+management — each a ready-to-run, customizable state machine.
 """
 
 from __future__ import annotations
@@ -42,13 +44,13 @@ class RequestNotFoundError(WorkflowError):
 _TYPE_SCHEME = {
     RequestType.INCIDENT: "incident",
     RequestType.SERVICE_REQUEST: "service_request",
-    RequestType.PROBLEM: "incident",
+    RequestType.PROBLEM: "problem",
     RequestType.CHANGE: "change",
 }
 
 
 def build_default_schemes() -> dict[str, WorkflowScheme]:
-    """Three production-shaped schemes a cloud Service Desk starts with."""
+    """The library of best-practice ITIL workflow schemes a Service Desk starts with."""
 
     incident = (
         WorkflowScheme("incident", "Incident Management", "Cloud incident lifecycle")
@@ -143,7 +145,262 @@ def build_default_schemes() -> dict[str, WorkflowScheme]:
         )
     )
 
-    return {scheme.key: scheme for scheme in (incident, service_request, change)}
+    major_incident = (
+        WorkflowScheme(
+            "major_incident", "Major Incident Management", "ITIL major incident lifecycle (PIR)"
+        )
+        .add_status("declared", "Declared", StatusCategory.TODO, initial=True)
+        .add_status("assembled", "Team Assembled", StatusCategory.IN_PROGRESS)
+        .add_status("investigating", "Investigating", StatusCategory.IN_PROGRESS)
+        .add_status("mitigated", "Mitigated", StatusCategory.IN_PROGRESS)
+        .add_status("resolved", "Resolved", StatusCategory.IN_PROGRESS)
+        .add_status("review", "Post-Incident Review", StatusCategory.IN_PROGRESS)
+        .add_status("closed", "Closed", StatusCategory.DONE)
+        .add_status("cancelled", "Cancelled", StatusCategory.DONE)
+        .add_transition(
+            "assemble",
+            "Assemble MI Team",
+            "assembled",
+            ["declared"],
+            conditions=["is_agent"],
+            post_functions=["assign_to_actor"],
+        )
+        .add_transition("investigate", "Investigate", "investigating", ["assembled"])
+        .add_transition("mitigate", "Apply Workaround", "mitigated", ["investigating"])
+        .add_transition(
+            "resolve",
+            "Resolve",
+            "resolved",
+            ["mitigated"],
+            conditions=["resolution_set"],
+            post_functions=["stamp_resolved_at"],
+        )
+        .add_transition(
+            "start_review", "Start Review (PIR)", "review", ["resolved"], conditions=["is_manager"]
+        )
+        .add_transition("close", "Close", "closed", ["review"])
+        .add_transition("reopen", "Reopen", "investigating", ["resolved", "review"])
+        .add_transition("cancel", "Cancel", "cancelled", post_functions=["stamp_resolved_at"])
+    )
+
+    problem = (
+        WorkflowScheme("problem", "Problem Management", "ITIL problem & known-error lifecycle")
+        .add_status("new", "New", StatusCategory.TODO, initial=True)
+        .add_status("investigation", "Root Cause Analysis", StatusCategory.IN_PROGRESS)
+        .add_status("known_error", "Known Error", StatusCategory.IN_PROGRESS)
+        .add_status("change_requested", "Change Requested", StatusCategory.IN_PROGRESS)
+        .add_status("resolved", "Resolved", StatusCategory.IN_PROGRESS)
+        .add_status("closed", "Closed", StatusCategory.DONE)
+        .add_status("cancelled", "Cancelled", StatusCategory.DONE)
+        .add_transition(
+            "investigate",
+            "Investigate",
+            "investigation",
+            ["new"],
+            conditions=["is_agent"],
+            post_functions=["assign_to_actor"],
+        )
+        .add_transition("identify", "Record Known Error", "known_error", ["investigation"])
+        .add_transition(
+            "raise_change",
+            "Raise Change (RFC)",
+            "change_requested",
+            ["known_error"],
+            conditions=["is_manager"],
+        )
+        .add_transition(
+            "resolve",
+            "Resolve",
+            "resolved",
+            ["known_error", "change_requested"],
+            conditions=["resolution_set"],
+            post_functions=["stamp_resolved_at"],
+        )
+        .add_transition("close", "Close", "closed", ["resolved"])
+        .add_transition("reopen", "Reopen", "investigation", ["resolved", "closed"])
+        .add_transition("cancel", "Cancel", "cancelled", post_functions=["stamp_resolved_at"])
+    )
+
+    standard_change = (
+        WorkflowScheme(
+            "standard_change", "Standard Change", "Pre-authorized low-risk change (no CAB)"
+        )
+        .add_status("requested", "Requested", StatusCategory.TODO, initial=True)
+        .add_status("scheduled", "Scheduled", StatusCategory.TODO)
+        .add_status("implementing", "Implementing", StatusCategory.IN_PROGRESS)
+        .add_status("implemented", "Implemented", StatusCategory.DONE)
+        .add_status("failed", "Failed", StatusCategory.DONE)
+        .add_transition("schedule", "Schedule", "scheduled", ["requested"])
+        .add_transition(
+            "implement",
+            "Start Implementation",
+            "implementing",
+            ["scheduled"],
+            conditions=["is_agent"],
+            post_functions=["assign_to_actor"],
+        )
+        .add_transition(
+            "complete",
+            "Complete",
+            "implemented",
+            ["implementing"],
+            post_functions=["stamp_resolved_at"],
+        )
+        .add_transition(
+            "fail", "Mark Failed", "failed", ["implementing"], post_functions=["stamp_resolved_at"]
+        )
+    )
+
+    emergency_change = (
+        WorkflowScheme(
+            "emergency_change", "Emergency Change", "Expedited change with ECAB approval"
+        )
+        .add_status("raised", "Raised", StatusCategory.TODO, initial=True)
+        .add_status("ecab_review", "ECAB Review", StatusCategory.TODO)
+        .add_status("approved", "Approved", StatusCategory.IN_PROGRESS)
+        .add_status("implementing", "Implementing", StatusCategory.IN_PROGRESS)
+        .add_status("implemented", "Implemented", StatusCategory.DONE)
+        .add_status("rejected", "Rejected", StatusCategory.DONE)
+        .add_status("rolled_back", "Rolled Back", StatusCategory.DONE)
+        .add_transition("submit", "Submit to ECAB", "ecab_review", ["raised"])
+        .add_transition(
+            "approve",
+            "Approve (ECAB)",
+            "approved",
+            ["ecab_review"],
+            conditions=["change_approved", "is_manager"],
+        )
+        .add_transition("reject", "Reject", "rejected", ["ecab_review"], conditions=["is_manager"])
+        .add_transition("implement", "Start Implementation", "implementing", ["approved"])
+        .add_transition(
+            "complete",
+            "Complete",
+            "implemented",
+            ["implementing"],
+            post_functions=["stamp_resolved_at"],
+        )
+        .add_transition(
+            "rollback",
+            "Roll Back",
+            "rolled_back",
+            ["implementing"],
+            post_functions=["stamp_resolved_at"],
+        )
+    )
+
+    release = (
+        WorkflowScheme("release", "Release Management", "ITIL release & deployment management")
+        .add_status("planned", "Planned", StatusCategory.TODO, initial=True)
+        .add_status("building", "Building", StatusCategory.IN_PROGRESS)
+        .add_status("testing", "Testing", StatusCategory.IN_PROGRESS)
+        .add_status("ready", "Ready for Deploy", StatusCategory.TODO)
+        .add_status("deploying", "Deploying", StatusCategory.IN_PROGRESS)
+        .add_status("deployed", "Deployed", StatusCategory.DONE)
+        .add_status("rolled_back", "Rolled Back", StatusCategory.DONE)
+        .add_status("cancelled", "Cancelled", StatusCategory.DONE)
+        .add_transition(
+            "build",
+            "Build",
+            "building",
+            ["planned"],
+            conditions=["is_agent"],
+            post_functions=["assign_to_actor"],
+        )
+        .add_transition("test", "Test", "testing", ["building"])
+        .add_transition("go", "Go Decision", "ready", ["testing"], conditions=["is_manager"])
+        .add_transition("deploy", "Deploy", "deploying", ["ready"])
+        .add_transition(
+            "complete",
+            "Complete",
+            "deployed",
+            ["deploying"],
+            post_functions=["stamp_resolved_at"],
+        )
+        .add_transition(
+            "rollback",
+            "Roll Back",
+            "rolled_back",
+            ["deploying"],
+            post_functions=["stamp_resolved_at"],
+        )
+        .add_transition("cancel", "Cancel", "cancelled", post_functions=["stamp_resolved_at"])
+    )
+
+    event = (
+        WorkflowScheme("event", "Event Management", "ITIL event detection & response")
+        .add_status("new", "New", StatusCategory.TODO, initial=True)
+        .add_status("triaged", "Triaged", StatusCategory.TODO)
+        .add_status("correlated", "Correlated", StatusCategory.IN_PROGRESS)
+        .add_status("in_progress", "Responding", StatusCategory.IN_PROGRESS)
+        .add_status("resolved", "Resolved", StatusCategory.DONE)
+        .add_status("suppressed", "Suppressed", StatusCategory.DONE)
+        .add_transition(
+            "triage",
+            "Classify",
+            "triaged",
+            ["new"],
+            conditions=["is_agent"],
+            post_functions=["assign_to_actor"],
+        )
+        .add_transition("suppress", "Suppress (Informational)", "suppressed", ["triaged"])
+        .add_transition("correlate", "Correlate", "correlated", ["triaged"])
+        .add_transition("respond", "Respond", "in_progress", ["correlated"])
+        .add_transition(
+            "auto_close",
+            "Auto-Close",
+            "resolved",
+            ["correlated"],
+            post_functions=["stamp_resolved_at"],
+        )
+        .add_transition(
+            "resolve",
+            "Resolve",
+            "resolved",
+            ["in_progress"],
+            post_functions=["stamp_resolved_at"],
+        )
+    )
+
+    knowledge = (
+        WorkflowScheme("knowledge", "Knowledge Management", "ITIL knowledge article lifecycle")
+        .add_status("draft", "Draft", StatusCategory.TODO, initial=True)
+        .add_status("review", "In Review", StatusCategory.TODO)
+        .add_status("approved", "Approved", StatusCategory.IN_PROGRESS)
+        .add_status("published", "Published", StatusCategory.DONE)
+        .add_status("archived", "Archived", StatusCategory.DONE)
+        .add_status("rejected", "Rejected", StatusCategory.DONE)
+        .add_transition(
+            "submit",
+            "Submit for Review",
+            "review",
+            ["draft"],
+            conditions=["is_agent"],
+            post_functions=["assign_to_actor"],
+        )
+        .add_transition("approve", "Approve", "approved", ["review"], conditions=["is_manager"])
+        .add_transition("reject", "Reject", "rejected", ["review"], conditions=["is_manager"])
+        .add_transition(
+            "publish", "Publish", "published", ["approved"], post_functions=["stamp_resolved_at"]
+        )
+        .add_transition("archive", "Archive", "archived", ["published"])
+        .add_transition("revise", "Revise (New Version)", "draft", ["published"])
+    )
+
+    return {
+        scheme.key: scheme
+        for scheme in (
+            incident,
+            major_incident,
+            problem,
+            service_request,
+            change,
+            standard_change,
+            emergency_change,
+            release,
+            event,
+            knowledge,
+        )
+    }
 
 
 class ServiceDesk:
