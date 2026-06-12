@@ -1,8 +1,8 @@
 site_name: ArcHub
 site_description: Modular knowledge & ITSM platform — CMS, plugins, hexagonal adapters, RAG and delivery APIs.
-site_url: https://archub-cms.github.io/archub_cms/
-repo_url: https://github.com/archub-cms/archub_cms
-repo_name: archub-cms/archub_cms
+site_url: https://kotenev.github.io/archub_cms/
+repo_url: https://github.com/kotenev/archub_cms
+repo_name: kotenev/archub_cms
 copyright: Copyright &copy; 2026 ArcHub contributors
 
 theme:
@@ -39,6 +39,7 @@ nav:
   - Deployment:
       - Local (no Docker): deployment/local.md
       - Docker & Compose: deployment/docker.md
+      - GitHub Pages (docs): deployment/github-pages.md
   - Capabilities:
       - Overview: capabilities/index.md
       - ITSM / ITIL: capabilities/itsm.md
