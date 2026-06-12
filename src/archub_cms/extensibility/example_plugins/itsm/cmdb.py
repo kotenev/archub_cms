@@ -236,10 +236,10 @@ class Cmdb:
     def list_items(self, *, ci_type: str = "", service_id: str = "") -> list[ConfigurationItem]:
         items = [ConfigurationItem.from_dict(row) for row in self._items.list_all()]
         if ci_type:
-            items = [i for i in items if i.ci_type.value == ci_type]
+            items = [i for i in items if CIType(i.ci_type).value == ci_type]
         if service_id:
             items = [i for i in items if i.service_id == service_id]
-        return sorted(items, key=lambda i: (i.ci_type.value, i.name.casefold(), i.id))
+        return sorted(items, key=lambda i: (CIType(i.ci_type).value, i.name.casefold(), i.id))
 
     # -- relationships -----------------------------------------------------
 
