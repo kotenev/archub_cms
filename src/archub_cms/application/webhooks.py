@@ -1,4 +1,10 @@
-"""Webhook integration application service for ArcHub CMS."""
+"""Webhook integration application service for ArcHub CMS.
+
+.. deprecated:: Superseded by the webhooks bounded context
+   (``archub_cms.application.webhooks_service`` — Outbox dispatch over the
+   ``domain.webhooks.Webhook`` aggregate, plus NotificationExt channels). Kept
+   for back-compat.
+"""
 
 from __future__ import annotations
 

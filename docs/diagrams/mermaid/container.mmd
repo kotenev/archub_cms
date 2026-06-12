@@ -1,21 +1,120 @@
 flowchart TB
-    subgraph Package[archub_cms package]
-        App[create_archub_app]
-        Routes[web.routes]
-        CMS[services.cms]
-        Builder[services.content_builder]
-        Runtime[services.runtime]
-        Ports[ports.py]
-        RAG[integrations.rag]
+    subgraph Actors
+        Editor[Content editor]
+        Visitor[Public visitor]
+        Host[FastAPI host app]
+        PluginDev[Plugin developer]
+        Agent[Agent / LLM consumer]
     end
 
-    Editor[Content editor] --> Routes
-    Visitor[Public visitor] --> Routes
-    Host[Host FastAPI app] --> Ports
-    App --> Routes
-    Routes --> CMS
-    Routes --> Builder
-    Routes --> Runtime
-    Runtime --> RAG
-    CMS --> DB[(SQLite)]
-    CMS --> Files[Runtime export files]
+    subgraph Web["web/ — FastAPI route adapters"]
+        Routes[web.routes\npublic + backoffice]
+        PlatformRoutes[web.platform_routes\n/api/platform/*]
+        CollabRoutes[web.collaboration_routes\n/api/platform/collaboration/*]
+        AdminRoutes[web.admin_routes\n/admin/platform]
+    end
+
+    subgraph Ports["ports.py — Hexagonal host contracts"]
+        AuthPort
+        TemplatePort
+        RuntimeSourcePort
+        LLMProviderPort
+        EmbeddingPort
+        SearchPort
+        CachePort[CacheInvalidationPort]
+        AuditSink
+    end
+
+    subgraph App["application/ — Bounded-context services"]
+        Platform[ArcHubPlatform\ncomposition root]
+        ContentSvc[content_service]
+        ModelingSvc[modeling_service]
+        DeliverySvc[delivery_read_service]
+        PublishingSvc[publishing]
+        WorkflowSvc[workflow_service]
+        GovernanceSvc[governance_service]
+        VersioningSvc[versioning_service]
+        MediaSvc[media_service]
+        PackageSvc[packaging_service]
+        WebhookSvc[webhooks_service]
+        SearchSvc[search_service]
+        CollabSvc[collaboration_service]
+        GraphSvc[graph_service]
+        RuntimeSvc[runtime_service]
+        LocSvc[localization_service]
+        AnalyticsSvc[analytics_service]
+        SubSvc[subscription_service]
+        AgentSvc[agent_service]
+        LockSvc[lock_service]
+        TrashSvc[trash_service]
+        BlueprintSvc[blueprint_service]
+        PluginMgmtSvc[plugin_management_service]
+        IngestionSvc[ingestion_service]
+    end
+
+    subgraph Domain["domain/ — 20 bounded contexts"]
+        ContentDomain[content\nContentNode aggregate]
+        ModelingDomain[modeling\nContentTypeModel]
+        WorkflowDomain[workflow\nWorkflow state machine]
+        GovernanceDomain[governance\nAccessRule + PermissionRule]
+        KnowledgeDomain[knowledge\nKnowledgeSpace + Graph]
+        PluginsDomain[plugins\nPluginManifest]
+    end
+
+    subgraph Kernel["kernel/ — Shared primitives"]
+        EventBus[EventBus + EventHandler]
+        UoW[UnitOfWork]
+        Result[Result / Ok / Err]
+        Spec[Specification]
+        CB[CircuitBreaker]
+    end
+
+    subgraph Extensibility["extensibility/ — Plugin runtime"]
+        PluginHost[PluginHost\nlifecycle manager]
+        ExtPoints[25 Extension Points\nSearch, LLMTool, Renderer,\nMacro, WorkflowAction, Connector,\nDashboardWidget, Storage...]
+        PermGate[PermissionGate]
+        PlatformAdapter[PluginPlatformAdapter\nSQLite/Postgres stores + audit]
+    end
+
+    subgraph Infra["infrastructure/ — Persistence"]
+        DB[Database connection factory]
+        Repos[31 SQLite repositories]
+        PluginRepos[Platform plugin repositories\ninfrastructure/plugins]
+        FTS[FTS5 full-text index]
+    end
+
+    subgraph Data["Data stores"]
+        SQLite[(SQLite\nARCHUB_CMS_DB)]
+        PluginAudit[(archub_plugin_audit)]
+        PluginData[(Plugin data tables\nSQLite or PostgreSQL)]
+        Files[Runtime export files\nARCHUB_RUNTIME_EXPORT_DIR]
+    end
+
+    Editor --> Routes
+    Visitor --> Routes
+    Agent --> PlatformRoutes
+    Host --> Ports
+    PluginDev --> ExtPoints
+
+    Routes --> App
+    PlatformRoutes --> App
+    CollabRoutes --> App
+    AdminRoutes --> App
+
+    App --> Domain
+    App --> Kernel
+    Platform --> ContentSvc
+    Platform --> ModelingSvc
+    Platform --> DeliverySvc
+
+    Domain --> Kernel
+    Extensibility --> Kernel
+    PluginHost --> ExtPoints
+    PluginHost --> PlatformAdapter
+
+    Domain --> Infra
+    Infra --> SQLite
+    PlatformAdapter --> PluginRepos
+    PluginRepos --> PluginData
+    PlatformAdapter --> PluginAudit
+    Infra --> Files

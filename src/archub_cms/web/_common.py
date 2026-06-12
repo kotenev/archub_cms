@@ -1,4 +1,5 @@
 """Standalone FastAPI web helpers for ArcHub CMS."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -18,6 +19,7 @@ _TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "templates"
 class CurrentUser:
     username: str = "admin"
     is_admin: bool = True
+    groups: tuple[str, ...] = ()
 
 
 def _format_datetime(ts: float) -> str:
@@ -62,5 +64,10 @@ def current_user(request: Request) -> CurrentUser | None:
     username = request.headers.get("X-ArcHub-User") or request.cookies.get("archub_user")
     if username:
         is_admin = (request.headers.get("X-ArcHub-Admin") or "1").strip() not in {"0", "false"}
-        return CurrentUser(username=username, is_admin=is_admin)
+        groups = tuple(
+            item.strip()
+            for item in (request.headers.get("X-ArcHub-Groups") or "").split(",")
+            if item.strip()
+        )
+        return CurrentUser(username=username, is_admin=is_admin, groups=groups)
     return CurrentUser()

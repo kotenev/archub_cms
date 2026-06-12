@@ -1,0 +1,49 @@
+@startuml
+title ArcHub CMS - Plugin Platform Adapter and Audit
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam sequenceMessageAlign center
+
+actor "Plugin developer" as Dev
+participant "PluginHost\nextensibility/host.py" as Host
+participant "PluginContext\nextension_points.py" as Context
+participant "PluginPlatformAdapter\nplatform_adapter.py" as Adapter
+participant "SQLitePluginStore /\nPostgresPluginStore" as Store
+participant "Platform SQL Repository\ninfrastructure/plugins/*" as Repo
+participant "Executable Plugin\nexample_plugins/*" as Plugin
+participant "PluginAuditLog" as Audit
+database "archub_plugin_audit\n+ plugin data tables" as DB
+
+Dev -> Host : plugin.json + entrypoint
+Host -> Adapter : create(plugin_id, settings, audit_log)
+Host -> Audit : plugin.load.attempt
+Host -> Context : manifest + settings + platform
+Host -> Plugin : setup(context)
+Plugin -> Adapter : service_desk_repository(settings)
+Adapter -> Store : choose SQLite or PostgreSQL
+Store -> Audit : adapter.sqlite.open / adapter.postgres.open
+Adapter -> Repo : construct repository with store
+Repo -> Store : transaction(itsm.schema.ensure)
+Store -> DB : CREATE TABLE IF NOT EXISTS
+Store -> Audit : itsm.schema.ensure
+Plugin -> Context : register(extension)
+Context -> Audit : extension.registered
+
+group Plugin request command
+    Plugin -> Repo : save(request)
+    Repo -> Store : transaction(itsm.request.save)
+    Store -> DB : INSERT ... ON CONFLICT UPDATE
+    alt success
+        Store -> Audit : itsm.request.save
+    else failure
+        Store -> DB : rollback
+        Store -> Audit : itsm.request.save.failed\nerror metadata
+    end
+end
+
+note over Plugin
+Plugin packages must not import Database,
+sqlite3, psycopg, or commit raw connections.
+end note
+
+@enduml

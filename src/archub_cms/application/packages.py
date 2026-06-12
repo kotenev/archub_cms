@@ -1,4 +1,9 @@
-"""Package promotion application service for ArcHub CMS."""
+"""Package promotion application service for ArcHub CMS.
+
+.. deprecated:: Superseded by the packaging bounded context
+   (``archub_cms.application.packaging_service.PackagingService`` over the
+   ``domain.packaging.ContentPackage`` value object). Kept for back-compat.
+"""
 
 from __future__ import annotations
 

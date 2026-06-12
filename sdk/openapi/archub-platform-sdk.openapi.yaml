@@ -1,0 +1,134 @@
+openapi: 3.1.0
+info:
+  title: ArcHub Platform SDK API Surface
+  version: 1.0.0
+  description: Stable SDK-facing subset of ArcHub platform, plugin, marketplace, delivery and knowledge APIs.
+servers:
+  - url: http://127.0.0.1:8088
+paths:
+  /api/platform/capabilities:
+    get:
+      tags: [platform]
+      summary: Platform capabilities, contexts, plugin runtime and core plugin coverage.
+      responses:
+        "200": { description: Capabilities payload }
+  /api/platform/index:
+    get:
+      tags: [platform]
+      summary: Self-describing route index grouped by platform context.
+      responses:
+        "200": { description: Route index }
+  /api/platform/core-plugins:
+    get:
+      tags: [core_plugins]
+      summary: Core plugin read model with Rust workspace coverage.
+      responses:
+        "200": { description: Core plugin catalog }
+  /api/platform/core-plugins/rust-workspace:
+    get:
+      tags: [core_plugins]
+      summary: Rust crate coverage and declaration report for core plugins.
+      responses:
+        "200": { description: Rust workspace coverage }
+  /api/platform/plugins/manage:
+    get:
+      tags: [plugins]
+      summary: Plugin management catalog with enabled, loaded and runtime status.
+      responses:
+        "200": { description: Plugin management catalog }
+  /api/platform/plugins/{plugin_id}/enable:
+    post:
+      tags: [plugins]
+      summary: Enable a plugin.
+      parameters:
+        - name: plugin_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Plugin status }
+  /api/platform/plugins/{plugin_id}/disable:
+    post:
+      tags: [plugins]
+      summary: Disable a plugin.
+      parameters:
+        - name: plugin_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Plugin status }
+  /api/platform/modules/marketplace:
+    get:
+      tags: [marketplace]
+      summary: Read a local marketplace repository.
+      parameters:
+        - name: repository
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Marketplace catalog }
+  /api/platform/modules/marketplace/install:
+    post:
+      tags: [marketplace]
+      summary: Install a module from a marketplace repository.
+      responses:
+        "200": { description: Installed module status }
+  /cms/api/tree:
+    get:
+      tags: [delivery]
+      summary: Published content tree.
+      responses:
+        "200": { description: Published tree }
+  /cms/api/content/{path}:
+    get:
+      tags: [delivery]
+      summary: Published content item.
+      parameters:
+        - name: path
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Published content item }
+  /cms/api/search:
+    get:
+      tags: [delivery]
+      summary: Published content search.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Search results }
+  /api/platform/knowledge/search:
+    get:
+      tags: [knowledge]
+      summary: Federated knowledge search.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Knowledge hits }
+  /api/platform/knowledge/answer:
+    post:
+      tags: [knowledge]
+      summary: Grounded answer over the knowledge base.
+      responses:
+        "200": { description: Grounded answer }
+  /api/platform/runtime/status:
+    get:
+      tags: [runtime]
+      summary: Runtime export status.
+      responses:
+        "200": { description: Runtime status }
+  /api/platform/runtime/export:
+    post:
+      tags: [runtime]
+      summary: Trigger runtime export.
+      responses:
+        "200": { description: Export status }

@@ -1,0 +1,13 @@
+{
+  "id": "example.backlinks",
+  "name": "Backlinks & Recent Publications",
+  "version": "1.0.0",
+  "capability": "connector",
+  "runtime": "python",
+  "entrypoint": "archub_cms.extensibility.example_plugins.backlinks:BacklinksPlugin",
+  "description": "Subscribes to content.published and indexes published routes for backlinks and search.",
+  "provider": "archub",
+  "permissions": ["events:subscribe", "content:read", "search:read"],
+  "tags": ["example", "obsidian", "backlinks"],
+  "enabled_by_default": true
+}

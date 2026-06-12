@@ -1,0 +1,27 @@
+@startuml
+title ArcHub.ru PHP Wiki External Plugin
+
+skinparam componentStyle rectangle
+skinparam shadowing false
+
+actor "ArcHub Editor" as Editor
+component "ArcHub Platform\nFastAPI host" as ArcHub
+component "PluginManagementService" as Plugins
+component "archub.ru.wiki.php\nplugin.json" as Manifest
+node "PHP 8.4 / Symfony 8\nExternal Wiki Service" as PHP {
+  component "Wiki API" as Api
+  component "Wiki Renderer" as Renderer
+  component "Draw.io-compatible\nDiagram Surface" as Drawio
+  database "Wiki Store\nSQLite-ready seed repo" as Store
+}
+
+Editor --> ArcHub : manages plugin
+ArcHub --> Plugins : catalog / enable
+Plugins --> Manifest : validate external module
+ArcHub --> Api : POST /api/arc-tool
+Editor --> Renderer : wiki UI
+Renderer --> Drawio : diagram editor
+Api --> Store : spaces, pages, graph
+Drawio --> Store : mxfile XML
+
+@enduml

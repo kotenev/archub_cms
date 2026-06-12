@@ -1,0 +1,45 @@
+# ArcHub platform — local container deployment.
+#
+#   docker compose up --build                 # app only (SQLite, persisted volume)
+#   docker compose --profile itsm-postgres up  # app + PostgreSQL for the ITSM plugin
+#
+# Then open http://127.0.0.1:8088/admin/archub and /admin/itsm.
+
+services:
+  archub:
+    build: .
+    image: archub-platform:local
+    ports:
+      - "8088:8000"
+    environment:
+      # Persist demo content + runtime exports in the named volume.
+      ARCHUB_CMS_DB: /data/archub_cms.db
+      ARCHUB_RUNTIME_EXPORT_DIR: /data/archub_runtime
+      # Run the maintenance worker (scheduled jobs, webhook dispatch, etc.).
+      ARCHUB_BACKGROUND_JOBS: "true"
+      # Uncomment to route the ITSM plugin (requests + catalog/SLA/CMDB) to Postgres.
+      # ARCHUB_ITSM_PG_DSN: postgresql://archub:archub@postgres:5432/archub_itsm
+    volumes:
+      - archub-data:/data
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    profiles: ["itsm-postgres"]
+    environment:
+      POSTGRES_DB: archub_itsm
+      POSTGRES_USER: archub
+      POSTGRES_PASSWORD: archub
+    ports:
+      - "5432:5432"
+    volumes:
+      - archub-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U archub -d archub_itsm"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  archub-data:
+  archub-pg:

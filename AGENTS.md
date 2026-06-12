@@ -1,31 +1,66 @@
 # Repository Guidelines
 
-## Project Structure & Module Organization
+## Project Structure
 
-ArcHub CMS is a Python package using a `src/` layout. Core package code lives in `src/archub_cms/`: `services/` contains CMS, content builder, and runtime export logic; `web/` contains FastAPI routes; `integrations/` contains optional host integration hooks; `templates/` and `static/` hold shipped UI assets. Tests live in `tests/`. MkDocs content is in `docs/`, and the static GitHub Pages demo is in `demo_site/`.
+ArcHub CMS is a standalone headless CMS and Content Builder for FastAPI hosts. Python `src/` layout; package is `archub_cms`.
+
+Key directories under `src/archub_cms/`:
+- `domain/` — bounded-context domain models (content, modeling, delivery, workflow, blueprints, etc.)
+- `services/` — facade services: `cms.py` (legacy aggregate being decomposed), `content_builder.py`, `runtime.py`, `jobs.py`
+- `infrastructure/db/` — `Database` connection factory shared everywhere; `infrastructure/sqlite/` — per-domain repositories
+- `kernel/` — shared primitives: `result.py`, `specification.py`, `unit_of_work.py`, `circuit_breaker.py`, `events.py`
+- `web/` — FastAPI route modules: `routes.py` (public delivery), `admin_routes.py`, `platform_routes.py`, `collaboration_routes.py`
+- `extensibility/` — plugin host, event bus, config store, extension points
+- `integrations/` — optional host integration hooks (e.g., RAG)
+- `ports.py` — Protocol-based host contracts (`AuthPort`, `TemplatePort`, `RuntimeSourcePort`, `LLMProviderPort`, `EmbeddingPort`, `SearchPort`, `CacheInvalidationPort`, `AuditSink`)
+- `settings.py` — environment-driven config via `ArcHubSettings.from_env()`
 
 ## Build, Test, and Development Commands
 
-- `python -m pip install -e ".[server,yaml,test,docs]"`: install the package locally with server, YAML, test, and docs extras.
-- `uvicorn archub_cms.app:create_archub_app --factory --host 127.0.0.1 --port 8088`: run the standalone demo app.
-- `ruff check src tests`: run lint checks used by CI.
-- `ruff format src tests`: format Python files with the configured Ruff formatter.
-- `python -m compileall -q src`: perform the CI syntax check.
-- `pytest -q`: run the test suite.
-- `mkdocs build --site-dir site`: build documentation locally.
+```bash
+python -m pip install -e ".[server,yaml,test,docs]"   # install with all extras
+uvicorn archub_cms.app:create_archub_app --factory --host 127.0.0.1 --port 8088  # standalone demo
+pytest -q                                              # run tests
+pytest tests/test_delivery.py -q                       # run a single test file
+ruff check src tests                                   # lint
+ruff format src tests                                  # format
+python -m compileall -q src                            # syntax check
+mkdocs build --site-dir site                           # build docs
+```
 
-## Coding Style & Naming Conventions
+CI gate runs in this order: **lint → syntax check → test** (see `.github/workflows/ci.yml`). CI tests on Python 3.11 and 3.12.
 
-Target Python 3.11+. Use type hints for public APIs and keep modules under the `archub_cms` product boundary. Follow Ruff settings in `pyproject.toml`: 100-character line length, double quotes, space indentation, sorted imports, and Python 3.11 upgrade rules. Use `snake_case` for modules, functions, fixtures, and variables; `PascalCase` for classes such as ports and services. Keep host-specific behavior behind `ports.py` abstractions instead of importing application-specific packages.
+## Coding Style
 
-## Testing Guidelines
+Target Python 3.11+. Ruff settings in `pyproject.toml`: 100-char lines, double quotes, space indent, sorted imports, `py311` target. Ruff lint rules: `E, W, F, I, UP, B, C4, RET, SIM, PTH, RUF` (E501 and RUF001–003, RUF022 ignored). Use `snake_case` for modules/functions/variables, `PascalCase` for classes.
 
-Tests use `pytest` and are discovered from `tests/` with `test_*.py` naming. Prefer isolated filesystem state with `tmp_path` and set `ARCHUB_CMS_DB` through `monkeypatch` when exercising persistence. Add coverage for route registration, public delivery behavior, content seeding, and product-boundary regressions when those areas change. CI runs tests on Python 3.11 and 3.12.
+Host-specific behavior must stay behind `ports.py` Protocol abstractions — never import application-specific packages into `archub_cms`.
 
-## Commit & Pull Request Guidelines
+## Testing
 
-Recent history uses short, imperative summaries such as `Prepare ArcHub CMS standalone release`. Keep the first line focused and under about 72 characters; add body text only for rationale or migration notes. Pull requests should include a brief summary, testing performed, linked issues when applicable, and screenshots or URLs for changes touching `templates/`, `static/`, `docs/`, or `demo_site/`.
+Tests in `tests/` with `test_*.py` naming. Use `tmp_path` for isolated filesystem state and `monkeypatch` to set `ARCHUB_CMS_DB` when exercising persistence. The `data/` directory is gitignored — SQLite DBs and runtime exports are created at runtime.
 
-## Security & Configuration Tips
+## Configuration
 
-Configuration is environment-driven. Local defaults create SQLite/runtime files under `data/`; do not commit generated databases, runtime exports, secrets, or host credentials. Use `ARCHUB_CMS_DB`, `ARCHUB_RUNTIME_EXPORT_DIR`, and delivery cache variables to isolate local and test runs.
+All config is environment-driven. Key variables:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `ARCHUB_CMS_DB` | `data/archub_cms.db` | SQLite database path |
+| `ARCHUB_RUNTIME_EXPORT_DIR` | `data/archub_runtime` | Published runtime snapshot directory |
+| `ARCHUB_PUBLIC_ROOT` | `/cms` | Public URL root |
+| `ARCHUB_BACKGROUND_JOBS` | off | Set `1`/`true` to enable background worker |
+| `ARCHUB_PLUGIN_DIRS` | `plugins` | Plugin search directories |
+| `ARCHUB_LLM_PROVIDER` | `offline-extractive` | LLM provider mode |
+
+Do not commit generated databases, runtime exports, secrets, or host credentials.
+
+## Commit & PR Guidelines
+
+Short, imperative summaries under ~72 characters. Body text only for rationale or migration notes. PRs: brief summary, testing performed, linked issues. Include screenshots/URLs for changes to `templates/`, `static/`, `docs/`, or `demo_site/`.
+
+## Key Entry Points
+
+- App factory: `src/archub_cms/app.py` → `create_archub_app()`
+- Public import surface: `archub_cms.services.cms`, `archub_cms.services.content_builder`, `archub_cms.web.routes`
+- Host embedding: `from archub_cms.web.routes import router as archub_router` then `app.include_router(archub_router)`

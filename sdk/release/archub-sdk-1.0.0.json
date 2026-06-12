@@ -1,0 +1,38 @@
+{
+  "api_groups": [
+    "platform",
+    "core_plugins",
+    "plugin_management",
+    "module_marketplace",
+    "delivery",
+    "knowledge",
+    "runtime"
+  ],
+  "artifacts": [
+    "sdk/python",
+    "sdk/openapi/archub-platform-sdk.openapi.yaml",
+    "docs/sdk/platform-sdk.md"
+  ],
+  "features": [
+    "Typed Python client with injectable transport",
+    "Plugin manifest builder and validator",
+    "Marketplace repository and module installation helpers",
+    "Published delivery API helpers",
+    "Knowledge search and grounded answer helpers",
+    "Core plugin and Rust workspace coverage helpers"
+  ],
+  "languages": [
+    "python"
+  ],
+  "minimum_python": "3.11",
+  "name": "ArcHub Platform SDK",
+  "package": "archub-platform-sdk",
+  "status": "beta",
+  "technology_stack": {
+    "client": "Python 3.11+ stdlib HTTP transport",
+    "docs": "MkDocs Material",
+    "platform": "FastAPI, SQLite/PostgreSQL adapters, Rust core plugin workspace",
+    "plugin_model": "Manifest, Python, HTTP/external, Rust core modules"
+  },
+  "version": "1.0.0"
+}

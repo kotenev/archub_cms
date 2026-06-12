@@ -132,7 +132,7 @@ class KnowledgeSource:
     title: str
     route_path: str
     excerpt: str
-    score: int = 0
+    score: float = 0.0
 
     def as_dict(self) -> dict[str, Any]:
         return {

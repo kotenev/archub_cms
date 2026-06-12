@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block main_class %}page{% endblock %}
+{% block content %}
+<a class="back-link" href="/admin/platform">← Platform</a>
+
+<div class="page-head">
+  <div>
+    <h1 class="profile__name">ArcHub ITSM</h1>
+    <p class="muted">
+      {{ current_user.username }} · {{ current_user.actor_role }}
+      {% for role in current_user.roles %} · {{ role.name }}{% endfor %}
+    </p>
+  </div>
+  <span>
+    <a class="btn btn--ghost" href="/api/platform/itsm/rbac/roles" target="_blank">RBAC JSON</a>
+    <a class="btn btn--ghost" href="/api/platform/itsm/queue" target="_blank">Queue JSON</a>
+    <a class="btn btn--ghost" href="/api/platform/itsm/schemes" target="_blank">Schemes JSON</a>
+  </span>
+</div>
+
+<div class="stat-cards">
+  <div class="stat-card"><span class="stat-card__num">{{ queue.total }}</span><span class="muted">requests</span></div>
+  <div class="stat-card"><span class="stat-card__num">{{ queue.open }}</span><span class="muted">open</span></div>
+  <div class="stat-card"><span class="stat-card__num">{{ queue.sla_response_breaches }}</span><span class="muted">response SLA</span></div>
+  <div class="stat-card"><span class="stat-card__num">{{ queue.sla_resolution_breaches }}</span><span class="muted">resolution SLA</span></div>
+  <div class="stat-card"><span class="stat-card__num">{{ schemes|length }}</span><span class="muted">schemes</span></div>
+  <div class="stat-card"><span class="stat-card__num">{{ current_user.permissions|length }}</span><span class="muted">permissions</span></div>
+</div>
+
+<section class="archub-panel">
+  <div class="archub-panel__head">
+    <div>
+      <h2 class="section-title">Queue</h2>
+      <p class="muted">Permissions: {% for item in current_user.permissions %}<code>{{ item }}</code>{% endfor %}</p>
+    </div>
+    <span class="archub-actions archub-actions--inline">
+      {% if can_create %}<span class="badge">create</span>{% endif %}
+      {% if can_assign %}<span class="badge">assign</span>{% endif %}
+      {% if can_approve %}<span class="badge">approve</span>{% endif %}
+    </span>
+  </div>
+  {% if requests %}
+  <ol class="archub-audit">
+    {% for item in requests[:20] %}
+    <li class="archub-audit__item archub-audit__item--info">
+      <strong>{{ item.key }}</strong>
+      <span>{{ item.summary }} · {{ item.status_id }} · {{ item.priority }}</span>
+      <a href="/api/platform/itsm/requests/{{ item.key }}" target="_blank">{{ item.type }}</a>
+      <code>{{ item.assignee or item.reporter or "unassigned" }}</code>
+    </li>
+    {% endfor %}
+  </ol>
+  {% else %}
+  <p class="muted">No ITSM requests.</p>
+  {% endif %}
+</section>
+
+<section class="archub-panel">
+  <div class="archub-panel__head">
+    <div>
+      <h2 class="section-title">Workflow Schemes</h2>
+      <p class="muted">Incident, service request, and change workflows.</p>
+    </div>
+    <span class="archub-actions archub-actions--inline">
+      <a class="btn" href="{{ workflow_editor_url }}">✎ Edit visually (BPMN)</a>
+    </span>
+  </div>
+  <div class="archub-types">
+    {% for scheme in schemes %}
+    <a class="archub-type" href="/api/platform/itsm/schemes/{{ scheme.key }}" target="_blank">
+      <div class="archub-type__head"><strong>{{ scheme.name }}</strong><code>{{ scheme.key }}</code></div>
+      <p class="muted">{{ scheme.statuses|length }} statuses · {{ scheme.transitions|length }} transitions</p>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="archub-panel">
+  <div class="archub-panel__head">
+    <div>
+      <h2 class="section-title">ITIL RBAC</h2>
+      <p class="muted">{{ rbac.roles|length }} roles · {{ rbac.permissions|length }} permissions</p>
+    </div>
+  </div>
+  <div class="archub-types">
+    {% for role in rbac.roles %}
+    <div class="archub-type">
+      <div class="archub-type__head"><strong>{{ role.name }}</strong><code>{{ role.role_id }}</code></div>
+      <p class="muted">{{ role.practice }} · {{ role.actor_role }}</p>
+      <p class="muted">{% for permission in role.permissions %}<code>{{ permission }}</code>{% endfor %}</p>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

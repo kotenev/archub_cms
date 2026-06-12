@@ -1,60 +1,177 @@
 @startuml
-title ArcHub CMS - Target Advanced CMS Layers
+title ArcHub CMS - DDD Layer Architecture (Current)
 skinparam componentStyle rectangle
 skinparam shadowing false
 skinparam defaultFontName Arial
 
-package "Adapters" {
-  component "FastAPI routes\nweb.routes" as Routes
-  component "Jinja templates\nstatic UI" as UI
-  component "Host ports\nports.py" as Ports
+package "Web adapters — web/" as WebLayer {
+    component "routes.py\npublic + backoffice" as Routes
+    component "platform_routes.py\n/api/platform/*" as PlatformRoutes
+    component "collaboration_routes.py" as CollabRoutes
+    component "admin_routes.py\nHTML dashboard" as AdminRoutes
+    artifact "Jinja templates\nstatic assets" as Assets
 }
 
-package "Application" {
-  component "Publishing use cases" as Publishing
-  component "Delivery read models" as Delivery
-  component "Package import/export" as Packages
-  component "Media management" as Media
-  component "Webhook orchestration" as Webhooks
-  component "Maintenance jobs" as Jobs
+package "Hexagonal Ports — ports.py" as PortsLayer {
+    interface "AuthPort" as AuthPort
+    interface "TemplatePort" as TemplatePort
+    interface "RuntimeSourcePort" as RuntimePort
+    interface "LLMProviderPort" as LLMPort
+    interface "EmbeddingPort" as EmbedPort
+    interface "SearchPort" as SearchPort
+    interface "CacheInvalidationPort" as CachePort
+    interface "AuditSink" as AuditPort
 }
 
-package "Domain" {
-  component "Content model\nnodes/types/fields" as Content
-  component "Workflow and permissions" as Governance
-  component "Published content facade" as Published
-  component "Domain events" as Events
+package "Application — application/" as AppLayer {
+    component "ArcHubPlatform\ncomposition root" as Platform
+    component "Content commands + queries" as ContentApp
+    component "Modeling queries" as ModelingApp
+    component "Delivery read service" as DeliveryApp
+    component "Publishing commands" as PublishingApp
+    component "Workflow CQRS" as WorkflowApp
+    component "Governance CQRS" as GovernanceApp
+    component "Versioning CQRS" as VersioningApp
+    component "Media CQRS" as MediaApp
+    component "Packaging commands" as PackageApp
+    component "Webhooks CQRS" as WebhookApp
+    component "Search + FTS5" as SearchApp
+    component "Agent tool-use answering" as AgentApp
+    component "Collaboration commands" as CollabApp
+    component "Graph queries" as GraphApp
+    component "Runtime CQRS" as RuntimeApp
+    component "Localization CQRS" as LocApp
+    component "Analytics queries" as AnalyticsApp
+    component "Subscription CQRS" as SubApp
+    component "Lock CQRS" as LockApp
+    component "Trash CQRS" as TrashApp
+    component "Blueprint CQRS" as BlueprintApp
+    component "Plugin management" as PluginApp
+    component "Ingestion" as IngestionApp
+    component "Resilient LLM\n(circuit breaker)" as ResilientLLM
+    component "Embeddings\n(offline + online)" as EmbeddingApp
 }
 
-package "Infrastructure" {
-  database "SQLite store" as SQLite
-  folder "Runtime snapshot files" as RuntimeFiles
-  component "Webhook transport" as Transport
-  component "RAG index hook" as Rag
+package "Domain — domain/" as DomainLayer {
+    component "content\nContentNode aggregate\nSlug, RoutePath, Culture" as ContentDomain
+    component "modeling\nContentTypeModel\nDataType, Template, Field" as ModelingDomain
+    component "workflow\nWorkflow state machine\nWORKFLOW_TRANSITIONS" as WorkflowDomain
+    component "governance\nAccessRule, PermissionRule\nAccessPolicy enum" as GovDomain
+    component "knowledge\nKnowledgeSpace, Document\nEdge, Graph, Answer" as KnowledgeDomain
+    component "collaboration\nComment aggregate\nMention, Reaction" as CollabDomain
+    component "search\nSearchQuery, Facets\nFacetBuilder" as SearchDomain
+    component "versioning\nVersion, VersionDiff\nFieldChange" as VersioningDomain
+    component "delivery\nRedirect, PublishedDocument" as DeliveryDomain
+    component "blueprints\nBlueprint aggregate" as BlueprintDomain
+    component "locks\nEditLock aggregate" as LockDomain
+    component "media\nMediaAsset aggregate" as MediaDomain
+    component "packaging\nContentPackage" as PackagingDomain
+    component "runtime\nRuntimeSnapshot" as RuntimeDomain
+    component "localization\nDictionaryEntry\nLocalizedVariant" as LocDomain
+    component "analytics\nHealthReport, ActivityEntry" as AnalyticsDomain
+    component "subscriptions\nSubscription aggregate" as SubDomain
+    component "trash\nTrashedItem" as TrashDomain
+    component "webhooks\nWebhook + DeliveryRecord" as WebhookDomain
+    component "plugins\nPluginManifest" as PluginDomain
 }
 
-Routes --> Publishing
-Routes --> Delivery
-Routes --> Packages
-Routes --> Media
-Routes --> Jobs
-Routes --> UI
-Routes --> Ports
-Publishing --> Content
-Publishing --> Governance
-Publishing --> Events
-Delivery --> Published
-Delivery --> Content
-Packages --> Content
-Media --> Content
-Webhooks --> Events
-Jobs --> Publishing
-Jobs --> Webhooks
-Jobs --> Delivery
-Content --> SQLite
-Governance --> SQLite
-Published --> SQLite
-Events --> Transport
-Events --> RuntimeFiles
-RuntimeFiles --> Rag
+package "Kernel — kernel/" as KernelLayer {
+    component "EventBus\nsync pub/sub\nwildcard subscriptions" as EventBus
+    component "UnitOfWork\ntransaction boundary\npost-commit events" as UoW
+    component "Result / Ok / Err\ntyped error handling" as Result
+    component "Specification\ncomposable predicates\n& | ~ operators" as Spec
+    component "CircuitBreaker\nClosed→Open→Half-Open" as CB
+}
+
+package "Extensibility — extensibility/" as ExtLayer {
+    component "PluginHost\nlifecycle: discover → check → load → wire" as PluginHost
+    component "25 Extension Points\nEventHook, Search, LLMTool,\nRenderer, Macro, WorkflowAction,\nConnector, DashboardWidget,\nStorage, Notification, Plugin" as ExtPts
+    component "PermissionGate\nmanifest enforcement" as PermGate
+    component "PluginConfigStore\nSQLite per-plugin settings" as ConfigStore
+    component "PluginPlatformAdapter\nSQLite/Postgres stores\n+ audit boundary" as PluginAdapter
+    component "InProcessLoader\nHttpToolLoader" as Loaders
+}
+
+package "Infrastructure — infrastructure/" as InfraLayer {
+    component "Database\nconnection factory\nauto-mkdir" as DB
+    component "schema.py\nDDL + migrations" as Schema
+    component "infrastructure/plugins\nplatform-owned plugin SQL repos" as PluginRepos
+    component "content_repository\nblueprint_repository\ncollaboration_repository\ncomment_repository\ndelivery_repository\nembedding_repository\nfts_index\ngovernance_repository\nlocalization_repository\nlock_repository\nmedia_repository\nmodeling_repository\nruntime_repository\nsubscription_repository\ntrash_repository\nversioning_repository\nwebhook_repository" as Repos
+}
+
+database "SQLite\nARCHUB_CMS_DB" as SQLite
+database "Plugin data tables\nSQLite or PostgreSQL" as PluginData
+database "archub_plugin_audit" as PluginAudit
+folder "Runtime export\nARCHUB_RUNTIME_EXPORT_DIR" as Files
+folder "Plugin dirs\nARCHUB_PLUGIN_DIRS" as PluginFiles
+
+Routes --> Platform
+PlatformRoutes --> Platform
+CollabRoutes --> Platform
+AdminRoutes --> Platform
+Routes --> Assets
+
+Platform --> ContentApp
+Platform --> ModelingApp
+Platform --> DeliveryApp
+Platform --> PublishingApp
+Platform --> WorkflowApp
+Platform --> GovernanceApp
+Platform --> AgentApp
+Platform --> SearchApp
+
+ContentApp --> ContentDomain
+ModelingApp --> ModelingDomain
+PublishingApp --> ContentDomain
+WorkflowApp --> WorkflowDomain
+GovernanceApp --> GovDomain
+AgentApp --> KnowledgeDomain
+CollabApp --> CollabDomain
+SearchApp --> SearchDomain
+VersioningApp --> VersioningDomain
+DeliveryApp --> DeliveryDomain
+
+ContentDomain --> EventBus
+ContentDomain --> UoW
+ContentDomain --> Result
+WorkflowDomain --> Spec
+GovDomain --> Spec
+AgentApp --> CB
+ResilientLLM --> CB
+
+ContentDomain --> Repos
+ModelingDomain --> Repos
+WorkflowDomain --> Repos
+GovDomain --> Repos
+CollabDomain --> Repos
+SearchDomain --> Repos
+VersioningDomain --> Repos
+DeliveryDomain --> Repos
+BlueprintDomain --> Repos
+LockDomain --> Repos
+MediaDomain --> Repos
+RuntimeDomain --> Repos
+LocDomain --> Repos
+AnalyticsDomain --> Repos
+SubDomain --> Repos
+TrashDomain --> Repos
+WebhookDomain --> Repos
+
+Repos --> DB
+DB --> SQLite
+RuntimeApp --> Files
+PluginHost --> PluginFiles
+PluginHost --> ExtPts
+PluginHost --> PermGate
+PluginHost --> ConfigStore
+PluginHost --> PluginAdapter
+PluginHost --> Loaders
+PluginAdapter --> PluginRepos
+PluginAdapter --> PluginAudit
+PluginRepos --> PluginData
+ExtPts ..> ContentApp : plugin contributions
+
+AuthPort -.-> Platform
+LLMPort -.-> ResilientLLM
+EmbedPort -.-> EmbeddingApp
 @enduml

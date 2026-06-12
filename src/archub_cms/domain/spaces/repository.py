@@ -1,0 +1,16 @@
+"""Space repository port."""
+
+from __future__ import annotations
+
+from typing import Protocol, runtime_checkable
+
+from archub_cms.domain.spaces.space import Space
+
+
+@runtime_checkable
+class SpaceRepository(Protocol):
+    def get(self, space_key: str) -> Space | None: ...
+    def list_all(self) -> list[Space]: ...
+    def upsert(self, space: Space) -> Space: ...
+    def delete(self, space_key: str) -> bool: ...
+    def find_by_owner(self, owner: str) -> list[Space]: ...

@@ -1,0 +1,46 @@
+@startuml
+title ArcHub Rust Core Plugin Distribution
+
+skinparam componentStyle rectangle
+skinparam shadowing false
+
+actor "Platform Maintainer" as Maintainer
+component "ArcHubPluginRegistry" as Registry
+component "KnowledgePluginManifest\ncore=true, runtime=rust" as Manifest
+component "Rust Workspace\nCargo.toml" as Workspace
+component "Core Crate\nrust/<crate>" as Crate
+component "ModuleDistributionBuilder" as Builder
+artifact "Marketplace Archive\nplugin.json + Cargo.toml + rust/*" as Archive
+database "Marketplace Repository\nmarketplace.json" as Marketplace
+component "ModuleDistributionInstaller" as Installer
+component "PluginManagementService" as Management
+component "Core Coverage API\n/api/platform/core-plugins" as Api
+
+Maintainer --> Registry : build marketplace
+Registry --> Manifest : built-in core manifests
+Manifest --> Workspace : rust_crate
+Workspace --> Crate : resolve crate path
+Manifest --> Builder
+Crate --> Builder : source files
+Builder --> Archive
+Builder --> Marketplace : index item\nsha256 + rust metadata
+Marketplace --> Installer : selected package
+Installer --> Management : installed metadata
+Management --> Api : coverage + declaration report
+
+note right of Builder
+Core packages include:
+- plugin.json
+- README.md
+- minimal Cargo.toml
+- rust/archub-core
+- rust/<target-crate>
+end note
+
+note bottom of Api
+Coverage is valid only when:
+missing_total = 0
+undeclared_total = 0
+end note
+
+@enduml

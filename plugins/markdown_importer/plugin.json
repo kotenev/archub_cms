@@ -1,0 +1,13 @@
+{
+  "id": "example.markdown_importer",
+  "name": "Markdown Importer",
+  "version": "1.0.0",
+  "capability": "importer",
+  "runtime": "python",
+  "entrypoint": "archub_cms.extensibility.example_plugins.markdown_importer:MarkdownImporterPlugin",
+  "description": "Imports markdown (with YAML front matter) into normalized knowledge documents.",
+  "provider": "archub",
+  "permissions": ["content:read"],
+  "tags": ["example", "wikijs", "importer"],
+  "enabled_by_default": true
+}

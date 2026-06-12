@@ -1,0 +1,13 @@
+{
+  "id": "example.content_macros",
+  "name": "Content Macros & Callouts",
+  "version": "1.0.0",
+  "capability": "macro",
+  "runtime": "python",
+  "entrypoint": "archub_cms.extensibility.example_plugins.content_macros:ContentMacrosPlugin",
+  "description": "Obsidian-style callout renderer plus {{badge}} and {{status}} Confluence-style macros.",
+  "provider": "archub",
+  "permissions": ["content:read"],
+  "tags": ["example", "confluence", "obsidian", "macros"],
+  "enabled_by_default": true
+}

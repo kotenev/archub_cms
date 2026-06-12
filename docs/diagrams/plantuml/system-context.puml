@@ -1,5 +1,5 @@
 @startuml
-title ArcHub CMS - System Context
+title ArcHub CMS - System Context (Current DDD Architecture)
 skinparam componentStyle rectangle
 skinparam shadowing false
 skinparam defaultFontName Arial
@@ -8,18 +8,37 @@ actor "Content editor" as Editor
 actor "Public visitor" as Visitor
 actor "FastAPI host app" as Host
 actor "Runtime/RAG consumer" as RuntimeConsumer
+actor "Plugin developer" as PluginDev
+actor "Agent / LLM client" as AgentClient
 
 rectangle "ArcHub CMS\nPython package" as ArcHub {
-  rectangle "Backoffice, delivery,\nand management APIs" as Routes
+    rectangle "FastAPI routes\n(public + backoffice)" as Routes
+    rectangle "Platform API\n/api/platform/*" as PlatformAPI
+    rectangle "Collaboration API\n/api/platform/collaboration" as CollabAPI
+    rectangle "ArcHubPlatform\ncomposition root" as PlatformRoot
+    rectangle "20 bounded-context\napplication services" as Services
+    rectangle "Plugin host\n25 extension points\nplatform persistence adapter" as Plugins
 }
 
 database "SQLite CMS store\nARCHUB_CMS_DB" as SQLite
+database "Plugin audit log\narchub_plugin_audit" as PluginAudit
 folder "Runtime snapshot files\nARCHUB_RUNTIME_EXPORT_DIR" as Export
+folder "Plugin manifests\nARCHUB_PLUGIN_DIRS" as PluginFiles
 
-Editor --> Routes : /admin/archub
-Visitor --> Routes : /cms and /cms/api/*
+Editor --> Routes : /admin/archub\nHTML + JSON
+Visitor --> Routes : /cms and /cms/api/*\nHTML + JSON
+AgentClient --> PlatformAPI : /api/platform/knowledge/*\nJSON
 Host --> ArcHub : include_router()\nimplement ports
-Routes --> SQLite : read/write editorial state
-Routes --> Export : write published runtime snapshot
+PluginDev --> PluginFiles : plugin.json manifest
+
+Routes --> Services
+PlatformAPI --> Services
+CollabAPI --> Services
+PlatformRoot --> Services
+Plugins --> Services
+Services --> SQLite : read/write state
+Plugins --> PluginAudit : audit lifecycle,\nconfig and persistence
+Services --> Export : write runtime snapshots
 RuntimeConsumer --> Export : consume content\nor rebuild indexes
+Plugins --> PluginFiles : discover and load
 @enduml

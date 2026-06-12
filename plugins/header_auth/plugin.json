@@ -1,0 +1,13 @@
+{
+  "id": "example.header_auth",
+  "name": "Header/Token Authentication",
+  "version": "1.0.0",
+  "capability": "auth",
+  "runtime": "python",
+  "entrypoint": "archub_cms.extensibility.example_plugins.header_auth:HeaderAuthPlugin",
+  "description": "Resolves identity from API tokens or trusted gateway headers (SSO/OIDC seam).",
+  "provider": "archub",
+  "permissions": ["settings:read"],
+  "tags": ["example", "confluence", "auth", "sso"],
+  "enabled_by_default": true
+}

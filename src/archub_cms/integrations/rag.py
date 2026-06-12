@@ -1,4 +1,5 @@
 """Standalone RAG corpus registry used by ArcHub runtime exports."""
+
 from __future__ import annotations
 
 from collections.abc import Iterable

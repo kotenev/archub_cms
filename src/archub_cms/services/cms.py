@@ -4,6 +4,7 @@ The design intentionally mirrors the useful Umbraco concepts that fit this
 FastAPI platform: document types, a hierarchical content tree, draft/published
 state, version history, and a read-only published-content surface.
 """
+
 from __future__ import annotations
 
 __all__ = [
@@ -43,6 +44,8 @@ import secrets
 import sqlite3
 import threading
 import time
+import urllib.error
+import urllib.request
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
@@ -50,6 +53,9 @@ from datetime import UTC, datetime
 from functools import cache
 from pathlib import Path
 from typing import Any
+
+from archub_cms.infrastructure.db.database import connect as db_connect
+from archub_cms.kernel.events import ArcHubDomainEvent, get_event_bus
 
 logger = logging.getLogger("archub_cms")
 
@@ -90,7 +96,9 @@ _CONTENT_PERMISSION_ACTIONS = (
     "admin",
 )
 _PUBLIC_ACCESS_POLICIES = ("public", "authenticated", "members")
-_HOSTNAME_RE = re.compile(r"^(?:\*|\*\.[a-z0-9][a-z0-9.-]{0,252}|localhost|[a-z0-9][a-z0-9.-]{0,252})$")
+_HOSTNAME_RE = re.compile(
+    r"^(?:\*|\*\.[a-z0-9][a-z0-9.-]{0,252}|localhost|[a-z0-9][a-z0-9.-]{0,252})$"
+)
 _PACKAGE_SCHEMA_VERSION = "archub.package.v1"
 
 
@@ -577,8 +585,7 @@ def _plain_text(value: Any) -> str:
 def _internal_cms_links(payload: dict[str, Any]) -> set[str]:
     text = _json_dumps(payload)
     return {
-        match.group("path").rstrip("/") or _PUBLIC_ROOT
-        for match in _CMS_LINK_RE.finditer(text)
+        match.group("path").rstrip("/") or _PUBLIC_ROOT for match in _CMS_LINK_RE.finditer(text)
     }
 
 
@@ -626,7 +633,9 @@ def _json_file(path: Path, payload: Any) -> None:
 
 def _markdown_file(path: Path, *, title: str, body: str, metadata: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    front_matter = "\n".join(f"{key}: {value}" for key, value in metadata.items() if str(value).strip())
+    front_matter = "\n".join(
+        f"{key}: {value}" for key, value in metadata.items() if str(value).strip()
+    )
     text = f"---\n{front_matter}\n---\n\n# {title}\n\n{body.strip()}\n"
     path.write_text(text, encoding="utf-8")
 
@@ -655,7 +664,8 @@ def _field_from_dict(item: dict[str, Any]) -> ContentField:
 def _fields_from_schema(raw: str | None) -> tuple[ContentField, ...]:
     raw_fields = _json_loads_list(str(raw or "[]"))
     return tuple(
-        field for field in (_field_from_dict(item) for item in raw_fields if isinstance(item, dict))
+        field
+        for field in (_field_from_dict(item) for item in raw_fields if isinstance(item, dict))
         if field.alias and field.name
     )
 
@@ -741,11 +751,13 @@ def _preview_token_from_row(row: sqlite3.Row) -> ContentPreviewToken:
 def _type_from_row(row: sqlite3.Row) -> ContentType:
     fields = _fields_from_schema(str(row["schema_json"] or "[]"))
     allowed = tuple(
-        str(item) for item in _json_loads_list(str(row["allowed_child_aliases_json"] or "[]"))
+        str(item)
+        for item in _json_loads_list(str(row["allowed_child_aliases_json"] or "[]"))
         if str(item)
     )
     composition_aliases = tuple(
-        str(item) for item in _json_loads_list(str(row["composition_aliases_json"] or "[]"))
+        str(item)
+        for item in _json_loads_list(str(row["composition_aliases_json"] or "[]"))
         if str(item)
     )
     return ContentType(
@@ -809,7 +821,9 @@ def _workflow_from_row(row: sqlite3.Row) -> ContentWorkflow:
             float(row["scheduled_publish_at"]) if row["scheduled_publish_at"] is not None else None
         ),
         scheduled_unpublish_at=(
-            float(row["scheduled_unpublish_at"]) if row["scheduled_unpublish_at"] is not None else None
+            float(row["scheduled_unpublish_at"])
+            if row["scheduled_unpublish_at"] is not None
+            else None
         ),
         note=str(row["note"] or ""),
         updated_at=float(row["updated_at"] or 0.0),
@@ -979,6 +993,11 @@ class ArcHubCMSService:
         self._db_path = db_path
         self._ensure_db()
         self._seed_defaults()
+
+    @property
+    def db_path(self) -> str:
+        """Path to the backing SQLite database (shared with new repositories)."""
+        return self._db_path
 
     def _ensure_db(self) -> None:
         Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
@@ -1339,8 +1358,7 @@ class ArcHubCMSService:
         definition: str,
     ) -> None:
         columns = {
-            str(row["name"])
-            for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+            str(row["name"]) for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()
         }
         if column_name not in columns:
             conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}")
@@ -1416,9 +1434,8 @@ class ArcHubCMSService:
         """)
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._db_path, check_same_thread=False)
-        conn.row_factory = sqlite3.Row
-        return conn
+        # Shared factory so extracted repositories open the DB identically.
+        return db_connect(self._db_path)
 
     def _seed_defaults(self) -> None:
         now = _now()
@@ -1698,7 +1715,12 @@ class ArcHubCMSService:
                     ContentField("price_per_message", "Token price", "text", True, default="40"),
                     ContentField("currency", "Currency", "text", True, default="ток."),
                     ContentField("greeting", "Greeting", "textarea"),
-                    ContentField("sample_questions", "Sample questions", "textarea", help_text="Один вопрос на строку"),
+                    ContentField(
+                        "sample_questions",
+                        "Sample questions",
+                        "textarea",
+                        help_text="Один вопрос на строку",
+                    ),
                     ContentField("system_prompt", "System prompt", "richtext", True),
                     ContentField("rag_school", "RAG corpus", "text"),
                     ContentField("online", "Online", "checkbox", default="1"),
@@ -1958,12 +1980,24 @@ class ArcHubCMSService:
                 data_types = conn.execute("SELECT COUNT(*) AS c FROM archub_data_types").fetchone()
                 templates = conn.execute("SELECT COUNT(*) AS c FROM archub_templates").fetchone()
                 types = conn.execute("SELECT COUNT(*) AS c FROM archub_content_types").fetchone()
-                compositions = conn.execute("SELECT COUNT(*) AS c FROM archub_content_compositions").fetchone()
-                blueprints = conn.execute("SELECT COUNT(*) AS c FROM archub_content_blueprints").fetchone()
-                versions = conn.execute("SELECT COUNT(*) AS c FROM archub_content_versions").fetchone()
-                variants = conn.execute("SELECT COUNT(*) AS c FROM archub_content_variants").fetchone()
-                segments = conn.execute("SELECT COUNT(*) AS c FROM archub_content_segments").fetchone()
-                domains = conn.execute("SELECT COUNT(*) AS c FROM archub_content_domains").fetchone()
+                compositions = conn.execute(
+                    "SELECT COUNT(*) AS c FROM archub_content_compositions"
+                ).fetchone()
+                blueprints = conn.execute(
+                    "SELECT COUNT(*) AS c FROM archub_content_blueprints"
+                ).fetchone()
+                versions = conn.execute(
+                    "SELECT COUNT(*) AS c FROM archub_content_versions"
+                ).fetchone()
+                variants = conn.execute(
+                    "SELECT COUNT(*) AS c FROM archub_content_variants"
+                ).fetchone()
+                segments = conn.execute(
+                    "SELECT COUNT(*) AS c FROM archub_content_segments"
+                ).fetchone()
+                domains = conn.execute(
+                    "SELECT COUNT(*) AS c FROM archub_content_domains"
+                ).fetchone()
                 preview_tokens = conn.execute(
                     """
                     SELECT COUNT(*) AS c FROM archub_preview_tokens
@@ -1972,9 +2006,15 @@ class ArcHubCMSService:
                     (_now(),),
                 ).fetchone()
                 media = conn.execute("SELECT COUNT(*) AS c FROM archub_media_assets").fetchone()
-                redirects = conn.execute("SELECT COUNT(*) AS c FROM archub_redirect_rules").fetchone()
-                workflows = conn.execute("SELECT COUNT(*) AS c FROM archub_content_workflows").fetchone()
-                activity = conn.execute("SELECT COUNT(*) AS c FROM archub_content_activity").fetchone()
+                redirects = conn.execute(
+                    "SELECT COUNT(*) AS c FROM archub_redirect_rules"
+                ).fetchone()
+                workflows = conn.execute(
+                    "SELECT COUNT(*) AS c FROM archub_content_workflows"
+                ).fetchone()
+                activity = conn.execute(
+                    "SELECT COUNT(*) AS c FROM archub_content_activity"
+                ).fetchone()
                 locks = conn.execute(
                     "SELECT COUNT(*) AS c FROM archub_content_locks WHERE expires_at > ?",
                     (_now(),),
@@ -2185,10 +2225,13 @@ class ArcHubCMSService:
             conn = self._connect()
             try:
                 for content_type_alias in clean_allowed:
-                    if conn.execute(
-                        "SELECT alias FROM archub_content_types WHERE alias = ?",
-                        (content_type_alias,),
-                    ).fetchone() is None:
+                    if (
+                        conn.execute(
+                            "SELECT alias FROM archub_content_types WHERE alias = ?",
+                            (content_type_alias,),
+                        ).fetchone()
+                        is None
+                    ):
                         raise ValueError(f"Unknown content type for template: {content_type_alias}")
                 existing = conn.execute(
                     "SELECT created_at FROM archub_templates WHERE alias = ?",
@@ -2543,7 +2586,9 @@ class ArcHubCMSService:
             for item in composition_aliases
             if str(item).strip()
         )
-        clean_template = self._validate_schema_alias(template.strip() or "page", label="Template alias")
+        clean_template = self._validate_schema_alias(
+            template.strip() or "page", label="Template alias"
+        )
         now = _now()
         with self._lock:
             conn = self._connect()
@@ -2562,10 +2607,13 @@ class ArcHubCMSService:
                 ):
                     raise ValueError(f"Template {clean_template} is not allowed for {clean_alias}")
                 for composition_alias in clean_compositions:
-                    if conn.execute(
-                        "SELECT alias FROM archub_content_compositions WHERE alias = ?",
-                        (composition_alias,),
-                    ).fetchone() is None:
+                    if (
+                        conn.execute(
+                            "SELECT alias FROM archub_content_compositions WHERE alias = ?",
+                            (composition_alias,),
+                        ).fetchone()
+                        is None
+                    ):
                         raise ValueError(f"Unknown composition: {composition_alias}")
                 existing = conn.execute(
                     "SELECT alias, created_at FROM archub_content_types WHERE alias = ?",
@@ -2679,7 +2727,9 @@ class ArcHubCMSService:
         ordered: list[ContentNode] = []
 
         def visit(parent_id: str | None) -> None:
-            for node in sorted(by_parent.get(parent_id, ()), key=lambda n: (n.sort_order, n.name.lower())):
+            for node in sorted(
+                by_parent.get(parent_id, ()), key=lambda n: (n.sort_order, n.name.lower())
+            ):
                 ordered.append(node)
                 visit(node.node_id)
 
@@ -2720,7 +2770,11 @@ class ArcHubCMSService:
     def allowed_child_types(self, parent_id: str | None) -> list[ContentType]:
         content_types = {item.alias: item for item in self.list_content_types()}
         if parent_id is None:
-            return [item for item in content_types.values() if item.allow_at_root and not item.is_element]
+            return [
+                item
+                for item in content_types.values()
+                if item.allow_at_root and not item.is_element
+            ]
         parent = self.get_node(parent_id)
         if parent is None:
             return []
@@ -2732,11 +2786,13 @@ class ArcHubCMSService:
                 item.alias for item in content_types.values() if item.allow_at_root
             }
             return [
-                item for item in content_types.values()
+                item
+                for item in content_types.values()
                 if item.alias in aliases and not item.is_element
             ]
         return [
-            content_types[alias] for alias in parent_type.allowed_child_aliases
+            content_types[alias]
+            for alias in parent_type.allowed_child_aliases
             if alias in content_types and not content_types[alias].is_element
         ]
 
@@ -2892,16 +2948,28 @@ class ArcHubCMSService:
                 row = self._get_node_row(conn, node_id)
                 self._assert_content_lock(conn, node_id=node_id, actor=updated_by)
                 content_type = self._get_content_type_row(conn, str(row["content_type_alias"]))
-                parent = self._get_node_row(conn, str(row["parent_id"])) if row["parent_id"] else None
-                parent_route = str(parent["route_path"]) if parent is not None else _PUBLIC_ROOT
-                final_slug = "" if node_id == _ROOT_NODE_ID else self._unique_slug(
-                    conn,
-                    str(row["parent_id"]) if row["parent_id"] else None,
-                    slug or name,
-                    exclude_id=node_id,
+                parent = (
+                    self._get_node_row(conn, str(row["parent_id"])) if row["parent_id"] else None
                 )
-                route_path = _PUBLIC_ROOT if node_id == _ROOT_NODE_ID else _route_for(parent_route, final_slug)
-                clean_payload = self._clean_payload(self._hydrate_content_type(conn, content_type), payload)
+                parent_route = str(parent["route_path"]) if parent is not None else _PUBLIC_ROOT
+                final_slug = (
+                    ""
+                    if node_id == _ROOT_NODE_ID
+                    else self._unique_slug(
+                        conn,
+                        str(row["parent_id"]) if row["parent_id"] else None,
+                        slug or name,
+                        exclude_id=node_id,
+                    )
+                )
+                route_path = (
+                    _PUBLIC_ROOT
+                    if node_id == _ROOT_NODE_ID
+                    else _route_for(parent_route, final_slug)
+                )
+                clean_payload = self._clean_payload(
+                    self._hydrate_content_type(conn, content_type), payload
+                )
                 now = _now()
                 conn.execute(
                     """
@@ -3169,15 +3237,23 @@ class ArcHubCMSService:
                 row = self._get_node_row(conn, node_id)
                 if str(row["status"]) != _STATUS_TRASHED:
                     raise ValueError("Content node is not in recycle bin")
-                original_parent_id = str(row["trashed_original_parent_id"]) if row["trashed_original_parent_id"] else None
+                original_parent_id = (
+                    str(row["trashed_original_parent_id"])
+                    if row["trashed_original_parent_id"]
+                    else None
+                )
                 original_slug = str(row["trashed_original_slug"] or "")
                 original_route = str(row["trashed_original_route_path"] or "")
                 if not original_route:
                     raise ValueError("Trashed node has no original route")
-                if original_parent_id and conn.execute(
-                    "SELECT node_id FROM archub_content_nodes WHERE node_id = ? AND status != ?",
-                    (original_parent_id, _STATUS_TRASHED),
-                ).fetchone() is None:
+                if (
+                    original_parent_id
+                    and conn.execute(
+                        "SELECT node_id FROM archub_content_nodes WHERE node_id = ? AND status != ?",
+                        (original_parent_id, _STATUS_TRASHED),
+                    ).fetchone()
+                    is None
+                ):
                     raise ValueError("Original parent is missing or trashed")
                 conflict = conn.execute(
                     """
@@ -3444,7 +3520,9 @@ class ArcHubCMSService:
                 row = self._get_node_row(conn, node_id)
                 self._assert_content_lock(conn, node_id=node_id, actor=updated_by)
                 content_type = self._get_content_type_row(conn, str(row["content_type_alias"]))
-                clean_payload = self._clean_payload(self._hydrate_content_type(conn, content_type), payload)
+                clean_payload = self._clean_payload(
+                    self._hydrate_content_type(conn, content_type), payload
+                )
                 now = _now()
                 existing = conn.execute(
                     """
@@ -3811,7 +3889,11 @@ class ArcHubCMSService:
                         "SELECT domain_id, created_at FROM archub_content_domains WHERE hostname = ?",
                         (clean_hostname,),
                     ).fetchone()
-                clean_id = clean_id or (str(existing["domain_id"]) if existing is not None else secrets.token_urlsafe(10))
+                clean_id = clean_id or (
+                    str(existing["domain_id"])
+                    if existing is not None
+                    else secrets.token_urlsafe(10)
+                )
                 created_at = float(existing["created_at"]) if existing is not None else now
                 if is_default:
                     conn.execute("UPDATE archub_content_domains SET is_default = 0")
@@ -3970,22 +4052,26 @@ class ArcHubCMSService:
                 "nodes": [self._node_package_payload(node) for node in selected_nodes],
                 "total": len(selected_nodes),
             },
-            "domains": self.content_domain_report(limit=1000) if include_domains else {"items": [], "total": 0},
+            "domains": self.content_domain_report(limit=1000)
+            if include_domains
+            else {"items": [], "total": 0},
             "media_assets": (
                 [self._media_payload(item) for item in self.list_media_assets(limit=1000)]
-                if include_media else []
+                if include_media
+                else []
             ),
             "dictionary_items": (
-                self.list_dictionary_items(limit=1000)
-                if include_dictionary else []
+                self.list_dictionary_items(limit=1000) if include_dictionary else []
             ),
             "redirects": (
                 [item.__dict__ for item in self.list_redirects(limit=1000)]
-                if include_redirects else []
+                if include_redirects
+                else []
             ),
             "public_access": (
                 [item.__dict__ for item in self.list_public_access_rules(limit=1000)]
-                if include_public_access else []
+                if include_public_access
+                else []
             ),
             "workflows": self._workflow_package_items(limit=1000) if include_workflows else [],
         }
@@ -4012,13 +4098,19 @@ class ArcHubCMSService:
     def inspect_content_package(self, package: dict[str, Any]) -> dict[str, Any]:
         issues: list[dict[str, str]] = []
         if str(package.get("schema_version") or "") != _PACKAGE_SCHEMA_VERSION:
-            issues.append({"severity": "error", "message": "Unsupported ArcHub package schema version"})
+            issues.append(
+                {"severity": "error", "message": "Unsupported ArcHub package schema version"}
+            )
         content = package.get("content") if isinstance(package.get("content"), dict) else {}
         nodes = content.get("nodes") if isinstance(content, dict) else []
         if not isinstance(nodes, list):
-            issues.append({"severity": "error", "message": "Package content.nodes must be an array"})
+            issues.append(
+                {"severity": "error", "message": "Package content.nodes must be an array"}
+            )
             nodes = []
-        model = package.get("content_model") if isinstance(package.get("content_model"), dict) else {}
+        model = (
+            package.get("content_model") if isinstance(package.get("content_model"), dict) else {}
+        )
         model_types = {
             str(item.get("alias") or "")
             for item in model.get("content_types", [])
@@ -4027,8 +4119,12 @@ class ArcHubCMSService:
         existing_types = {item.alias for item in self.list_content_types()}
         available_types = model_types | existing_types
         node_ids = {str(item.get("node_id") or "") for item in nodes if isinstance(item, dict)}
-        route_paths = [str(item.get("route_path") or "") for item in nodes if isinstance(item, dict)]
-        duplicate_routes = sorted({path for path in route_paths if path and route_paths.count(path) > 1})
+        route_paths = [
+            str(item.get("route_path") or "") for item in nodes if isinstance(item, dict)
+        ]
+        duplicate_routes = sorted(
+            {path for path in route_paths if path and route_paths.count(path) > 1}
+        )
         for path in duplicate_routes:
             issues.append({"severity": "error", "message": f"Duplicate package route path: {path}"})
         for item in nodes:
@@ -4037,10 +4133,14 @@ class ArcHubCMSService:
                 continue
             alias = str(item.get("content_type_alias") or "")
             if alias not in available_types:
-                issues.append({"severity": "error", "message": f"Missing content type for node: {alias}"})
+                issues.append(
+                    {"severity": "error", "message": f"Missing content type for node: {alias}"}
+                )
             parent_id = str(item.get("parent_id") or "")
             if parent_id and parent_id not in node_ids and self.get_node(parent_id) is None:
-                issues.append({"severity": "warning", "message": f"Parent node is not included: {parent_id}"})
+                issues.append(
+                    {"severity": "warning", "message": f"Parent node is not included: {parent_id}"}
+                )
         domains = self._package_items(package.get("domains"))
         packaged_segments = sum(
             len(self._package_items(item.get("segments")))
@@ -4056,7 +4156,9 @@ class ArcHubCMSService:
             "counts": {
                 "data_types": len(model.get("data_types", [])) if isinstance(model, dict) else 0,
                 "templates": len(model.get("templates", [])) if isinstance(model, dict) else 0,
-                "content_types": len(model.get("content_types", [])) if isinstance(model, dict) else 0,
+                "content_types": len(model.get("content_types", []))
+                if isinstance(model, dict)
+                else 0,
                 "nodes": len(nodes),
                 "segments": packaged_segments,
                 "domains": len(domains),
@@ -4083,7 +4185,13 @@ class ArcHubCMSService:
             with self._lock:
                 conn = self._connect()
                 try:
-                    for item in sorted(nodes, key=lambda row: (_safe_int(row.get("level")), str(row.get("route_path") or ""))):
+                    for item in sorted(
+                        nodes,
+                        key=lambda row: (
+                            _safe_int(row.get("level")),
+                            str(row.get("route_path") or ""),
+                        ),
+                    ):
                         action = self._plan_package_node_import(conn, item, overwrite=overwrite)
                         counts[str(action["action"])] += 1
                         actions.append(action)
@@ -4118,9 +4226,21 @@ class ArcHubCMSService:
         plan = self.plan_content_package_import(package, overwrite=overwrite)
         inspection = plan["inspection"]
         if not inspection["ok"]:
-            return {"ok": False, "inspection": inspection, "plan": plan, "imported": {}, "skipped": {}}
+            return {
+                "ok": False,
+                "inspection": inspection,
+                "plan": plan,
+                "imported": {},
+                "skipped": {},
+            }
         if not plan["ok"]:
-            return {"ok": False, "inspection": inspection, "plan": plan, "imported": {}, "skipped": {}}
+            return {
+                "ok": False,
+                "inspection": inspection,
+                "plan": plan,
+                "imported": {},
+                "skipped": {},
+            }
         imported: dict[str, int] = {}
         skipped: dict[str, int] = {}
         self._import_package_content_model(package, imported_by=imported_by)
@@ -4133,12 +4253,20 @@ class ArcHubCMSService:
         imported.update(node_result["imported"])
         skipped.update(node_result["skipped"])
         id_map = node_result["id_map"]
-        imported["domains"] = self._import_package_domains(package, id_map=id_map, imported_by=imported_by)
-        imported["dictionary_items"] = self._import_package_dictionary(package, imported_by=imported_by)
+        imported["domains"] = self._import_package_domains(
+            package, id_map=id_map, imported_by=imported_by
+        )
+        imported["dictionary_items"] = self._import_package_dictionary(
+            package, imported_by=imported_by
+        )
         imported["media_assets"] = self._import_package_media(package, imported_by=imported_by)
         imported["redirects"] = self._import_package_redirects(package, imported_by=imported_by)
-        imported["public_access"] = self._import_package_access(package, id_map=id_map, imported_by=imported_by)
-        imported["workflows"] = self._import_package_workflows(package, id_map=id_map, imported_by=imported_by)
+        imported["public_access"] = self._import_package_access(
+            package, id_map=id_map, imported_by=imported_by
+        )
+        imported["workflows"] = self._import_package_workflows(
+            package, id_map=id_map, imported_by=imported_by
+        )
         with self._lock:
             conn = self._connect()
             try:
@@ -4407,9 +4535,7 @@ class ArcHubCMSService:
                 stored = self._preview_token_row(conn, token_hash)
                 if stored is None:
                     return None
-                token_payload = self._preview_token_payload(
-                    _preview_token_from_row(stored)
-                )
+                token_payload = self._preview_token_payload(_preview_token_from_row(stored))
                 node = _node_from_row(node_row)
                 return {
                     "preview": True,
@@ -4451,7 +4577,7 @@ class ArcHubCMSService:
                     SELECT t.*, n.name AS node_name, n.route_path, n.content_type_alias
                     FROM archub_preview_tokens t
                     LEFT JOIN archub_content_nodes n ON n.node_id = t.node_id
-                    WHERE {' AND '.join(clauses)}
+                    WHERE {" AND ".join(clauses)}
                     ORDER BY t.created_at DESC
                     LIMIT ?
                     """,
@@ -4618,10 +4744,7 @@ class ArcHubCMSService:
 
     def published_feed(self, *, base_url: str = "", limit: int = 25) -> list[dict[str, Any]]:
         base = base_url.rstrip("/")
-        nodes = [
-            node for node in self.list_tree()
-            if node.is_published and not node.is_root
-        ]
+        nodes = [node for node in self.list_tree() if node.is_published and not node.is_root]
         nodes.sort(key=lambda node: (node.published_at or 0.0, node.updated_at), reverse=True)
         items: list[dict[str, Any]] = []
         for node in nodes[: max(1, min(limit, 100))]:
@@ -4714,13 +4837,19 @@ class ArcHubCMSService:
                 )
                 row["count"] += 1
                 content_types = row["content_types"]
-                content_types[node.content_type_alias] = content_types.get(node.content_type_alias, 0) + 1
-        return sorted(tags.values(), key=lambda item: (-int(item["count"]), str(item["tag"]).casefold()))
+                content_types[node.content_type_alias] = (
+                    content_types.get(node.content_type_alias, 0) + 1
+                )
+        return sorted(
+            tags.values(), key=lambda item: (-int(item["count"]), str(item["tag"]).casefold())
+        )
 
     def published_by_tag(self, tag: str, *, limit: int = 50) -> list[dict[str, Any]]:
         return self.published_search(tag=tag, limit=limit)
 
-    def list_redirects(self, *, active_only: bool = False, limit: int = 200) -> list[ContentRedirect]:
+    def list_redirects(
+        self, *, active_only: bool = False, limit: int = 200
+    ) -> list[ContentRedirect]:
         limit = max(1, min(limit, 1000))
         with self._lock:
             conn = self._connect()
@@ -4825,7 +4954,15 @@ class ArcHubCMSService:
                             updated_at = ?, updated_by = ?
                         WHERE redirect_id = ?
                         """,
-                        (target, status_code, int(active), note.strip(), now, updated_by, redirect_id),
+                        (
+                            target,
+                            status_code,
+                            int(active),
+                            note.strip(),
+                            now,
+                            updated_by,
+                            redirect_id,
+                        ),
                     )
                 self._record_activity(
                     conn,
@@ -4852,7 +4989,9 @@ class ArcHubCMSService:
     def content_reference_graph(self) -> dict[str, Any]:
         nodes = self.list_tree()
         by_path = {node.route_path.rstrip("/") or _PUBLIC_ROOT: node for node in nodes}
-        redirect_sources = {item.source_path for item in self.list_redirects(active_only=True, limit=1000)}
+        redirect_sources = {
+            item.source_path for item in self.list_redirects(active_only=True, limit=1000)
+        }
         edges: list[dict[str, Any]] = []
         node_rows = [
             {
@@ -4903,7 +5042,8 @@ class ArcHubCMSService:
             },
             "outgoing": [edge for edge in graph["edges"] if edge["source_id"] == node_id],
             "incoming": [
-                edge for edge in graph["edges"]
+                edge
+                for edge in graph["edges"]
                 if edge["target_id"] == node_id or edge["target_path"] == path
             ],
         }
@@ -4960,7 +5100,9 @@ class ArcHubCMSService:
             finally:
                 conn.close()
 
-    def list_content_locks(self, *, active_only: bool = True, limit: int = 100) -> list[ContentLock]:
+    def list_content_locks(
+        self, *, active_only: bool = True, limit: int = 100
+    ) -> list[ContentLock]:
         limit = max(1, min(limit, 1000))
         with self._lock:
             conn = self._connect()
@@ -5014,7 +5156,11 @@ class ArcHubCMSService:
                 existing = self._active_lock_row(conn, node_id=node_id, now=now)
                 if existing is not None and str(existing["owner"]) != clean_owner and not force:
                     raise ValueError(f"Content is locked by {existing['owner']}")
-                token = str(existing["token"]) if existing is not None and str(existing["owner"]) == clean_owner else secrets.token_urlsafe(16)
+                token = (
+                    str(existing["token"])
+                    if existing is not None and str(existing["owner"]) == clean_owner
+                    else secrets.token_urlsafe(16)
+                )
                 conn.execute(
                     """
                     INSERT INTO archub_content_locks (
@@ -5044,6 +5190,7 @@ class ArcHubCMSService:
                 )
                 conn.commit()
                 row = self._active_lock_row(conn, node_id=node_id, now=now)
+                assert row is not None
                 return _lock_from_row(row)
             finally:
                 conn.close()
@@ -5191,6 +5338,7 @@ class ArcHubCMSService:
                 )
                 conn.commit()
                 row = self._permission_rule_row(conn, clean_rule_id)
+                assert row is not None
                 return _permission_rule_from_row(row)
             finally:
                 conn.close()
@@ -5205,7 +5353,9 @@ class ArcHubCMSService:
                 row = self._permission_rule_row(conn, clean_rule_id, required=False)
                 if row is None:
                     return False
-                conn.execute("DELETE FROM archub_content_permissions WHERE rule_id = ?", (clean_rule_id,))
+                conn.execute(
+                    "DELETE FROM archub_content_permissions WHERE rule_id = ?", (clean_rule_id,)
+                )
                 self._record_activity(
                     conn,
                     action="permissions.revoked",
@@ -5394,6 +5544,8 @@ class ArcHubCMSService:
                 )
                 conn.commit()
                 row = self._access_rule_row_for_node(conn, node_id)
+                if row is None:
+                    raise ValueError("Public access rule was not saved")
                 return _access_rule_from_row(row)
             finally:
                 conn.close()
@@ -5422,7 +5574,9 @@ class ArcHubCMSService:
             finally:
                 conn.close()
 
-    def get_public_access_rule(self, node_id: str, *, inherited: bool = True) -> ContentAccessRule | None:
+    def get_public_access_rule(
+        self, node_id: str, *, inherited: bool = True
+    ) -> ContentAccessRule | None:
         clean_node_id = node_id.strip()
         if not clean_node_id:
             return None
@@ -5536,7 +5690,11 @@ class ArcHubCMSService:
                         (clean_name,),
                     ).fetchone()
 
-                final_id = str(existing["webhook_id"]) if existing is not None else secrets.token_urlsafe(10)
+                final_id = (
+                    str(existing["webhook_id"])
+                    if existing is not None
+                    else secrets.token_urlsafe(10)
+                )
                 final_secret = secret.strip()
                 if existing is not None and not final_secret:
                     final_secret = str(existing["secret"] or "")
@@ -5718,7 +5876,9 @@ class ArcHubCMSService:
                                 """,
                                 (attempts, now, now, delivery_id),
                             )
-                            result["delivered"].append({"delivery_id": delivery_id, "status_code": int(status_code)})
+                            result["delivered"].append(
+                                {"delivery_id": delivery_id, "status_code": int(status_code)}
+                            )
                             continue
                         raise RuntimeError(f"HTTP {status_code}")
                     except Exception as exc:
@@ -5869,8 +6029,12 @@ class ArcHubCMSService:
         items: list[dict[str, Any]] = []
         for row in rows:
             workflow = _workflow_from_row(row)
-            publish_due = bool(workflow.scheduled_publish_at and workflow.scheduled_publish_at <= now)
-            unpublish_due = bool(workflow.scheduled_unpublish_at and workflow.scheduled_unpublish_at <= now)
+            publish_due = bool(
+                workflow.scheduled_publish_at and workflow.scheduled_publish_at <= now
+            )
+            unpublish_due = bool(
+                workflow.scheduled_unpublish_at and workflow.scheduled_unpublish_at <= now
+            )
             items.append(
                 {
                     **workflow.__dict__,
@@ -5883,13 +6047,18 @@ class ArcHubCMSService:
                 }
             )
         return {
-            "states": {state: sum(1 for item in items if item["state"] == state) for state in sorted(_WORKFLOW_STATES)},
+            "states": {
+                state: sum(1 for item in items if item["state"] == state)
+                for state in sorted(_WORKFLOW_STATES)
+            },
             "items": items,
             "total": len(items),
             "due": sum(1 for item in items if item["publish_due"] or item["unpublish_due"]),
         }
 
-    def apply_due_workflows(self, *, now: float | None = None, updated_by: str = "system") -> dict[str, Any]:
+    def apply_due_workflows(
+        self, *, now: float | None = None, updated_by: str = "system"
+    ) -> dict[str, Any]:
         now = _now() if now is None else now
         report = self.workflow_report(now=now, limit=1000)
         applied: list[dict[str, str]] = []
@@ -5925,25 +6094,40 @@ class ArcHubCMSService:
             except Exception as exc:
                 logger.warning("ArcHub workflow due action failed: %s", node_id, exc_info=True)
                 errors.append({"node_id": node_id, "error": str(exc)})
-        return {"applied": applied, "errors": errors, "applied_count": len(applied), "error_count": len(errors)}
+        return {
+            "applied": applied,
+            "errors": errors,
+            "applied_count": len(applied),
+            "error_count": len(errors),
+        }
 
     def content_health_report(self) -> dict[str, Any]:
         issues: list[ContentAuditIssue] = []
         nodes = self.list_tree()
-        types = {content_type.alias: content_type for content_type in self.list_content_types()}
-        published_paths = {node.route_path.rstrip("/") or _PUBLIC_ROOT for node in nodes if node.is_published}
+        types: dict[str, ContentType] = {
+            content_type.alias: content_type for content_type in self.list_content_types()
+        }
+        published_paths = {
+            node.route_path.rstrip("/") or _PUBLIC_ROOT for node in nodes if node.is_published
+        }
         builder = None
 
         for node in nodes:
             content_type = types.get(node.content_type_alias)
-            payload = node.published if node.is_published else node.draft
             if content_type is None:
                 issues.append(self._audit_issue(node, "error", "Content type is missing."))
                 continue
-            template = self.get_template(content_type.template)
+            template_alias = content_type.template
+            template = self.get_template(template_alias)
+            payload = node.published if node.is_published else node.draft
             if template is None:
-                issues.append(self._audit_issue(node, "error", f"Template is missing: {content_type.template}"))
-            elif (
+                issues.append(
+                    self._audit_issue(
+                        node, "error", f"Template is missing: {content_type.template}"
+                    )
+                )
+                continue
+            if (
                 template.allowed_content_type_aliases
                 and content_type.alias not in template.allowed_content_type_aliases
             ):
@@ -5962,15 +6146,28 @@ class ArcHubCMSService:
             title = str(payload.get("title") or payload.get("hero_title") or node.name).strip()
             if not title:
                 issues.append(self._audit_issue(node, "warning", "Content has no title."))
-            if content_type.template in {"page", "landing", "article", "expert"} and not node.is_root:
+            if (
+                content_type.template in {"page", "landing", "article", "expert"}
+                and not node.is_root
+            ):
                 body = _plain_text(payload.get("body"))
                 blocks = payload.get("builder_blocks")
                 has_blocks = bool(blocks)
                 if len(body) < 40 and not has_blocks:
-                    issues.append(self._audit_issue(node, "warning", "Content body is short and has no builder blocks."))
-                seo_description = str(payload.get("seo_description") or payload.get("excerpt") or "").strip()
+                    issues.append(
+                        self._audit_issue(
+                            node, "warning", "Content body is short and has no builder blocks."
+                        )
+                    )
+                seo_description = str(
+                    payload.get("seo_description") or payload.get("excerpt") or ""
+                ).strip()
                 if node.is_published and content_type.alias == "page" and len(seo_description) < 40:
-                    issues.append(self._audit_issue(node, "info", "Published page has a short SEO description."))
+                    issues.append(
+                        self._audit_issue(
+                            node, "info", "Published page has a short SEO description."
+                        )
+                    )
 
             if content_type.field("builder_blocks") is not None:
                 if builder is None:
@@ -5992,8 +6189,13 @@ class ArcHubCMSService:
 
             for link in _internal_cms_links(payload):
                 target_path = link.rstrip("/") or _PUBLIC_ROOT
-                if target_path not in published_paths and self.resolve_redirect(target_path) is None:
-                    issues.append(self._audit_issue(node, "error", f"Broken internal CMS link: {link}"))
+                if (
+                    target_path not in published_paths
+                    and self.resolve_redirect(target_path) is None
+                ):
+                    issues.append(
+                        self._audit_issue(node, "error", f"Broken internal CMS link: {link}")
+                    )
 
         return {
             "ok": not any(issue.severity == "error" for issue in issues),
@@ -6010,7 +6212,9 @@ class ArcHubCMSService:
 
     def delivery_cache_report(self, *, limit: int = 20) -> dict[str, Any]:
         published_nodes = [node for node in self.list_tree() if node.is_published]
-        published_nodes.sort(key=lambda node: (node.published_at or 0.0, node.updated_at), reverse=True)
+        published_nodes.sort(
+            key=lambda node: (node.published_at or 0.0, node.updated_at), reverse=True
+        )
         latest = 0.0
         for node in published_nodes:
             latest = max(latest, node.updated_at, node.published_at or 0.0)
@@ -6121,7 +6325,9 @@ class ArcHubCMSService:
         needle = str(value or "").strip()
         if not needle:
             return None
-        for node in self.list_nodes_by_type(content_type_alias, include_unpublished=include_unpublished):
+        for node in self.list_nodes_by_type(
+            content_type_alias, include_unpublished=include_unpublished
+        ):
             payloads = [node.draft]
             if not include_unpublished:
                 payloads = [node.published]
@@ -6173,7 +6379,7 @@ class ArcHubCMSService:
             known_keys.add(key)
             files = {
                 _relative_source_path(path)
-                for path in self._iter_corpus_files(getattr(spec, "corpus_dirs", ()))
+                for path in self._iter_corpus_files(self._corpus_dirs_from_spec(spec))
             }
             nodes = rag_by_corpus.get(key, [])
             sources = {
@@ -6184,9 +6390,7 @@ class ArcHubCMSService:
                 {
                     "key": key,
                     "title": str(getattr(spec, "title", "") or key),
-                    "corpus_dirs": [
-                        str(path) for path in getattr(spec, "corpus_dirs", ())
-                    ],
+                    "corpus_dirs": [str(path) for path in self._corpus_dirs_from_spec(spec)],
                     "index_dir": str(getattr(spec, "default_index_dir", "") or ""),
                     "files_total": len(files),
                     "nodes_total": len(nodes),
@@ -6212,8 +6416,7 @@ class ArcHubCMSService:
             )
 
         resource_files = {
-            _relative_source_path(path)
-            for path in self._iter_resource_files(bot_resource_roots)
+            _relative_source_path(path) for path in self._iter_resource_files(bot_resource_roots)
         }
         resource_sources = {
             str((node.published if node.is_published else node.draft).get("source_path") or "")
@@ -6304,16 +6507,20 @@ class ArcHubCMSService:
             corpus_key = str(getattr(spec, "key", "") or "").strip()
             if not corpus_key:
                 continue
-            for file_path in self._iter_corpus_files(getattr(spec, "corpus_dirs", ())):
+            for file_path in self._iter_corpus_files(self._corpus_dirs_from_spec(spec)):
                 source_path = _relative_source_path(file_path)
                 if self.find_node_by_field("rag_material", "source_path", source_path):
                     continue
                 try:
                     body = file_path.read_text(encoding="utf-8")
                 except OSError:
-                    logger.warning("Cannot import RAG material into ArcHub: %s", file_path, exc_info=True)
+                    logger.warning(
+                        "Cannot import RAG material into ArcHub: %s", file_path, exc_info=True
+                    )
                     continue
-                title = _markdown_title(body, file_path.stem.replace("_", " ").replace("-", " ").title())
+                title = _markdown_title(
+                    body, file_path.stem.replace("_", " ").replace("-", " ").title()
+                )
                 try:
                     node = self.create_node(
                         parent_id=_ROOT_NODE_ID,
@@ -6332,7 +6539,9 @@ class ArcHubCMSService:
                     )
                     self.publish_node(node.node_id, published_by=created_by)
                 except ValueError:
-                    logger.warning("Cannot import RAG material into ArcHub: %s", file_path, exc_info=True)
+                    logger.warning(
+                        "Cannot import RAG material into ArcHub: %s", file_path, exc_info=True
+                    )
                     continue
                 inserted += 1
         return inserted
@@ -6346,9 +6555,13 @@ class ArcHubCMSService:
             try:
                 body = file_path.read_text(encoding="utf-8")
             except OSError:
-                logger.warning("Cannot import bot resource into ArcHub: %s", file_path, exc_info=True)
+                logger.warning(
+                    "Cannot import bot resource into ArcHub: %s", file_path, exc_info=True
+                )
                 continue
-            title = _markdown_title(body, file_path.stem.replace("_", " ").replace("-", " ").title())
+            title = _markdown_title(
+                body, file_path.stem.replace("_", " ").replace("-", " ").title()
+            )
             group = file_path.parent.name if file_path.parent.name else "bot"
             try:
                 node = self.create_node(
@@ -6370,7 +6583,9 @@ class ArcHubCMSService:
                 )
                 self.publish_node(node.node_id, published_by=created_by)
             except ValueError:
-                logger.warning("Cannot import bot resource into ArcHub: %s", file_path, exc_info=True)
+                logger.warning(
+                    "Cannot import bot resource into ArcHub: %s", file_path, exc_info=True
+                )
                 continue
             inserted += 1
         return inserted
@@ -6392,7 +6607,11 @@ class ArcHubCMSService:
     def runtime_export_status(self, export_dir: Path | str | None = None) -> dict[str, Any]:
         base = _runtime_export_dir(export_dir)
         manifest_path = base / "manifest.json"
-        manifest = _json_loads_dict(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {}
+        manifest = (
+            _json_loads_dict(manifest_path.read_text(encoding="utf-8"))
+            if manifest_path.exists()
+            else {}
+        )
         generated_at = float(manifest.get("generated_at") or 0.0)
         latest_runtime_update = self._latest_runtime_update_at()
         return {
@@ -6427,8 +6646,14 @@ class ArcHubCMSService:
             if node.content_type_alias == "ai_expert":
                 expert_id = str(node.draft.get("expert_id") or "").strip()
                 if expert_id and expert_id in seen_experts:
-                    issues.append(self._audit_issue(node, "error", f"Duplicate expert_id: {expert_id}"))
-                    issues.append(self._audit_issue(seen_experts[expert_id], "error", f"Duplicate expert_id: {expert_id}"))
+                    issues.append(
+                        self._audit_issue(node, "error", f"Duplicate expert_id: {expert_id}")
+                    )
+                    issues.append(
+                        self._audit_issue(
+                            seen_experts[expert_id], "error", f"Duplicate expert_id: {expert_id}"
+                        )
+                    )
                 elif expert_id:
                     seen_experts[expert_id] = node
 
@@ -6453,8 +6678,7 @@ class ArcHubCMSService:
 
     def runtime_snapshot(self) -> dict[str, Any]:
         ai_experts = [
-            self._runtime_node_payload(node)
-            for node in self.list_nodes_by_type("ai_expert")
+            self._runtime_node_payload(node) for node in self.list_nodes_by_type("ai_expert")
         ]
         rag_materials = [
             self._runtime_node_payload(node)
@@ -6724,7 +6948,11 @@ class ArcHubCMSService:
         action = "create"
         reason = "missing"
         existing = by_id or by_route
-        if by_id is not None and by_route is not None and str(by_id["node_id"]) != str(by_route["node_id"]):
+        if (
+            by_id is not None
+            and by_route is not None
+            and str(by_id["node_id"]) != str(by_route["node_id"])
+        ):
             action = "conflict"
             reason = "node_id_and_route_match_different_existing_nodes"
             existing = by_route
@@ -6754,7 +6982,9 @@ class ArcHubCMSService:
         }
 
     def _import_package_content_model(self, package: dict[str, Any], *, imported_by: str) -> None:
-        model = package.get("content_model") if isinstance(package.get("content_model"), dict) else {}
+        model = (
+            package.get("content_model") if isinstance(package.get("content_model"), dict) else {}
+        )
         for item in self._package_items(model.get("data_types") if isinstance(model, dict) else []):
             self.upsert_data_type(
                 alias=str(item.get("alias") or ""),
@@ -6776,7 +7006,9 @@ class ArcHubCMSService:
                 config=_json_dict_from_value(item.get("config")),
                 updated_by=imported_by,
             )
-        for item in self._package_items(model.get("compositions") if isinstance(model, dict) else []):
+        for item in self._package_items(
+            model.get("compositions") if isinstance(model, dict) else []
+        ):
             self.upsert_content_composition(
                 alias=str(item.get("alias") or ""),
                 name=str(item.get("name") or ""),
@@ -6784,7 +7016,9 @@ class ArcHubCMSService:
                 fields=self._package_items(item.get("fields")),
                 updated_by=imported_by,
             )
-        for item in self._package_items(model.get("content_types") if isinstance(model, dict) else []):
+        for item in self._package_items(
+            model.get("content_types") if isinstance(model, dict) else []
+        ):
             self.upsert_content_type(
                 alias=str(item.get("alias") or ""),
                 name=str(item.get("name") or ""),
@@ -6831,8 +7065,13 @@ class ArcHubCMSService:
         with self._lock:
             conn = self._connect()
             try:
-                for item in sorted(nodes, key=lambda row: (_safe_int(row.get("level")), str(row.get("route_path") or ""))):
-                    original_id = str(item.get("node_id") or "").strip() or secrets.token_urlsafe(10)
+                for item in sorted(
+                    nodes,
+                    key=lambda row: (_safe_int(row.get("level")), str(row.get("route_path") or "")),
+                ):
+                    original_id = str(item.get("node_id") or "").strip() or secrets.token_urlsafe(
+                        10
+                    )
                     parent_id = str(item.get("parent_id") or "").strip() or None
                     if parent_id:
                         parent_id = id_map.get(parent_id, parent_id)
@@ -6948,8 +7187,12 @@ class ArcHubCMSService:
             culture = _normalize_culture(str(variant.get("culture") or ""))
             if not culture:
                 continue
-            variant_draft = self._clean_payload(content_type, _json_dict_from_value(variant.get("draft")))
-            variant_published = self._clean_payload(content_type, _json_dict_from_value(variant.get("published")))
+            variant_draft = self._clean_payload(
+                content_type, _json_dict_from_value(variant.get("draft"))
+            )
+            variant_published = self._clean_payload(
+                content_type, _json_dict_from_value(variant.get("published"))
+            )
             conn.execute(
                 """
                 INSERT INTO archub_content_variants (
@@ -6975,8 +7218,12 @@ class ArcHubCMSService:
         segment_count = 0
         for segment in self._package_items(item.get("segments")):
             segment_alias = _normalize_segment(str(segment.get("segment") or ""))
-            segment_draft = self._clean_segment_payload(content_type, _json_dict_from_value(segment.get("draft")))
-            segment_published = self._clean_segment_payload(content_type, _json_dict_from_value(segment.get("published")))
+            segment_draft = self._clean_segment_payload(
+                content_type, _json_dict_from_value(segment.get("draft"))
+            )
+            segment_published = self._clean_segment_payload(
+                content_type, _json_dict_from_value(segment.get("published"))
+            )
             conn.execute(
                 """
                 INSERT INTO archub_content_segments (
@@ -7056,7 +7303,9 @@ class ArcHubCMSService:
                 url=str(item.get("url") or ""),
                 folder=str(item.get("folder") or ""),
                 alt_text=str(item.get("alt_text") or ""),
-                tags=[str(tag) for tag in item.get("tags", [])] if isinstance(item.get("tags"), list) else [],
+                tags=[str(tag) for tag in item.get("tags", [])]
+                if isinstance(item.get("tags"), list)
+                else [],
                 metadata=_json_dict_from_value(item.get("metadata")),
                 created_by=imported_by,
             )
@@ -7285,7 +7534,9 @@ class ArcHubCMSService:
             "tags": list(_content_tags(payload)),
         }
 
-    def _localized_payload(self, node: ContentNode, culture: str = "") -> tuple[dict[str, Any], str, bool]:
+    def _localized_payload(
+        self, node: ContentNode, culture: str = ""
+    ) -> tuple[dict[str, Any], str, bool]:
         clean_culture = _normalize_culture(culture)
         if not clean_culture:
             return dict(node.published), "", False
@@ -7498,7 +7749,9 @@ class ArcHubCMSService:
                         url=str(row["url"]),
                         folder=str(row["folder"] or ""),
                         alt_text=str(row["alt_text"] or ""),
-                        tags=tuple(str(item) for item in _json_loads_list(str(row["tags_json"] or "[]"))),
+                        tags=tuple(
+                            str(item) for item in _json_loads_list(str(row["tags_json"] or "[]"))
+                        ),
                         metadata=_json_loads_dict(str(row["metadata_json"] or "{}")),
                         created_at=float(row["created_at"] or 0.0),
                         created_by=str(row["created_by"] or ""),
@@ -7564,7 +7817,9 @@ class ArcHubCMSService:
             finally:
                 conn.close()
 
-    def list_dictionary_items(self, *, group_name: str = "", limit: int = 100) -> list[dict[str, Any]]:
+    def list_dictionary_items(
+        self, *, group_name: str = "", limit: int = 100
+    ) -> list[dict[str, Any]]:
         limit = max(1, min(limit, 500))
         with self._lock:
             conn = self._connect()
@@ -7600,6 +7855,18 @@ class ArcHubCMSService:
                 ]
             finally:
                 conn.close()
+
+    @staticmethod
+    def _corpus_dirs_from_spec(spec: Any) -> tuple[Path | str, ...]:
+        roots = getattr(spec, "corpus_dirs", ())
+        if roots is None:
+            return ()
+        if isinstance(roots, str | Path):
+            return (roots,)
+        try:
+            return tuple(roots)
+        except TypeError:
+            return ()
 
     @staticmethod
     def _iter_corpus_files(roots: Iterable[Path | str]) -> list[Path]:
@@ -7800,7 +8067,11 @@ class ArcHubCMSService:
 
     @classmethod
     def _normalize_permission_actions(cls, actions: Iterable[str]) -> tuple[str, ...]:
-        requested = {cls._normalize_permission_action(str(action)) for action in actions if str(action).strip()}
+        requested = {
+            cls._normalize_permission_action(str(action))
+            for action in actions
+            if str(action).strip()
+        }
         return tuple(action for action in _CONTENT_PERMISSION_ACTIONS if action in requested)
 
     @staticmethod
@@ -7952,7 +8223,11 @@ class ArcHubCMSService:
             scope_route = str(row["route_path"] or "").rstrip("/")
             if scope_node_id == node_id:
                 return row
-            if bool(row["include_descendants"]) and scope_route and target_route.startswith(f"{scope_route}/"):
+            if (
+                bool(row["include_descendants"])
+                and scope_route
+                and target_route.startswith(f"{scope_route}/")
+            ):
                 return row
         return None
 
@@ -8017,7 +8292,9 @@ class ArcHubCMSService:
         return alias
 
     @staticmethod
-    def _normalize_content_fields(fields: Iterable[dict[str, Any] | ContentField]) -> tuple[ContentField, ...]:
+    def _normalize_content_fields(
+        fields: Iterable[dict[str, Any] | ContentField],
+    ) -> tuple[ContentField, ...]:
         normalized: list[ContentField] = []
         for item in fields:
             field = item if isinstance(item, ContentField) else _field_from_dict(item)
@@ -8221,7 +8498,9 @@ class ArcHubCMSService:
             "trash_route_path": str(row["route_path"]),
             "slug": str(row["trashed_original_slug"] or row["slug"] or ""),
             "original_parent_id": (
-                str(row["trashed_original_parent_id"]) if row["trashed_original_parent_id"] else None
+                str(row["trashed_original_parent_id"])
+                if row["trashed_original_parent_id"]
+                else None
             ),
             "original_status": str(row["trashed_original_status"] or ""),
             "trashed_at": float(row["trashed_at"] or 0.0),
@@ -8263,7 +8542,9 @@ class ArcHubCMSService:
             raise ValueError("; ".join(errors))
         return clean
 
-    def _clean_segment_payload(self, content_type: ContentType, payload: dict[str, Any]) -> dict[str, Any]:
+    def _clean_segment_payload(
+        self, content_type: ContentType, payload: dict[str, Any]
+    ) -> dict[str, Any]:
         clean: dict[str, Any] = {}
         validation_errors: list[str] = []
         fields = {field.alias: field for field in content_type.fields}
@@ -8280,7 +8561,9 @@ class ArcHubCMSService:
                 )
 
                 builder = get_archub_content_builder_service()
-                clean[field.alias] = builder.serialize_blocks(builder.parse_blocks(value, strict=True))
+                clean[field.alias] = builder.serialize_blocks(
+                    builder.parse_blocks(value, strict=True)
+                )
                 continue
             text = str(value or "").strip()
             if text:
@@ -8310,7 +8593,9 @@ class ArcHubCMSService:
                 errors.append(f"{field.name} must match {pattern}")
         return errors
 
-    def _clean_blueprint_payload(self, content_type: ContentType, payload: dict[str, Any]) -> dict[str, Any]:
+    def _clean_blueprint_payload(
+        self, content_type: ContentType, payload: dict[str, Any]
+    ) -> dict[str, Any]:
         clean: dict[str, Any] = {}
         for field in content_type.fields:
             value = payload.get(field.alias, field.default)
@@ -8323,7 +8608,9 @@ class ArcHubCMSService:
                 )
 
                 builder = get_archub_content_builder_service()
-                clean[field.alias] = builder.serialize_blocks(builder.parse_blocks(value, strict=True))
+                clean[field.alias] = builder.serialize_blocks(
+                    builder.parse_blocks(value, strict=True)
+                )
                 continue
             clean[field.alias] = str(value or "").strip()
         return clean
@@ -8463,10 +8750,18 @@ class ArcHubCMSService:
         headers: dict[str, str],
         timeout: float,
     ) -> int:
-        import requests
-
-        response = requests.post(target_url, json=payload, headers=headers, timeout=timeout)
-        return int(response.status_code)
+        body = _json_dumps(payload).encode("utf-8")
+        request = urllib.request.Request(
+            target_url,
+            data=body,
+            headers={**headers, "Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                return int(response.status)
+        except urllib.error.HTTPError as exc:
+            return int(exc.code)
 
     @staticmethod
     def _enqueue_webhook_deliveries(
@@ -8486,7 +8781,9 @@ class ArcHubCMSService:
         ).fetchall()
         for row in rows:
             events = tuple(str(item) for item in _json_loads_list(str(row["events_json"] or "[]")))
-            if not any(ArcHubCMSService._webhook_event_matches(item, event_type) for item in events):
+            if not any(
+                ArcHubCMSService._webhook_event_matches(item, event_type) for item in events
+            ):
                 continue
             conn.execute(
                 """
@@ -8550,6 +8847,18 @@ class ArcHubCMSService:
             event_type=action,
             aggregate_id=node_id,
             payload=payload,
+        )
+        # Publish to the in-process event bus so plugins/integrations react.
+        # Contract: handlers are synchronous and MUST NOT re-enter the write
+        # path (the service lock is held here). A transactional outbox→bus
+        # relay replaces this best-effort emit in a later phase.
+        get_event_bus().publish(
+            ArcHubDomainEvent(
+                event_type=action,
+                aggregate_id=node_id,
+                actor=actor,
+                metadata={"summary": summary, **clean_metadata},
+            )
         )
 
     def _refresh_descendant_routes(self, conn: sqlite3.Connection, node_id: str) -> None:

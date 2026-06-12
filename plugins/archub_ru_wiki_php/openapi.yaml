@@ -1,0 +1,35 @@
+openapi: 3.1.0
+info:
+  title: ArcHub.ru Enterprise Wiki PHP Plugin
+  version: 1.0.0
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        "200":
+          description: OK
+  /api/arc-tool:
+    post:
+      summary: ArcHub external plugin tool bridge
+      responses:
+        "200":
+          description: Tool response
+  /api/wiki/overview:
+    get:
+      summary: Wiki capability overview
+      responses:
+        "200":
+          description: Overview
+  /api/wiki/pages:
+    get:
+      summary: List wiki pages
+      responses:
+        "200":
+          description: Page list
+  /api/wiki/diagrams:
+    get:
+      summary: List Draw.io-compatible diagrams
+      responses:
+        "200":
+          description: Diagram list

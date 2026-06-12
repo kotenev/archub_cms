@@ -1,0 +1,39 @@
+@startuml
+!include <C4/C4_Container>
+LAYOUT_WITH_LEGEND()
+title Container View — ArcHub Platform (single FastAPI process)
+
+Person(editor, "Content Editor")
+Person(agent_user, "ITSM Agent / Manager")
+Person(visitor, "Public Visitor")
+
+System_Boundary(archub, "ArcHub Platform") {
+  Container(web, "Web Layer", "FastAPI routers", "routes, platform_routes, collaboration_routes, admin_routes, itsm_routes")
+  Container(platform_root, "ArcHubPlatform", "Composition root", "Wires bounded-context application services")
+  Container(services, "Bounded-Context Services", "DDD application layer", "content, knowledge, delivery, modeling, governance, workflow, media, search")
+  Container(plugin_host, "Plugin Host", "Extensibility runtime", "Discovers manifests, permission-gates, loads plugins; 25+ extension points")
+  Container(adapter, "Plugin Platform Adapter", "Capability boundary", "Audited SQLite/PostgreSQL stores + document repositories")
+  Container(itsm, "ITSM Plugin", "Service Desk + ITIL", "ServiceDesk, BPMN engine, Catalog, SLA, CMDB")
+  Container(editor_plugin, "Offline BPMN Editor Plugin", "EditorExt + static assets", "Dependency-free SVG editor")
+  ContainerDb(sqlite, "SQLite", "Embedded DB", "Content, versions, FTS5, plugin config, ITSM data")
+  ContainerDb(fs, "Filesystem", "Runtime exports", "RAG materials, vault exports, BPMN")
+}
+System_Ext(llm, "LLM / Embedding Provider")
+ContainerDb_Ext(pg, "PostgreSQL", "Optional ITSM backend")
+
+Rel(editor, web, "Backoffice & APIs", "HTTPS")
+Rel(agent_user, web, "/api/platform/itsm/*, /admin/itsm", "HTTPS")
+Rel(visitor, web, "Delivery API", "HTTPS")
+Rel(web, platform_root, "Resolves services")
+Rel(web, itsm, "Drives Service Desk / schemes", "via plugin host")
+Rel(platform_root, services, "Owns & exposes")
+Rel(services, plugin_host, "Fires domain events, calls hooks")
+Rel(plugin_host, itsm, "Loads & runs")
+Rel(plugin_host, editor_plugin, "Loads (EditorExt + assets)")
+Rel(itsm, adapter, "Requests audited repositories")
+Rel(adapter, sqlite, "Reads/writes", "SQL")
+Rel(adapter, pg, "Reads/writes (optional)", "SQL")
+Rel(services, sqlite, "Reads/writes", "SQL")
+Rel(services, fs, "Exports")
+Rel(services, llm, "Answers & embeddings", "HTTPS")
+@enduml

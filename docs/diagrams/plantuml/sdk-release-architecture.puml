@@ -1,0 +1,30 @@
+@startuml
+title ArcHub Platform SDK Release
+
+skinparam componentStyle rectangle
+skinparam shadowing false
+
+actor "SDK Consumer" as Consumer
+component "archub-platform-sdk\nPython 3.11+" as SDK
+component "PluginManifest Builder" as Manifest
+component "ArcHub Platform API\nFastAPI" as API
+component "Plugin Management" as Plugins
+component "Marketplace" as Marketplace
+component "Delivery API" as Delivery
+component "Knowledge API" as Knowledge
+component "Runtime API" as Runtime
+database "Release Manifest\narchub-sdk-1.0.0.json" as Release
+artifact "OpenAPI 3.1 subset" as OpenAPI
+
+Consumer --> SDK : import ArcHubClient
+Consumer --> Manifest : generate plugin.json
+SDK --> API : HTTP JSON
+API --> Plugins
+API --> Marketplace
+API --> Delivery
+API --> Knowledge
+API --> Runtime
+SDK --> Release : declares version/features
+SDK --> OpenAPI : aligns endpoint subset
+
+@enduml

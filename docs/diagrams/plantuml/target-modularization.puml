@@ -1,39 +1,120 @@
 @startuml
-title ArcHub CMS - Incremental Modularization of ArcHubCMSService
+title ArcHub CMS - Current Modularization (DDD Bounded Contexts)
 skinparam componentStyle rectangle
 skinparam shadowing false
 skinparam defaultFontName Arial
 
-component "Current\nArcHubCMSService" as Monolith
+component "Legacy\nArcHubCMSService\nservices/cms.py" as Monolith
 
-package "Extraction targets" {
-  component "domain.content\nentities and validation" as Domain
-  component "application.publishing\npublish/unpublish/workflow" as Publish
-  component "application.delivery\npublished tree/search/feed" as Delivery
-  component "application.media\nasset metadata and reports" as Media
-  component "application.packages\nenvironment promotion" as Packages
-  component "application.webhooks\nqueue and retry" as Webhooks
-  component "infrastructure.sqlite_store\nschema, migrations, hydration" as Store
+package "Composition Root" {
+    component "ArcHubPlatform\napplication/platform.py" as Platform
 }
 
-component "Compatibility API\nexisting service methods" as API
-component "FastAPI routes" as Routes
-component "PublishedContent helper" as Helper
-component "Maintenance service" as Jobs
+package "Domain Contexts — domain/" {
+    component "content\nContentNode + repository port" as Content
+    component "modeling\nContentTypeModel + repo port" as Modeling
+    component "workflow\nWorkflow state machine" as Workflow
+    component "governance\nAccessRule + PermissionRule" as Governance
+    component "knowledge\nKnowledgeSpace + Graph" as Knowledge
+    component "collaboration\nComment + Reaction + Mention" as Collaboration
+    component "search\nSearchQuery + Facets" as Search
+    component "versioning\nVersion + VersionDiff" as Versioning
+    component "delivery\nRedirect + PublishedDocument" as Delivery
+    component "blueprints\nBlueprint" as Blueprints
+    component "locks\nEditLock" as Locks
+    component "media\nMediaAsset" as Media
+    component "packaging\nContentPackage" as Packaging
+    component "runtime\nRuntimeSnapshot" as Runtime
+    component "localization\nDictionaryEntry + Variant" as Localization
+    component "analytics\nHealthReport" as Analytics
+    component "subscriptions\nSubscription" as Subscriptions
+    component "trash\nTrashedItem" as Trash
+    component "webhooks\nWebhook + DeliveryRecord" as Webhooks
+    component "plugins\nPluginManifest" as Plugins
+}
 
-Routes --> API
-Helper --> API
-Jobs --> API
-API --> Publish
-API --> Delivery
-API --> Media
-API --> Packages
-API --> Webhooks
-Publish --> Domain
-Delivery --> Domain
-Media --> Domain
-Packages --> Domain
-Webhooks --> Domain
-Domain --> Store
-Monolith ..> API : preserve during extraction
+package "Application Services — application/" {
+    component "content_service" as ContentSvc
+    component "modeling_service" as ModelingSvc
+    component "workflow_service" as WorkflowSvc
+    component "governance_service" as GovernanceSvc
+    component "agent_service" as AgentSvc
+    component "collaboration_service" as CollabSvc
+    component "search_service + fts_search_service" as SearchSvc
+    component "versioning_service" as VersioningSvc
+    component "delivery_read_service" as DeliverySvc
+    component "blueprint_service" as BlueprintSvc
+    component "lock_service" as LockSvc
+    component "media_service" as MediaSvc
+    component "packaging_service" as PackageSvc
+    component "runtime_service" as RuntimeSvc
+    component "localization_service" as LocSvc
+    component "analytics_service" as AnalyticsSvc
+    component "subscription_service" as SubSvc
+    component "trash_service" as TrashSvc
+    component "webhooks_service" as WebhookSvc
+    component "plugin_management_service" as PluginMgmtSvc
+    component "ingestion_service" as IngestionSvc
+    component "resilient_llm" as ResilientLLM
+    component "embeddings" as Embeddings
+}
+
+package "Infrastructure — infrastructure/" {
+    component "31 SQLite repository adapters" as Repos
+    component "Plugin SQL repositories\ninfrastructure/plugins" as PluginRepos
+    component "Database + schema" as InfraDB
+}
+
+package "Web Routes — web/" {
+    component "routes.py" as Routes
+    component "platform_routes.py" as PlatformRoutes
+    component "collaboration_routes.py" as CollabRoutes
+    component "admin_routes.py" as AdminRoutes
+}
+
+package "Kernel — kernel/" {
+    component "EventBus\nUnitOfWork\nResult\nSpecification\nCircuitBreaker" as Kernel
+}
+
+package "Extensibility — extensibility/" {
+    component "PluginHost + 25 Ext Points" as Extensibility
+    component "PluginPlatformAdapter\nplugin persistence + audit" as PluginAdapter
+}
+
+Routes --> Platform
+PlatformRoutes --> Platform
+CollabRoutes --> Platform
+AdminRoutes --> Platform
+
+Platform --> ContentSvc
+Platform --> ModelingSvc
+Platform --> WorkflowSvc
+Platform --> GovernanceSvc
+Platform --> AgentSvc
+
+ContentSvc --> Content
+ModelingSvc --> Modeling
+WorkflowSvc --> Workflow
+GovernanceSvc --> Governance
+AgentSvc --> Knowledge
+CollabSvc --> Collaboration
+SearchSvc --> Search
+VersioningSvc --> Versioning
+
+Content --> Kernel
+Workflow --> Kernel
+Governance --> Kernel
+Knowledge --> Kernel
+
+Content --> Repos
+Modeling --> Repos
+Workflow --> Repos
+Governance --> Repos
+Repos --> InfraDB
+
+Monolith ..> Platform : legacy compat\npinned by characterization tests
+Extensibility --> Kernel
+Extensibility --> PluginAdapter
+PluginAdapter --> PluginRepos
+Extensibility ..> Platform : plugin contributions
 @enduml

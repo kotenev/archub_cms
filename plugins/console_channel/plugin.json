@@ -1,0 +1,13 @@
+{
+  "id": "example.console_channel",
+  "name": "Console Notification Channel",
+  "version": "1.0.0",
+  "capability": "notification",
+  "runtime": "python",
+  "entrypoint": "archub_cms.extensibility.example_plugins.console_channel:ConsoleChannelPlugin",
+  "description": "An outbound notification channel that records all domain events (Slack/email/webhook seam).",
+  "provider": "archub",
+  "permissions": ["events:subscribe", "network:outbound"],
+  "tags": ["example", "confluence", "notification", "integration"],
+  "enabled_by_default": true
+}

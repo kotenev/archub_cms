@@ -1,0 +1,22 @@
+[workspace]
+members = [
+    "rust/archub-core",
+    "rust/archub-cms-core",
+    "rust/archub-adapters",
+    "rust/archub-rest-api",
+    "rust/archub-search-core",
+    "rust/archub-llm-core",
+    "rust/archub-workflow-core",
+    "rust/archub-governance-core",
+    "rust/archub-automation-core",
+    "rust/archub-knowledge-core",
+    "rust/archub-media-core",
+    "rust/archub-collaboration-core",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+authors = ["ArcHub contributors"]

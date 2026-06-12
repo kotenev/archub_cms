@@ -1,0 +1,26 @@
+sequenceDiagram
+    participant Host as PluginHost
+    participant Context as PluginContext
+    participant Adapter as PluginPlatformAdapter
+    participant Store as SQLite/Postgres PluginStore
+    participant Repo as Platform SQL Repository
+    participant Plugin as Executable Plugin
+    participant Audit as PluginAuditLog
+    participant DB as SQLite/Postgres
+
+    Host->>Adapter: create(plugin_id, audit_log)
+    Host->>Audit: plugin.load.attempt
+    Host->>Context: pass manifest, settings, platform
+    Plugin->>Adapter: request platform repository/store
+    Adapter->>Store: choose backend from settings
+    Store->>Audit: adapter.*.open
+    Adapter->>Repo: construct infrastructure repository
+    Repo->>Store: transaction(schema.ensure)
+    Store->>DB: apply plugin tables
+    Store->>Audit: schema.ensure
+    Plugin->>Context: register extensions
+    Context->>Audit: extension.registered
+    Plugin->>Repo: command/query through repository port
+    Repo->>Store: transaction/read(action)
+    Store->>DB: execute SQL
+    Store->>Audit: action or action.failed

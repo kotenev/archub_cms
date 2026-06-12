@@ -40,12 +40,18 @@ dependencies = [
 [project.optional-dependencies]
 server = ["uvicorn[standard]>=0.29"]
 yaml = ["pyyaml>=6"]
-docs = ["mkdocs>=1.6", "mkdocs-material>=9.5"]
+docs = ["mkdocs>=1.6", "mkdocs-material>=9.5", "plantuml-markdown>=3.9", "pymdown-extensions>=10"]
 test = ["httpx>=0.27", "pytest>=8"]
+postgres = ["psycopg[binary]>=3.1"]
 
 [project.urls]
 Documentation = "https://github.com/archub-cms/archub-cms"
 Repository = "https://github.com/archub-cms/archub-cms"
+
+[project.scripts]
+archub-marketplace-build = "archub_cms.tools.module_distributions:main"
+archub-core-plugins = "archub_cms.tools.core_plugins:main"
+archub-sdk-release = "archub_cms.tools.sdk_release:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -56,6 +62,8 @@ archub_cms = [
     "templates/*.html",
     "static/*.css",
     "static/js/*.js",
+    "extensibility/example_plugins/bpmn_editor/static/*.js",
+    "extensibility/example_plugins/bpmn_editor/static/*.css",
 ]
 
 [tool.ruff]

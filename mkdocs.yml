@@ -1,8 +1,8 @@
-site_name: ArcHub CMS
-site_description: Standalone headless CMS, content builder and delivery API.
-site_url: https://archub-cms.github.io/archub_cms/
-repo_url: https://github.com/archub-cms/archub_cms
-repo_name: archub-cms/archub_cms
+site_name: ArcHub
+site_description: Modular knowledge & ITSM platform — CMS, plugins, hexagonal adapters, RAG and delivery APIs.
+site_url: https://kotenev.github.io/archub_cms/
+repo_url: https://github.com/kotenev/archub_cms
+repo_name: kotenev/archub_cms
 copyright: Copyright &copy; 2026 ArcHub contributors
 
 theme:
@@ -12,6 +12,9 @@ theme:
     - scheme: default
       primary: teal
       accent: amber
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
     - scheme: slate
       primary: teal
       accent: amber
@@ -21,28 +24,53 @@ theme:
   features:
     - navigation.sections
     - navigation.tabs
+    - navigation.tabs.sticky
     - navigation.top
+    - navigation.indexes
+    - toc.follow
     - content.code.copy
+    - content.code.annotate
+    - search.suggest
+    - search.highlight
 
 nav:
   - Overview: index.md
   - Getting Started: getting-started.md
-  - Architecture: architecture.md
-  - Advanced CMS Refactor: architecture/advanced-cms-refactor.md
-  - CMS Capability Matrix: architecture/capability-matrix.md
-  - Enterprise Knowledge Platform: architecture/enterprise-knowledge-platform.md
-  - Content Modeling: architecture/content-modeling.md
-  - Versioning & Cleanup: architecture/versioning-cleanup.md
-  - Publishing & Workflow: architecture/publishing-workflow.md
-  - Media & DAM: architecture/media-dam.md
-  - Package Promotion: architecture/package-promotion.md
-  - Webhook Integrations: architecture/webhook-integrations.md
-  - Governance & Access: architecture/governance-access.md
-  - Runtime & Data: architecture/runtime-and-data.md
-  - Diagrams & Models: architecture/diagrams.md
-  - Content Builder: content-builder.md
-  - Delivery API: delivery-api.md
-  - Delivery Contracts: architecture/delivery-contracts.md
+  - Deployment:
+      - Local (no Docker): deployment/local.md
+      - Docker & Compose: deployment/docker.md
+      - GitHub Pages (docs): deployment/github-pages.md
+  - Capabilities:
+      - Overview: capabilities/index.md
+      - ITSM / ITIL: capabilities/itsm.md
+      - Plugins & Extensibility: capabilities/plugins.md
+      - Content Builder: content-builder.md
+      - Delivery API: delivery-api.md
+  - Architecture:
+      - Overview: architecture.md
+      - C4 Model: architecture/c4-model.md
+      - Bounded Contexts: architecture/contexts.md
+      - Advanced CMS Refactor: architecture/advanced-cms-refactor.md
+      - CMS Capability Matrix: architecture/capability-matrix.md
+      - Enterprise Knowledge Platform: architecture/enterprise-knowledge-platform.md
+      - ArcHub Core Platform: architecture/archub-core-platform.md
+      - Plugin Platform Adapter: architecture/plugin-platform-adapter.md
+      - Module Marketplace: architecture/module-marketplace.md
+      - Content Modeling: architecture/content-modeling.md
+      - Versioning & Cleanup: architecture/versioning-cleanup.md
+      - Publishing & Workflow: architecture/publishing-workflow.md
+      - Media & DAM: architecture/media-dam.md
+      - Package Promotion: architecture/package-promotion.md
+      - Webhook Integrations: architecture/webhook-integrations.md
+      - Governance & Access: architecture/governance-access.md
+      - Runtime & Data: architecture/runtime-and-data.md
+      - Delivery Contracts: architecture/delivery-contracts.md
+      - Diagrams & Models: architecture/diagrams.md
+  - Reference:
+      - Configuration: reference/configuration.md
+      - HTTP API: reference/api.md
+      - Platform SDK: sdk/platform-sdk.md
+      - PHP Wiki Plugin: plugins/archub-ru-wiki-php.md
   - GitHub Demo: demo-site.md
   - Release Notes: release-notes.md
 
@@ -51,10 +79,31 @@ markdown_extensions:
   - attr_list
   - md_in_html
   - tables
+  - footnotes
+  - toc:
+      permalink: true
   - pymdownx.details
-  - pymdownx.highlight
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  # PlantUML (including the C4 model) rendered via the public PlantUML server.
+  # Self-host by pointing `server` at your own instance, or render the `.puml`
+  # sources under docs/diagrams/ with the `plantuml` CLI for fully-offline builds.
+  - plantuml_markdown:
+      server: https://www.plantuml.com/plantuml
+      format: svg
+      cachedir: /tmp/archub-plantuml-cache
   - pymdownx.superfences:
       custom_fences:
         - name: mermaid
           class: mermaid
           format: !!python/name:pymdownx.superfences.fence_code_format
+
+plugins:
+  - search

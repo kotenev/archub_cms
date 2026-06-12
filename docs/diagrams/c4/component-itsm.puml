@@ -1,0 +1,36 @@
+@startuml
+!include <C4/C4_Component>
+LAYOUT_WITH_LEGEND()
+title Component View — ITSM Plugin & BPMN Engine
+
+Container(web, "itsm_routes", "FastAPI", "/api/platform/itsm/* + /admin/itsm HTML")
+Container(editor_plugin, "Offline BPMN Editor", "EditorExt + JS/CSS assets")
+ContainerDb(store, "Platform Stores", "SQLite / PostgreSQL", "audited, via the adapter")
+
+Component(itsm_service, "ItsmService", "Facade", "Composes desk + ITIL registries; imports/persists BPMN; SLA-aware logging; impact")
+Component(desk, "ServiceDesk", "Application facade", "Create/transition/assign requests; queue & SLA summary")
+Component(engine, "Workflow Engine", "State machine", "WorkflowScheme: statuses, guarded transitions, conditions, post-functions")
+Component(bpmn, "BPMN Engine", "Serializer/parser", "to_bpmn_xml / from_bpmn_xml — lossless BPMN 2.0 + Mermaid")
+Component(schemes, "ITIL Scheme Library", "Defaults", "incident, major_incident, problem, request, change x3, release, event, knowledge")
+Component(catalog, "Service Catalog", "Registry", "Request-able services + lifecycle + linked SLA")
+Component(sla, "SLA Registry", "Registry", "Per-priority response/resolution targets")
+Component(cmdb, "CMDB", "Registry + graph", "Configuration items, relationships, impact analysis")
+Component(repos, "Repositories", "Adapters", "Request + document repositories")
+
+Rel(web, itsm_service, "Calls")
+Rel(web, desk, "Calls")
+Rel(editor_plugin, web, "Loads schemes, POST /schemes & /import-bpmn", "fetch")
+Rel(itsm_service, desk, "Wraps")
+Rel(itsm_service, catalog, "Resolves service to SLA")
+Rel(itsm_service, sla, "Computes due times")
+Rel(itsm_service, cmdb, "Impact analysis")
+Rel(itsm_service, bpmn, "Import / persist schemes")
+Rel(desk, engine, "Applies transitions")
+Rel(desk, schemes, "Default scheme per type")
+Rel(engine, bpmn, "Serialize / parse")
+Rel(desk, repos, "Persists requests")
+Rel(catalog, repos, "Documents")
+Rel(sla, repos, "Documents")
+Rel(cmdb, repos, "Documents")
+Rel(repos, store, "Audited reads/writes", "SQL")
+@enduml

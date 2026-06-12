@@ -1,8 +1,19 @@
 name: Publish GitHub Pages
 
+# Builds the MkDocs site and deploys it to GitHub Pages using the modern
+# "GitHub Actions" Pages source (no gh-pages branch needed).
+#
+# One-time setup: repo Settings -> Pages -> Build and deployment -> Source: GitHub Actions.
+
 on:
   push:
     branches: [main]
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - "pyproject.toml"
+      - "demo_site/**"
+      - ".github/workflows/pages.yml"
   workflow_dispatch:
 
 permissions:
@@ -18,21 +29,32 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6.0.3
+
+      - uses: actions/setup-python@v6.2.0
         with:
           python-version: "3.12"
+          cache: pip
+
+      - uses: actions/configure-pages@v6.0.0
+
       - name: Install docs dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e .[docs]
+
       - name: Build docs
-        run: mkdocs build --site-dir site
+        # PlantUML (C4) diagrams render via the server configured in mkdocs.yml
+        # (the public plantuml.com instance by default). GitHub runners have
+        # outbound network access; self-host PlantUML for fully reproducible builds.
+        run: mkdocs build --strict --site-dir site
+
       - name: Add static demo
         run: |
           mkdir -p site/demo
           cp -R demo_site/. site/demo/
-      - uses: actions/upload-pages-artifact@v3
+
+      - uses: actions/upload-pages-artifact@v5.0.0
         with:
           path: site
 
@@ -44,4 +66,4 @@ jobs:
     needs: build
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5.0.0
