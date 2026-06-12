@@ -24,7 +24,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from enum import StrEnum
 from time import time
-from typing import Any
+from typing import Any, cast
 
 from archub_cms.extensibility.example_plugins.itsm.documents import DocumentRepository, new_id
 from archub_cms.extensibility.example_plugins.itsm.request import CloudResource
@@ -110,7 +110,7 @@ class ConfigurationItem:
                 region=str(cloud.get("region") or ""),
                 resource_id=str(cloud.get("resource_id") or ""),
             ),
-            attributes=dict(payload.get("attributes") or {}),
+            attributes=cast(dict[str, Any], dict(payload.get("attributes") or {})),
             created_at=float(payload.get("created_at") or 0.0),
             updated_at=float(payload.get("updated_at") or 0.0),
         )
@@ -213,7 +213,7 @@ class Cmdb:
         if changes.get("status"):
             item.status = _enum(CIStatus, changes["status"], item.status)
         if isinstance(changes.get("attributes"), dict):
-            item.attributes = dict(changes["attributes"])
+            item.attributes = cast(dict[str, Any], dict(changes["attributes"]))
         if isinstance(changes.get("cloud"), dict):
             cloud = changes["cloud"]
             item.cloud = CloudResource(
