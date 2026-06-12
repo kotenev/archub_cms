@@ -362,9 +362,9 @@ class ModuleDistributionInstaller:
         target_root = target.resolve()
         with tarfile.open(source) as archive:
             for member in archive.getmembers():
-                if member.isdir():
+                if member.isdir():  # type: ignore[attr-defined]
                     continue
-                if member.issym() or member.islnk():
+                if member.issym() or member.islnk():  # type: ignore[attr-defined]
                     raise ValueError(f"unsafe tar link member: {member.name}")
                 destination = (target_root / member.name).resolve()
                 if not _is_relative_to(destination, target_root):
