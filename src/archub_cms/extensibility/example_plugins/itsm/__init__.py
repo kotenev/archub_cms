@@ -21,7 +21,32 @@ into an IT Service Management (ITSM) Service Desk for a cloud provider:
 
 from __future__ import annotations
 
-from archub_cms.extensibility.example_plugins.itsm.bpmn import to_bpmn_xml, to_mermaid
+from archub_cms.extensibility.example_plugins.itsm.bpmn import (
+    from_bpmn_xml,
+    to_bpmn_xml,
+    to_mermaid,
+)
+from archub_cms.extensibility.example_plugins.itsm.catalog import (
+    CatalogService,
+    ServiceCatalog,
+    ServiceLifecycle,
+)
+from archub_cms.extensibility.example_plugins.itsm.cmdb import (
+    CIRelationship,
+    CIStatus,
+    CIType,
+    Cmdb,
+    ConfigurationItem,
+    RelationshipType,
+)
+from archub_cms.extensibility.example_plugins.itsm.documents import (
+    DocumentRepository,
+    InMemoryDocumentRepository,
+)
+from archub_cms.extensibility.example_plugins.itsm.itsm_service import (
+    ItsmService,
+    SchemeValidationError,
+)
 from archub_cms.extensibility.example_plugins.itsm.rbac import (
     ITILRole,
     ITSMPermission,
@@ -43,6 +68,7 @@ from archub_cms.extensibility.example_plugins.itsm.request import (
     SlaPolicy,
 )
 from archub_cms.extensibility.example_plugins.itsm.service_desk import ServiceDesk
+from archub_cms.extensibility.example_plugins.itsm.sla import SlaDefinition, SlaRegistry
 from archub_cms.extensibility.example_plugins.itsm.workflow import (
     StatusCategory,
     WorkflowError,
@@ -53,22 +79,38 @@ from archub_cms.extensibility.example_plugins.itsm.workflow import (
 )
 
 __all__ = [
+    "CIRelationship",
+    "CIStatus",
+    "CIType",
+    "CatalogService",
     "CloudResource",
-    "InMemoryRequestRepository",
+    "Cmdb",
+    "ConfigurationItem",
+    "DocumentRepository",
     "ITILRole",
     "ITSMPermission",
+    "InMemoryDocumentRepository",
+    "InMemoryRequestRepository",
+    "ItsmService",
     "Priority",
+    "RelationshipType",
     "Request",
     "RequestRepository",
     "RequestType",
+    "SchemeValidationError",
+    "ServiceCatalog",
     "ServiceDesk",
+    "ServiceLifecycle",
+    "SlaDefinition",
     "SlaPolicy",
+    "SlaRegistry",
     "StatusCategory",
     "WorkflowError",
     "WorkflowScheme",
     "WorkflowStatus",
     "WorkflowTransition",
     "actor_role_for_groups",
+    "from_bpmn_xml",
     "has_itsm_permission",
     "itil_role_report",
     "permissions_for_groups",

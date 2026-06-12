@@ -770,3 +770,336 @@ def test_api_change_manager_can_create_and_approve_change(client):
     )
     assert approved.status_code == 200
     assert approved.json()["status_id"] == "approved"
+
+
+# -- ITIL: Service Catalog / SLA / CMDB / BPMN engine (unit) ----------------
+
+from archub_cms.extensibility.example_plugins.itsm.bpmn import from_bpmn_xml  # noqa: E402
+from archub_cms.extensibility.example_plugins.itsm.catalog import ServiceCatalog  # noqa: E402
+from archub_cms.extensibility.example_plugins.itsm.cmdb import Cmdb  # noqa: E402
+from archub_cms.extensibility.example_plugins.itsm.documents import (  # noqa: E402
+    InMemoryDocumentRepository,
+)
+from archub_cms.extensibility.example_plugins.itsm.itsm_service import (  # noqa: E402
+    ItsmService,
+    SchemeValidationError,
+)
+from archub_cms.extensibility.example_plugins.itsm.repository import (  # noqa: E402
+    InMemoryRequestRepository,
+)
+from archub_cms.extensibility.example_plugins.itsm.sla import SlaRegistry  # noqa: E402
+
+
+def _doc() -> InMemoryDocumentRepository:
+    return InMemoryDocumentRepository()
+
+
+def test_bpmn_roundtrip_is_lossless_for_default_schemes():
+    for key, scheme in build_default_schemes().items():
+        back = from_bpmn_xml(to_bpmn_xml(scheme))
+        assert back.key == key
+        assert set(back.statuses) == set(scheme.statuses)
+        assert back.initial_status_id == scheme.initial_status_id
+        assert {s.category for s in back.statuses.values()} == {
+            s.category for s in scheme.statuses.values()
+        }
+        assert set(back.transitions) == set(scheme.transitions)
+        for tid, transition in scheme.transitions.items():
+            assert back.transitions[tid].to_status == transition.to_status
+            assert back.transitions[tid].is_global == transition.is_global
+        assert back.is_valid
+
+
+def test_bpmn_import_of_handwritten_process():
+    xml = """<?xml version="1.0"?>
+    <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL">
+      <bpmn:process id="approval">
+        <bpmn:startEvent id="s" />
+        <bpmn:userTask id="open" name="Open" />
+        <bpmn:userTask id="done" name="Done" />
+        <bpmn:endEvent id="e" />
+        <bpmn:sequenceFlow id="f0" sourceRef="s" targetRef="open" />
+        <bpmn:sequenceFlow id="f1" name="Finish" sourceRef="open" targetRef="done" />
+        <bpmn:sequenceFlow id="f2" sourceRef="done" targetRef="e" />
+      </bpmn:process>
+    </bpmn:definitions>"""
+    scheme = from_bpmn_xml(xml)
+    assert scheme.key == "approval"
+    assert scheme.initial_status_id == "open"
+    assert scheme.statuses["done"].is_done  # flows into an end event → terminal
+    assert scheme.is_valid
+    assert scheme.apply("open", "f1").to_status == "done"
+
+
+def test_bpmn_import_rejects_xml_without_tasks():
+    with pytest.raises(ValueError):
+        from_bpmn_xml(
+            "<bpmn:definitions xmlns:bpmn='http://www.omg.org/spec/BPMN/20100524/MODEL'/>"
+        )
+
+
+def test_service_catalog_crud():
+    catalog = ServiceCatalog(_doc(), clock=lambda: 1.0)
+    svc = catalog.create(name="Managed PostgreSQL", category="database", owner="dba")
+    assert svc.id.startswith("svc-")
+    assert catalog.get(svc.id).name == "Managed PostgreSQL"
+    catalog.update(svc.id, lifecycle="deprecated")
+    assert catalog.get(svc.id).lifecycle.value == "deprecated"
+    assert [s.id for s in catalog.list(category="database")] == [svc.id]
+    assert catalog.delete(svc.id) is True
+    assert catalog.find(svc.id) is None
+
+
+def test_sla_definition_to_policy():
+    registry = SlaRegistry(_doc(), clock=lambda: 1.0)
+    gold = registry.create(name="Gold", targets={"high": [10, 60], "low": [240, 1440]})
+    policy = registry.policy_for(gold.id)
+    assert policy is not None
+    assert policy.response_minutes(Priority.HIGH) == 10
+    assert policy.resolution_minutes(Priority.HIGH) == 60
+
+
+def test_cmdb_items_relationships_and_impact():
+    cmdb = Cmdb(_doc(), _doc(), clock=lambda: 1.0)
+    db = cmdb.add_item(name="pg-prod", ci_type="database")
+    app = cmdb.add_item(name="checkout", ci_type="application")
+    web = cmdb.add_item(name="storefront", ci_type="application")
+    cmdb.relate(app.id, db.id, "depends_on")
+    cmdb.relate(web.id, app.id, "depends_on")
+    impact = cmdb.impact(db.id)
+    # both the app and the web tier are (transitively) impacted if the DB fails
+    assert impact["impacted_count"] == 2
+    impacted_ids = {ci["id"] for ci in impact["impacted"]}
+    assert impacted_ids == {app.id, web.id}
+    # deleting a CI drops its relationships
+    cmdb.delete_item(app.id)
+    assert cmdb.impact(db.id)["impacted_count"] == 0
+
+
+def test_cmdb_rejects_self_relationship():
+    cmdb = Cmdb(_doc(), _doc(), clock=lambda: 1.0)
+    ci = cmdb.add_item(name="solo")
+    with pytest.raises(ValueError):
+        cmdb.relate(ci.id, ci.id, "depends_on")
+
+
+def _itsm_service(now: float = 1000.0) -> ItsmService:
+    return ItsmService(
+        desk=ServiceDesk(repository=InMemoryRequestRepository(), clock=lambda: now),
+        catalog=ServiceCatalog(_doc(), clock=lambda: now),
+        sla=SlaRegistry(_doc(), clock=lambda: now),
+        cmdb=Cmdb(_doc(), _doc(), clock=lambda: now),
+        scheme_repo=_doc(),
+        link_repo=_doc(),
+        clock=lambda: now,
+    )
+
+
+def test_itsm_service_applies_service_sla_and_records_impact():
+    itsm = _itsm_service(now=1000.0)
+    gold = itsm.sla.create(name="Gold", targets={"high": [10, 60]})
+    svc = itsm.catalog.create(name="Managed PG", category="database", sla_id=gold.id)
+    db = itsm.cmdb.add_item(name="pg-prod", ci_type="database", service_id=svc.id)
+    app = itsm.cmdb.add_item(name="checkout", ci_type="application")
+    itsm.cmdb.relate(app.id, db.id, "depends_on")
+
+    request = itsm.log_request(
+        type=RequestType.INCIDENT,
+        summary="pg down",
+        priority=Priority.HIGH,
+        service_id=svc.id,
+        ci_ids=(db.id,),
+    )
+    # Gold SLA (high): 10 min response, 60 min resolution — applied, not the default.
+    assert request.sla_response_due - request.created_at == 10 * 60
+    assert request.sla_resolution_due - request.created_at == 60 * 60
+
+    impact = itsm.request_impact(request.key)
+    assert impact["service"]["id"] == svc.id
+    assert impact["impacted_count"] == 1
+    assert impact["impacted"][0]["id"] == app.id
+
+
+def test_itsm_service_imports_and_persists_bpmn_scheme():
+    itsm = _itsm_service()
+    base = build_default_schemes()["incident"]
+    xml = to_bpmn_xml(base)
+    scheme = itsm.import_bpmn_scheme(xml, key="custom_incident", name="Custom Incident")
+    assert scheme.key == "custom_incident"
+    assert "custom_incident" in itsm.desk.schemes  # registered on the desk
+    assert "custom_incident" in itsm.custom_scheme_keys()  # persisted
+
+    # A fresh facade over the same document store reloads the persisted scheme.
+    reloaded = ItsmService(
+        desk=ServiceDesk(repository=InMemoryRequestRepository()),
+        catalog=itsm.catalog,
+        sla=itsm.sla,
+        cmdb=itsm.cmdb,
+        scheme_repo=itsm._schemes,
+        link_repo=itsm._links,
+    )
+    assert "custom_incident" in reloaded.desk.schemes
+
+
+def test_itsm_service_rejects_invalid_bpmn_scheme():
+    itsm = _itsm_service()
+    xml = """<?xml version="1.0"?>
+    <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL">
+      <bpmn:process id="broken">
+        <bpmn:userTask id="a" name="A" />
+        <bpmn:userTask id="island" name="Island" />
+        <bpmn:sequenceFlow id="f" sourceRef="a" targetRef="a" />
+      </bpmn:process>
+    </bpmn:definitions>"""
+    with pytest.raises(SchemeValidationError):
+        itsm.import_bpmn_scheme(xml)
+
+
+def test_document_repository_sqlite_persists(tmp_path, monkeypatch):
+    monkeypatch.setenv("ARCHUB_CMS_DB", str(tmp_path / "docs.db"))
+    from archub_cms.extensibility.platform_adapter import PluginPlatformAdapter
+
+    adapter = PluginPlatformAdapter(plugin_id="test.itsm")
+    repo = adapter.document_repository("itsm_catalog", {})
+    repo.upsert("a", {"id": "a", "name": "X", "created_at": 1.0, "updated_at": 1.0})
+    assert repo.get("a")["name"] == "X"
+
+    # A fresh repository over the same database/collection sees the document.
+    repo2 = adapter.document_repository("itsm_catalog", {})
+    assert [d["id"] for d in repo2.list_all()] == ["a"]
+    # A different collection is isolated.
+    other = adapter.document_repository("itsm_sla", {})
+    assert other.list_all() == []
+    assert repo2.delete("a") is True
+    assert repo2.get("a") is None
+
+
+# -- ITIL REST API ---------------------------------------------------------
+
+
+def test_api_catalog_crud(client):
+    created = client.post(
+        "/api/platform/itsm/catalog",
+        json={"name": "Object Storage", "category": "storage", "owner": "sre"},
+    )
+    assert created.status_code == 201
+    service_id = created.json()["id"]
+
+    listing = client.get("/api/platform/itsm/catalog", params={"category": "storage"}).json()
+    assert listing["total"] == 1
+
+    updated = client.put(
+        f"/api/platform/itsm/catalog/{service_id}", json={"lifecycle": "deprecated"}
+    )
+    assert updated.json()["lifecycle"] == "deprecated"
+    assert client.delete(f"/api/platform/itsm/catalog/{service_id}").json()["deleted"] is True
+    assert client.get(f"/api/platform/itsm/catalog/{service_id}").status_code == 404
+
+
+def test_api_sla_drives_request_due_times(client):
+    sla = client.post(
+        "/api/platform/itsm/sla", json={"name": "Gold", "targets": {"high": [10, 60]}}
+    ).json()
+    svc = client.post(
+        "/api/platform/itsm/catalog",
+        json={"name": "Managed PG", "category": "database", "sla_id": sla["id"]},
+    ).json()
+    request = client.post(
+        "/api/platform/itsm/requests",
+        json={
+            "type": "incident",
+            "summary": "pg down",
+            "priority": "high",
+            "service_id": svc["id"],
+        },
+    ).json()
+    # Gold SLA applied via the linked service (60-minute resolution target).
+    assert request["sla_resolution_due"] - request["created_at"] == 60 * 60
+
+
+def test_api_cmdb_items_and_impact(client):
+    db = client.post(
+        "/api/platform/itsm/cmdb/items", json={"name": "pg-prod", "ci_type": "database"}
+    ).json()
+    app = client.post(
+        "/api/platform/itsm/cmdb/items", json={"name": "checkout", "ci_type": "application"}
+    ).json()
+    rel = client.post(
+        "/api/platform/itsm/cmdb/relationships",
+        json={"source_id": app["id"], "target_id": db["id"], "type": "depends_on"},
+    )
+    assert rel.status_code == 201
+
+    impact = client.get(f"/api/platform/itsm/cmdb/items/{db['id']}/impact").json()
+    assert impact["impacted_count"] == 1
+    assert impact["impacted"][0]["id"] == app["id"]
+
+    self_rel = client.post(
+        "/api/platform/itsm/cmdb/relationships",
+        json={"source_id": db["id"], "target_id": db["id"]},
+    )
+    assert self_rel.status_code == 422
+
+
+def test_api_request_impact_endpoint(client):
+    svc = client.post(
+        "/api/platform/itsm/catalog", json={"name": "Compute", "category": "compute"}
+    ).json()
+    ci = client.post(
+        "/api/platform/itsm/cmdb/items", json={"name": "vm-1", "ci_type": "server"}
+    ).json()
+    request = client.post(
+        "/api/platform/itsm/requests",
+        json={
+            "type": "incident",
+            "summary": "vm crash",
+            "service_id": svc["id"],
+            "ci_ids": [ci["id"]],
+        },
+    ).json()
+    impact = client.get(f"/api/platform/itsm/requests/{request['key']}/impact").json()
+    assert impact["service"]["id"] == svc["id"]
+    assert {c["id"] for c in impact["configuration_items"]} == {ci["id"]}
+
+
+def test_api_bpmn_engine_import_and_delete(client):
+    # Export the built-in incident scheme, then re-import it under a new key.
+    exported = client.get("/api/platform/itsm/schemes/incident/bpmn")
+    assert exported.status_code == 200
+    imported = client.post(
+        "/api/platform/itsm/schemes/import-bpmn",
+        json={"bpmn": exported.text, "key": "custom_flow", "name": "Custom Flow"},
+    )
+    assert imported.status_code == 201
+    assert imported.json()["key"] == "custom_flow"
+
+    # The imported scheme is now a runnable, listed workflow scheme.
+    schemes = {s["key"] for s in client.get("/api/platform/itsm/schemes").json()["schemes"]}
+    assert "custom_flow" in schemes
+    assert client.get("/api/platform/itsm/schemes/custom_flow/bpmn").status_code == 200
+
+    # Custom schemes can be deleted; built-ins cannot.
+    assert client.delete("/api/platform/itsm/schemes/custom_flow").json()["deleted"] is True
+    assert client.delete("/api/platform/itsm/schemes/incident").status_code == 409
+
+
+def test_api_bpmn_import_rejects_invalid_xml(client):
+    bad = client.post("/api/platform/itsm/schemes/import-bpmn", json={"bpmn": "<not-bpmn/>"})
+    assert bad.status_code == 422
+
+
+def test_api_report_endpoint(client):
+    client.post("/api/platform/itsm/catalog", json={"name": "S", "category": "x"})
+    report = client.get("/api/platform/itsm/report").json()
+    assert report["catalog"]["total"] == 1
+    assert "queue" in report and "cmdb" in report
+
+
+def test_api_management_requires_permission(client):
+    # A viewer (read-only ITIL role) cannot create catalog entries.
+    denied = client.post(
+        "/api/platform/itsm/catalog",
+        json={"name": "X", "category": "y"},
+        headers={"X-ArcHub-User": "viewer", "X-ArcHub-Admin": "0"},
+    )
+    assert denied.status_code == 403

@@ -447,6 +447,40 @@ class PluginPlatformAdapter:
             self.sqlite_store(db_path=db_path, purpose="itsm.service_desk")
         )
 
+    def document_repository(self, collection: str, settings: dict[str, Any] | None = None) -> Any:
+        """Create a keyed document repository (catalog / SLA / CMDB / schemes).
+
+        Uses the same backend selection as :meth:`service_desk_repository` so all ITSM
+        reference data lives in whichever store the plugin is configured with.
+        """
+
+        from archub_cms.infrastructure.plugins.itsm_document_repository import (
+            PostgresDocumentRepository,
+            SqliteDocumentRepository,
+        )
+
+        plugin_settings = dict(settings or {})
+        storage = str(plugin_settings.get("storage") or "sqlite").strip().lower()
+        if storage in _POSTGRES_ALIASES:
+            dsn = str(
+                plugin_settings.get("dsn")
+                or plugin_settings.get("postgres_dsn")
+                or os.environ.get("ARCHUB_ITSM_PG_DSN")
+                or ""
+            )
+            if not dsn:
+                raise RuntimeError(
+                    "ITSM storage 'postgres' requires a 'dsn' setting or ARCHUB_ITSM_PG_DSN"
+                )
+            return PostgresDocumentRepository(
+                self.postgres_store(dsn=dsn, purpose=f"itsm.{collection}"), collection
+            )
+
+        db_path = plugin_settings.get("db_path") or self._settings.cms_db_path
+        return SqliteDocumentRepository(
+            self.sqlite_store(db_path=db_path, purpose=f"itsm.{collection}"), collection
+        )
+
 
 def _json(value: dict[str, Any]) -> str:
     try:

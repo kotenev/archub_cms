@@ -200,11 +200,15 @@ class ServiceDesk:
         reporter: str = "",
         cloud: CloudResource | None = None,
         scheme_key: str = "",
+        sla: SlaPolicy | None = None,
     ) -> Request:
         scheme = self.schemes[scheme_key] if scheme_key else self.scheme_for(type)
         now = self._clock()
         key = self._repo.next_key(self.project_prefix)
         resource = cloud or CloudResource(provider=self.provider)
+        # A per-request SLA (e.g. from the requested service's agreement) overrides
+        # the desk default; both expose the same response/resolution-minutes API.
+        policy = sla or self.sla
         request = Request(
             key=key,
             type=type,
@@ -217,8 +221,8 @@ class ServiceDesk:
             cloud=resource,
             created_at=now,
             updated_at=now,
-            sla_response_due=now + self.sla.response_minutes(priority) * 60.0,
-            sla_resolution_due=now + self.sla.resolution_minutes(priority) * 60.0,
+            sla_response_due=now + policy.response_minutes(priority) * 60.0,
+            sla_resolution_due=now + policy.resolution_minutes(priority) * 60.0,
         )
         request.record(RequestEvent(at=now, actor=reporter or "system", kind="created", detail=key))
         self._repo.save(request)

@@ -22,6 +22,9 @@ __all__ = ["ITSMServiceDeskPlugin"]
 from typing import Any
 
 from archub_cms.extensibility.example_plugins.itsm.bpmn import to_bpmn_xml, to_mermaid
+from archub_cms.extensibility.example_plugins.itsm.catalog import ServiceCatalog
+from archub_cms.extensibility.example_plugins.itsm.cmdb import Cmdb
+from archub_cms.extensibility.example_plugins.itsm.itsm_service import ItsmService
 from archub_cms.extensibility.example_plugins.itsm.repository import RequestRepository
 from archub_cms.extensibility.example_plugins.itsm.request import (
     CloudResource,
@@ -30,6 +33,7 @@ from archub_cms.extensibility.example_plugins.itsm.request import (
     RequestType,
 )
 from archub_cms.extensibility.example_plugins.itsm.service_desk import ServiceDesk
+from archub_cms.extensibility.example_plugins.itsm.sla import SlaRegistry
 from archub_cms.extensibility.example_plugins.itsm.workflow import WorkflowError
 
 # Keywords that nudge offline triage toward a type/priority (no network needed).
@@ -47,6 +51,7 @@ class ITSMServiceDeskPlugin:
 
     def __init__(self) -> None:
         self.desk: ServiceDesk | None = None
+        self.itsm: ItsmService | None = None
 
     def setup(self, context: Any) -> None:
         settings = getattr(context, "settings", {}) or {}
@@ -59,12 +64,14 @@ class ITSMServiceDeskPlugin:
             repository=_build_repository(settings, platform),
         )
         self.desk = desk
+        self.itsm = _build_itsm_service(desk, settings, platform)
         platform.audit(
             "itsm.setup",
             metadata={
                 "project_prefix": desk.project_prefix,
                 "provider": desk.provider,
                 "storage": str(settings.get("storage") or "sqlite"),
+                "custom_schemes": self.itsm.custom_scheme_keys(),
             },
         )
         context.register(ServiceDeskWorkflowAction(desk))
@@ -82,6 +89,25 @@ def _build_repository(settings: dict[str, Any], platform: Any) -> RequestReposit
     if not isinstance(repository, RequestRepository):
         raise RuntimeError("platform returned an incompatible ITSM request repository")
     return repository
+
+
+def _build_itsm_service(desk: ServiceDesk, settings: dict[str, Any], platform: Any) -> ItsmService:
+    """Compose catalog, SLA, CMDB and the BPMN scheme store over platform storage."""
+
+    def collection(name: str) -> Any:
+        return platform.document_repository(name, settings)
+
+    catalog = ServiceCatalog(collection("itsm_catalog"))
+    sla = SlaRegistry(collection("itsm_sla"))
+    cmdb = Cmdb(collection("itsm_cmdb_item"), collection("itsm_cmdb_rel"))
+    return ItsmService(
+        desk=desk,
+        catalog=catalog,
+        sla=sla,
+        cmdb=cmdb,
+        scheme_repo=collection("itsm_scheme"),
+        link_repo=collection("itsm_request_link"),
+    )
 
 
 def _resource_from(payload: dict[str, Any], *, default_provider: str) -> CloudResource:

@@ -18,6 +18,12 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, Res
 from fastapi.responses import HTMLResponse
 
 from archub_cms.extensibility.example_plugins.itsm.bpmn import to_bpmn_xml, to_mermaid
+from archub_cms.extensibility.example_plugins.itsm.catalog import ServiceCatalogError
+from archub_cms.extensibility.example_plugins.itsm.cmdb import CmdbError
+from archub_cms.extensibility.example_plugins.itsm.itsm_service import (
+    ItsmService,
+    SchemeValidationError,
+)
 from archub_cms.extensibility.example_plugins.itsm.rbac import (
     ITSMPermission,
     actor_role_for_groups,
@@ -35,6 +41,7 @@ from archub_cms.extensibility.example_plugins.itsm.service_desk import (
     RequestNotFoundError,
     ServiceDesk,
 )
+from archub_cms.extensibility.example_plugins.itsm.sla import SlaError
 from archub_cms.extensibility.example_plugins.itsm.workflow import WorkflowError, WorkflowScheme
 from archub_cms.extensibility.host import get_plugin_host
 from archub_cms.web._common import current_user, templates
@@ -137,6 +144,22 @@ _ITSM_READ = Depends(_require(ITSMPermission.READ))
 _ITSM_CREATE_REQUEST = Depends(_require(ITSMPermission.CREATE_REQUEST))
 _ITSM_TRANSITION = Depends(_require(ITSMPermission.TRANSITION))
 _ITSM_ASSIGN = Depends(_require(ITSMPermission.ASSIGN))
+_ITSM_MANAGE = Depends(_require(ITSMPermission.MANAGE))
+_ITSM_ADMIN = Depends(_require(ITSMPermission.ADMIN))
+
+
+def _itsm_service() -> ItsmService:
+    host = get_plugin_host()
+    plugin = host.plugin_instance(_PLUGIN_ID)
+    service = getattr(plugin, "itsm", None) if plugin is not None else None
+    if service is None:
+        raise HTTPException(status_code=503, detail="ITSM Service Desk plugin is not enabled")
+    assert isinstance(service, ItsmService)
+    return service
+
+
+def _not_found(exc: Exception) -> HTTPException:
+    return HTTPException(status_code=404, detail=str(exc))
 
 
 def _scheme(desk: ServiceDesk, key: str) -> WorkflowScheme:
@@ -247,7 +270,6 @@ def create_request(
     payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
     identity: ITSMIdentity = _ITSM_CREATE_REQUEST,
 ) -> dict[str, Any]:
-    desk = _service_desk()
     summary = str(payload.get("summary") or "").strip()
     if not summary:
         raise HTTPException(status_code=422, detail="summary is required")
@@ -255,8 +277,12 @@ def create_request(
     if request_type is RequestType.CHANGE:
         _ensure_permission(identity, ITSMPermission.CREATE_CHANGE)
     priority = _parse_priority(payload.get("priority"))
+    # Route through the ITSM facade so a requested service's SLA is applied and the
+    # affected configuration items are recorded for impact analysis.
+    itsm = _itsm_service()
+    ci_ids = tuple(str(c) for c in payload.get("ci_ids", ()) if str(c))
     try:
-        request = desk.create_request(
+        request = itsm.log_request(
             type=request_type,
             summary=summary,
             description=str(payload.get("description") or ""),
@@ -264,6 +290,9 @@ def create_request(
             reporter=str(payload.get("reporter") or identity.username),
             cloud=_cloud_from(payload),
             scheme_key=str(payload.get("scheme_key") or ""),
+            service_id=str(payload.get("service_id") or ""),
+            sla_id=str(payload.get("sla_id") or ""),
+            ci_ids=ci_ids,
         )
     except KeyError as exc:
         raise HTTPException(status_code=422, detail=f"unknown workflow scheme: {exc}") from exc
@@ -352,6 +381,321 @@ def queue_summary(
     _identity: ITSMIdentity = _ITSM_READ,
 ) -> dict[str, Any]:
     return _service_desk().queue_summary()
+
+
+@itsm_router.get("/requests/{key}/impact")
+def request_impact(
+    key: str,
+    _identity: ITSMIdentity = _ITSM_READ,
+) -> dict[str, Any]:
+    try:
+        return _itsm_service().request_impact(key)
+    except RequestNotFoundError as exc:
+        raise _not_found(exc) from exc
+
+
+@itsm_router.get("/report")
+def itsm_report(
+    _identity: ITSMIdentity = _ITSM_READ,
+) -> dict[str, Any]:
+    return _itsm_service().report()
+
+
+# -- service catalog ----------------------------------------------------------
+
+
+@itsm_router.get("/catalog")
+def list_catalog(
+    category: str = Query(default=""),
+    _identity: ITSMIdentity = _ITSM_READ,
+) -> dict[str, Any]:
+    services = _itsm_service().catalog.list(category=category)
+    return {"services": [s.as_dict() for s in services], "total": len(services)}
+
+
+@itsm_router.post("/catalog", status_code=201)
+def create_catalog_service(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+    _identity: ITSMIdentity = _ITSM_MANAGE,
+) -> dict[str, Any]:
+    try:
+        service = _itsm_service().catalog.create(**_catalog_fields(payload))
+    except ServiceCatalogError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return service.as_dict()
+
+
+@itsm_router.get("/catalog/{service_id}")
+def get_catalog_service(
+    service_id: str,
+    _identity: ITSMIdentity = _ITSM_READ,
+) -> dict[str, Any]:
+    try:
+        return _itsm_service().catalog.get(service_id).as_dict()
+    except ServiceCatalogError as exc:
+        raise _not_found(exc) from exc
+
+
+@itsm_router.put("/catalog/{service_id}")
+def update_catalog_service(
+    service_id: str,
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+    _identity: ITSMIdentity = _ITSM_MANAGE,
+) -> dict[str, Any]:
+    try:
+        return _itsm_service().catalog.update(service_id, **_catalog_fields(payload)).as_dict()
+    except ServiceCatalogError as exc:
+        raise _not_found(exc) from exc
+
+
+@itsm_router.delete("/catalog/{service_id}")
+def delete_catalog_service(
+    service_id: str,
+    _identity: ITSMIdentity = _ITSM_MANAGE,
+) -> dict[str, Any]:
+    return {"deleted": _itsm_service().catalog.delete(service_id)}
+
+
+# -- SLA definitions ----------------------------------------------------------
+
+
+@itsm_router.get("/sla")
+def list_sla(
+    _identity: ITSMIdentity = _ITSM_READ,
+) -> dict[str, Any]:
+    definitions = _itsm_service().sla.list()
+    return {"sla": [d.as_dict() for d in definitions], "total": len(definitions)}
+
+
+@itsm_router.post("/sla", status_code=201)
+def create_sla(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+    _identity: ITSMIdentity = _ITSM_MANAGE,
+) -> dict[str, Any]:
+    try:
+        definition = _itsm_service().sla.create(
+            id=str(payload.get("id") or ""),
+            name=str(payload.get("name") or ""),
+            description=str(payload.get("description") or ""),
+            targets=payload.get("targets"),
+        )
+    except SlaError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return definition.as_dict()
+
+
+@itsm_router.get("/sla/{sla_id}")
+def get_sla(
+    sla_id: str,
+    _identity: ITSMIdentity = _ITSM_READ,
+) -> dict[str, Any]:
+    try:
+        return _itsm_service().sla.get(sla_id).as_dict()
+    except SlaError as exc:
+        raise _not_found(exc) from exc
+
+
+@itsm_router.put("/sla/{sla_id}")
+def update_sla(
+    sla_id: str,
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+    _identity: ITSMIdentity = _ITSM_MANAGE,
+) -> dict[str, Any]:
+    try:
+        return (
+            _itsm_service()
+            .sla.update(
+                sla_id,
+                name=payload.get("name"),
+                description=payload.get("description"),
+                targets=payload.get("targets"),
+            )
+            .as_dict()
+        )
+    except SlaError as exc:
+        raise _not_found(exc) from exc
+
+
+@itsm_router.delete("/sla/{sla_id}")
+def delete_sla(
+    sla_id: str,
+    _identity: ITSMIdentity = _ITSM_MANAGE,
+) -> dict[str, Any]:
+    return {"deleted": _itsm_service().sla.delete(sla_id)}
+
+
+# -- CMDB (configuration items + relationships + impact) ----------------------
+
+
+@itsm_router.get("/cmdb/items")
+def list_cmdb_items(
+    type: str = Query(default=""),
+    service_id: str = Query(default=""),
+    _identity: ITSMIdentity = _ITSM_READ,
+) -> dict[str, Any]:
+    items = _itsm_service().cmdb.list_items(ci_type=type, service_id=service_id)
+    return {"items": [i.as_dict() for i in items], "total": len(items)}
+
+
+@itsm_router.post("/cmdb/items", status_code=201)
+def create_cmdb_item(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+    _identity: ITSMIdentity = _ITSM_MANAGE,
+) -> dict[str, Any]:
+    try:
+        item = _itsm_service().cmdb.add_item(**_ci_fields(payload))
+    except CmdbError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return item.as_dict()
+
+
+@itsm_router.get("/cmdb/items/{ci_id}")
+def get_cmdb_item(
+    ci_id: str,
+    _identity: ITSMIdentity = _ITSM_READ,
+) -> dict[str, Any]:
+    try:
+        return _itsm_service().cmdb.get_item(ci_id).as_dict()
+    except CmdbError as exc:
+        raise _not_found(exc) from exc
+
+
+@itsm_router.put("/cmdb/items/{ci_id}")
+def update_cmdb_item(
+    ci_id: str,
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+    _identity: ITSMIdentity = _ITSM_MANAGE,
+) -> dict[str, Any]:
+    try:
+        return _itsm_service().cmdb.update_item(ci_id, **_ci_fields(payload)).as_dict()
+    except CmdbError as exc:
+        raise _not_found(exc) from exc
+
+
+@itsm_router.delete("/cmdb/items/{ci_id}")
+def delete_cmdb_item(
+    ci_id: str,
+    _identity: ITSMIdentity = _ITSM_MANAGE,
+) -> dict[str, Any]:
+    return {"deleted": _itsm_service().cmdb.delete_item(ci_id)}
+
+
+@itsm_router.get("/cmdb/items/{ci_id}/impact")
+def cmdb_impact(
+    ci_id: str,
+    _identity: ITSMIdentity = _ITSM_READ,
+) -> dict[str, Any]:
+    try:
+        return _itsm_service().cmdb.impact(ci_id)
+    except CmdbError as exc:
+        raise _not_found(exc) from exc
+
+
+@itsm_router.get("/cmdb/relationships")
+def list_cmdb_relationships(
+    ci_id: str = Query(default=""),
+    _identity: ITSMIdentity = _ITSM_READ,
+) -> dict[str, Any]:
+    rels = _itsm_service().cmdb.list_relationships(ci_id=ci_id)
+    return {"relationships": [r.as_dict() for r in rels], "total": len(rels)}
+
+
+@itsm_router.post("/cmdb/relationships", status_code=201)
+def create_cmdb_relationship(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+    _identity: ITSMIdentity = _ITSM_MANAGE,
+) -> dict[str, Any]:
+    source_id = str(payload.get("source_id") or "").strip()
+    target_id = str(payload.get("target_id") or "").strip()
+    if not source_id or not target_id:
+        raise HTTPException(status_code=422, detail="source_id and target_id are required")
+    if source_id == target_id:
+        raise HTTPException(status_code=422, detail="a CI cannot relate to itself")
+    try:
+        rel = _itsm_service().cmdb.relate(
+            source_id, target_id, type=payload.get("type") or "depends_on"
+        )
+    except CmdbError as exc:
+        raise _not_found(exc) from exc
+    return rel.as_dict()
+
+
+@itsm_router.delete("/cmdb/relationships/{relationship_id}")
+def delete_cmdb_relationship(
+    relationship_id: str,
+    _identity: ITSMIdentity = _ITSM_MANAGE,
+) -> dict[str, Any]:
+    return {"deleted": _itsm_service().cmdb.unrelate(relationship_id)}
+
+
+# -- BPMN workflow engine (import / customize schemes) ------------------------
+
+
+@itsm_router.post("/schemes/import-bpmn", status_code=201)
+def import_bpmn_scheme(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+    identity: ITSMIdentity = _ITSM_ADMIN,
+) -> dict[str, Any]:
+    """Upload a BPMN 2.0 process and register it as a runnable workflow scheme."""
+
+    xml = str(payload.get("bpmn") or "").strip()
+    if not xml:
+        raise HTTPException(status_code=422, detail="bpmn XML is required")
+    try:
+        scheme = _itsm_service().import_bpmn_scheme(
+            xml,
+            key=str(payload.get("key") or ""),
+            name=str(payload.get("name") or ""),
+            actor=identity.username,
+        )
+    except SchemeValidationError as exc:
+        raise HTTPException(status_code=422, detail={"problems": exc.problems}) from exc
+    except ValueError as exc:  # BPMN parse error
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return scheme.as_dict()
+
+
+@itsm_router.delete("/schemes/{key}")
+def delete_scheme(
+    key: str,
+    _identity: ITSMIdentity = _ITSM_ADMIN,
+) -> dict[str, Any]:
+    try:
+        deleted = _itsm_service().delete_custom_scheme(key)
+    except ValueError as exc:  # built-in scheme cannot be deleted
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"deleted": deleted}
+
+
+def _catalog_fields(payload: dict[str, Any]) -> dict[str, Any]:
+    fields: dict[str, Any] = {}
+    for key in (
+        "id",
+        "name",
+        "category",
+        "description",
+        "owner",
+        "sla_id",
+        "lifecycle",
+        "provider",
+    ):
+        if key in payload and payload[key] is not None:
+            fields[key] = payload[key]
+    if isinstance(payload.get("tags"), (list, tuple)):
+        fields["tags"] = tuple(str(tag) for tag in payload["tags"])
+    return fields
+
+
+def _ci_fields(payload: dict[str, Any]) -> dict[str, Any]:
+    fields: dict[str, Any] = {}
+    for key in ("id", "name", "ci_type", "status", "description", "owner", "service_id"):
+        if key in payload and payload[key] is not None:
+            fields[key] = payload[key]
+    if isinstance(payload.get("cloud"), dict):
+        fields["cloud"] = payload["cloud"]
+    if isinstance(payload.get("attributes"), dict):
+        fields["attributes"] = payload["attributes"]
+    return fields
 
 
 # -- RBAC + HTML dashboard ----------------------------------------------------
