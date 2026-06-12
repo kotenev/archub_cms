@@ -51,6 +51,7 @@ Repository = "https://github.com/archub-cms/archub-cms"
 [project.scripts]
 archub-marketplace-build = "archub_cms.tools.module_distributions:main"
 archub-core-plugins = "archub_cms.tools.core_plugins:main"
+archub-sdk-release = "archub_cms.tools.sdk_release:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

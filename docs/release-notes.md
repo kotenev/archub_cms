@@ -1,5 +1,14 @@
 # Release Notes
 
+## SDK 1.0.0
+
+- Added `archub-platform-sdk`, a dependency-free Python SDK for platform,
+  plugin, marketplace, delivery, knowledge and runtime APIs.
+- Added SDK release manifest: `sdk/release/archub-sdk-1.0.0.json`.
+- Added SDK OpenAPI subset: `sdk/openapi/archub-platform-sdk.openapi.yaml`.
+- Added `archub-sdk-release` CLI for release metadata.
+- Documented API groups, technology stack and SDK capabilities in MkDocs.
+
 ## 0.1.0
 
 ArcHub CMS 0.1.0 is the first standalone release.

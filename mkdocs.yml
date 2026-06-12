@@ -34,6 +34,7 @@ nav:
   - Enterprise Knowledge Platform: architecture/enterprise-knowledge-platform.md
   - ArcHub Core Platform: architecture/archub-core-platform.md
   - Plugin Platform Adapter: architecture/plugin-platform-adapter.md
+  - Platform SDK: sdk/platform-sdk.md
   - PHP Wiki Plugin: plugins/archub-ru-wiki-php.md
   - Module Marketplace: architecture/module-marketplace.md
   - Content Modeling: architecture/content-modeling.md

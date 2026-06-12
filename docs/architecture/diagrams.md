@@ -277,6 +277,8 @@ point, or render the ArchiMate PlantUML source directly.
   coverage, marketplace packaging, and install flow.
 - `php-wiki-plugin.puml`: ArcHub.ru external PHP wiki plugin, Symfony service
   boundary, Draw.io-compatible diagram surface, and ArcHub plugin bridge.
+- `sdk-release-architecture.puml`: ArcHub SDK release artifacts, Python client,
+  OpenAPI contract, plugin manifest builder, and platform API groups.
 
 ### Service boundary diagrams
 

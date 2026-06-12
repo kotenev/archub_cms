@@ -32,7 +32,16 @@ _INDEX_FILES = (
 )
 _ZIP_DATE_TIME = (2026, 1, 1, 0, 0, 0)
 _IGNORED_PACKAGE_NAMES = {".DS_Store"}
-_IGNORED_PACKAGE_PARTS = {"__pycache__", ".pytest_cache", ".ruff_cache"}
+_IGNORED_PACKAGE_PARTS = {
+    "__pycache__",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".venv",
+    "node_modules",
+    "target",
+    "var",
+    "vendor",
+}
 
 
 @dataclass(frozen=True)
