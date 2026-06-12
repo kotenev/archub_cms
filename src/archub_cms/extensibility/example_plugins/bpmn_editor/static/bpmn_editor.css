@@ -1,0 +1,35 @@
+/* Offline ArcHub BPMN editor — self-contained styles (no external fonts/icons). */
+.abe { display: flex; flex-direction: column; gap: 10px; }
+.abe__toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.abe__toolbar select,
+.abe__btn {
+  padding: 6px 10px; border-radius: 6px; border: 1px solid #2a2a40;
+  background: #16213e; color: #e0e0e0; cursor: pointer; font: inherit;
+}
+.abe__btn:hover { background: #1f2b50; }
+.abe__btn--primary { background: #0b7285; border-color: #0b7285; color: #fff; }
+.abe__btn[disabled] { opacity: .45; cursor: not-allowed; }
+.abe__hint { color: #9aa3b2; font-size: 13px; }
+.abe__status { min-height: 1.3em; font-size: 14px; }
+.abe__status--ok { color: #2f9e44; }
+.abe__status--err { color: #e03131; }
+.abe__problems { margin: 4px 0 0 18px; color: #e03131; }
+.abe__canvas {
+  width: 100%; height: 70vh; min-height: 420px; background: #fff;
+  border: 1px solid #2a2a40; border-radius: 8px; touch-action: none;
+}
+.abe__node { cursor: grab; }
+.abe__node-box { stroke: #1f2933; stroke-width: 1.5; rx: 10; }
+.abe__node--todo .abe__node-box { fill: #e7f5ff; }
+.abe__node--in_progress .abe__node-box { fill: #fff3bf; }
+.abe__node--done .abe__node-box { fill: #d3f9d8; }
+.abe__node--selected .abe__node-box { stroke: #0b7285; stroke-width: 3; }
+.abe__node-label { font: 13px sans-serif; fill: #1f2933; pointer-events: none; }
+.abe__node-cat { font: 10px sans-serif; fill: #495057; pointer-events: none; }
+.abe__event { fill: #fff; stroke: #1f2933; stroke-width: 2; }
+.abe__event--end { stroke-width: 3.5; }
+.abe__edge { stroke: #495057; stroke-width: 1.6; fill: none; }
+.abe__edge:hover { stroke: #0b7285; }
+.abe__edge-hit { stroke: transparent; stroke-width: 14; fill: none; cursor: pointer; }
+.abe__edge-label { font: 11px sans-serif; fill: #343a40; pointer-events: none; }
+.abe__linking .abe__canvas { cursor: crosshair; }

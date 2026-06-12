@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+{% block main_class %}page{% endblock %}
+
+{% block head %}
+{% if offline_editor %}
+{# Offline editor plugin: self-hosted assets, zero external requests. #}
+<link rel="stylesheet" href="{{ offline_editor.css }}">
+{% else %}
+{# Fallback: bpmn-js (bpmn.io / Camunda) from CDN — needs network access. #}
+<link rel="stylesheet" href="https://unpkg.com/bpmn-js@17.11.1/dist/assets/diagram-js.css">
+<link rel="stylesheet" href="https://unpkg.com/bpmn-js@17.11.1/dist/assets/bpmn-js.css">
+<link rel="stylesheet" href="https://unpkg.com/bpmn-js@17.11.1/dist/assets/bpmn-font/css/bpmn.css">
+<style>
+  #bpmn-canvas { height: 72vh; min-height: 420px; border: 1px solid #2a2a40; border-radius: 8px; background: #fff; }
+  .bpmn-editor { display: grid; grid-template-columns: 260px 1fr; gap: 16px; }
+  .bpmn-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0; }
+  .bpmn-status { min-height: 1.4em; } .bpmn-status--ok { color: #2f9e44; } .bpmn-status--err { color: #e03131; }
+  .bpmn-problems { color: #e03131; }
+</style>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<a class="back-link" href="/admin/itsm">← ITSM</a>
+
+<div class="page-head">
+  <div>
+    <h1 class="profile__name">Workflow Editor</h1>
+    <p class="muted">
+      {% if offline_editor %}
+        Offline editor (plugin <code>{{ offline_editor.info.editor_id }}</code> · {{ offline_editor.info.engine }}) — no network required
+      {% else %}
+        bpmn-js (CDN)
+      {% endif %}
+      · {{ current_user.username }} · {{ current_user.actor_role }}
+      {% if not can_edit %} · <strong>read-only</strong> (requires <code>itsm:admin</code>){% endif %}
+    </p>
+  </div>
+</div>
+
+<script id="itsm-workflow-data" type="application/json">
+  {{ {"schemes": schemes, "custom": custom_scheme_keys, "canEdit": can_edit}|tojson }}
+</script>
+
+<div id="bpmn-editor-root"
+     data-can-edit="{{ 'true' if can_edit else 'false' }}"
+     data-mode="{{ 'offline' if offline_editor else 'bpmn-js' }}">
+{% if not offline_editor %}
+  <div class="bpmn-toolbar">
+    <select id="scheme-select"></select>
+    <button class="btn btn--ghost" id="btn-reload" type="button">Reload</button>
+    {% if can_edit %}
+    <button class="btn" id="btn-save" type="button">Save</button>
+    <button class="btn btn--ghost" id="btn-new" type="button">New…</button>
+    <button class="btn btn--ghost" id="btn-delete" type="button">Delete custom</button>
+    {% endif %}
+    <button class="btn btn--ghost" id="btn-download" type="button">Download BPMN</button>
+  </div>
+  <p class="bpmn-status" id="bpmn-status"></p>
+  <ul class="bpmn-problems" id="bpmn-problems" hidden></ul>
+  <div class="bpmn-editor">
+    <div class="bpmn-editor__side archub-panel">
+      <h2 class="section-title">Legend</h2>
+      <p class="muted">User tasks are workflow <strong>statuses</strong>; sequence flows are
+        <strong>transitions</strong>. Saving validates and registers the scheme.</p>
+    </div>
+    <div id="bpmn-canvas"></div>
+  </div>
+{% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if offline_editor %}
+<script src="{{ offline_editor.js }}"></script>
+<script>
+  (function () {
+    var data = JSON.parse(document.getElementById("itsm-workflow-data").textContent || "{}");
+    window.ArcHubBpmnEditor.mount({ container: "#bpmn-editor-root", api: "/api/platform/itsm", data: data });
+  })();
+</script>
+{% else %}
+<script src="https://unpkg.com/bpmn-js@17.11.1/dist/bpmn-modeler.production.min.js"></script>
+<script>
+(function () {
+  "use strict";
+  var data = JSON.parse(document.getElementById("itsm-workflow-data").textContent || "{}");
+  var schemes = data.schemes || [];
+  var customKeys = data.custom || [];
+  var canEdit = !!data.canEdit;
+  var API = "/api/platform/itsm";
+  var statusEl = document.getElementById("bpmn-status");
+  var problemsEl = document.getElementById("bpmn-problems");
+  var selectEl = document.getElementById("scheme-select");
+
+  function setStatus(message, kind) {
+    statusEl.textContent = message || "";
+    statusEl.className = "bpmn-status" + (kind ? " bpmn-status--" + kind : "");
+  }
+  function showProblems(problems) {
+    problemsEl.innerHTML = "";
+    if (!problems || !problems.length) { problemsEl.hidden = true; return; }
+    problems.forEach(function (p) { var li = document.createElement("li"); li.textContent = p; problemsEl.appendChild(li); });
+    problemsEl.hidden = false;
+  }
+  if (typeof window.BpmnJS === "undefined") {
+    setStatus("Could not load bpmn-js (offline?). Enable the offline editor plugin for network-free editing.", "err");
+    return;
+  }
+  var archubModdle = {
+    name: "ArcHub", prefix: "archub", uri: "http://archub.dev/itsm", xml: { tagAlias: "lowerCase" },
+    types: [
+      { name: "TaskCategory", extends: ["bpmn:UserTask"], properties: [{ name: "category", isAttr: true, type: "String" }] },
+      { name: "FlowMeta", extends: ["bpmn:SequenceFlow"], properties: [
+        { name: "transition", isAttr: true, type: "String" }, { name: "global", isAttr: true, type: "String" },
+        { name: "conditions", isAttr: true, type: "String" }, { name: "postFunctions", isAttr: true, type: "String" }] }
+    ]
+  };
+  var modeler = new window.BpmnJS({ container: "#bpmn-canvas", moddleExtensions: { archub: archubModdle } });
+  var currentKey = "";
+
+  function populateSelect() {
+    selectEl.innerHTML = "";
+    schemes.forEach(function (scheme) {
+      var opt = document.createElement("option");
+      opt.value = scheme.key;
+      opt.textContent = scheme.name + " (" + scheme.key + ")" + (customKeys.indexOf(scheme.key) >= 0 ? " · custom" : " · built-in");
+      selectEl.appendChild(opt);
+    });
+  }
+  async function loadScheme(key) {
+    if (!key) { return; }
+    setStatus("Loading " + key + "…"); showProblems([]);
+    try {
+      var resp = await fetch(API + "/schemes/" + encodeURIComponent(key) + "/bpmn");
+      if (!resp.ok) { throw new Error("HTTP " + resp.status); }
+      await modeler.importXML(await resp.text());
+      modeler.get("canvas").zoom("fit-viewport");
+      currentKey = key; setStatus("Loaded workflow " + key, "ok");
+    } catch (err) { setStatus("Failed to load " + key + ": " + err.message, "err"); }
+  }
+  async function saveScheme() {
+    var key = (prompt("Save as workflow key:", currentKey || "custom_workflow") || "").trim(); if (!key) { return; }
+    var name = (prompt("Display name:", key) || key).trim();
+    setStatus("Saving " + key + "…"); showProblems([]);
+    try {
+      var result = await modeler.saveXML({ format: true });
+      var resp = await fetch(API + "/schemes/import-bpmn", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bpmn: result.xml, key: key, name: name })
+      });
+      var payload = await resp.json().catch(function () { return {}; });
+      if (resp.status === 201) {
+        setStatus("Saved workflow " + payload.key, "ok");
+        if (!schemes.some(function (s) { return s.key === payload.key; })) { schemes.push(payload); customKeys.push(payload.key); populateSelect(); }
+        selectEl.value = payload.key; currentKey = payload.key;
+      } else if (resp.status === 422 && payload.detail && payload.detail.problems) {
+        setStatus("Workflow is invalid:", "err"); showProblems(payload.detail.problems);
+      } else { setStatus("Save failed (HTTP " + resp.status + ")", "err"); }
+    } catch (err) { setStatus("Save failed: " + err.message, "err"); }
+  }
+  async function downloadXml() {
+    var result = await modeler.saveXML({ format: true });
+    var a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([result.xml], { type: "application/xml" }));
+    a.download = (currentKey || "workflow") + ".bpmn"; a.click(); URL.revokeObjectURL(a.href);
+  }
+  selectEl.addEventListener("change", function () { loadScheme(selectEl.value); });
+  document.getElementById("btn-reload").addEventListener("click", function () { loadScheme(selectEl.value); });
+  document.getElementById("btn-download").addEventListener("click", downloadXml);
+  if (canEdit) {
+    document.getElementById("btn-save").addEventListener("click", saveScheme);
+    document.getElementById("btn-new").addEventListener("click", async function () {
+      await modeler.createDiagram(); currentKey = ""; setStatus("New workflow — model it, then Save.", "ok");
+    });
+    document.getElementById("btn-delete").addEventListener("click", async function () {
+      if (!currentKey || customKeys.indexOf(currentKey) < 0) { setStatus("Only custom workflows can be deleted.", "err"); return; }
+      if (!confirm("Delete '" + currentKey + "'?")) { return; }
+      var resp = await fetch(API + "/schemes/" + encodeURIComponent(currentKey), { method: "DELETE" });
+      if (resp.ok) { schemes = schemes.filter(function (s) { return s.key !== currentKey; }); customKeys = customKeys.filter(function (k) { return k !== currentKey; }); populateSelect(); if (schemes.length) { selectEl.value = schemes[0].key; loadScheme(schemes[0].key); } }
+      else { setStatus("Delete failed (HTTP " + resp.status + ")", "err"); }
+    });
+  }
+  populateSelect();
+  if (schemes.length) { selectEl.value = schemes[0].key; loadScheme(schemes[0].key); }
+})();
+</script>
+{% endif %}
+{% endblock %}

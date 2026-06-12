@@ -810,6 +810,19 @@ def test_bpmn_roundtrip_is_lossless_for_default_schemes():
         assert back.is_valid
 
 
+def test_workflow_scheme_from_dict_roundtrip():
+    for key, scheme in build_default_schemes().items():
+        back = WorkflowScheme.from_dict(scheme.as_dict())
+        assert back.key == key
+        assert set(back.statuses) == set(scheme.statuses)
+        assert back.initial_status_id == scheme.initial_status_id
+        assert set(back.transitions) == set(scheme.transitions)
+        for tid, transition in scheme.transitions.items():
+            assert back.transitions[tid].to_status == transition.to_status
+            assert back.transitions[tid].is_global == transition.is_global
+        assert back.is_valid
+
+
 def test_bpmn_import_of_handwritten_process():
     xml = """<?xml version="1.0"?>
     <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL">
@@ -1103,3 +1116,114 @@ def test_api_management_requires_permission(client):
         headers={"X-ArcHub-User": "viewer", "X-ArcHub-Admin": "0"},
     )
     assert denied.status_code == 403
+
+
+# -- Visual BPMN workflow editor (web) -------------------------------------
+
+
+def test_api_workflow_editor_offline_by_default(client):
+    # The offline editor plugin ships enabled, so the page renders in offline mode
+    # with a self-hosted asset and NO CDN dependency.
+    page = client.get("/admin/itsm/workflow")
+    assert page.status_code == 200
+    assert page.headers["content-type"].startswith("text/html")
+    body = page.text
+    assert 'data-mode="offline"' in body
+    assert "ArcHubBpmnEditor" in body
+    assert "/admin/itsm/workflow/assets/bpmn_editor.js" in body
+    assert "unpkg.com/bpmn-js" not in body  # no CDN — fully offline
+    assert "itsm-workflow-data" in body
+    assert '"incident"' in body
+    # Default identity is admin → editing enabled.
+    assert 'data-can-edit="true"' in body
+
+
+def test_api_workflow_editor_assets_served_offline(client):
+    js = client.get("/admin/itsm/workflow/assets/bpmn_editor.js")
+    assert js.status_code == 200
+    assert js.headers["content-type"].startswith("application/javascript")
+    assert "ArcHubBpmnEditor" in js.text
+    css = client.get("/admin/itsm/workflow/assets/bpmn_editor.css")
+    assert css.status_code == 200 and css.headers["content-type"].startswith("text/css")
+    # Unknown / traversal asset names are rejected.
+    assert client.get("/admin/itsm/workflow/assets/nope.js").status_code == 404
+
+
+def test_offline_editor_plugin_registered(client):
+    extensions = client.get("/api/platform/extensions")
+    # The editor plugin loaded as an EditorExt in the platform plugin host.
+    report = client.get("/api/platform/plugins").json()
+    assert "bpmn-offline" in report["editors"]
+    assert extensions.status_code == 200
+
+
+def test_api_workflow_editor_read_only_without_admin(client):
+    # A service-desk agent has READ (can view) but not itsm:admin (cannot edit).
+    headers = {"Authorization": "Bearer demo-itsm-agent-token"}
+    page = client.get("/admin/itsm/workflow", headers=headers)
+    assert page.status_code == 200
+    assert 'data-can-edit="false"' in page.text
+
+
+def test_api_create_scheme_from_json(client):
+    # What the offline editor's "Save" does: POST the scheme as JSON; the engine
+    # validates, registers and persists it as BPMN.
+    created = client.post(
+        "/api/platform/itsm/schemes",
+        json={
+            "key": "ticket_flow",
+            "name": "Ticket Flow",
+            "initial_status_id": "new",
+            "statuses": [
+                {"id": "new", "name": "New", "category": "todo"},
+                {"id": "wip", "name": "Working", "category": "in_progress"},
+                {"id": "closed", "name": "Closed", "category": "done"},
+            ],
+            "transitions": [
+                {"id": "start", "name": "Start", "to_status": "wip", "from_statuses": ["new"]},
+                {"id": "finish", "name": "Finish", "to_status": "closed", "from_statuses": ["wip"]},
+            ],
+        },
+    )
+    assert created.status_code == 201
+    assert created.json()["valid"] is True
+    # Registered → selectable and exportable as BPMN.
+    schemes = {s["key"] for s in client.get("/api/platform/itsm/schemes").json()["schemes"]}
+    assert "ticket_flow" in schemes
+    assert client.get("/api/platform/itsm/schemes/ticket_flow/bpmn").status_code == 200
+
+
+def test_api_create_scheme_invalid_returns_problems(client):
+    bad = client.post(
+        "/api/platform/itsm/schemes",
+        json={
+            "key": "broken",
+            "name": "Broken",
+            "statuses": [{"id": "a", "name": "A", "category": "todo"}],
+        },
+    )
+    assert bad.status_code == 422
+    assert "problems" in bad.json()["detail"]
+
+
+def test_api_dashboard_links_to_workflow_editor(client):
+    dashboard = client.get("/admin/itsm")
+    assert dashboard.status_code == 200
+    assert "/admin/itsm/workflow" in dashboard.text
+
+
+def test_api_workflow_editor_save_roundtrip(client):
+    # Mirrors what the editor's "Save" does: take the BPMN the canvas loaded and
+    # POST it back to the engine, which validates and registers it as runnable.
+    exported = client.get("/api/platform/itsm/schemes/incident/bpmn").text
+    saved = client.post(
+        "/api/platform/itsm/schemes/import-bpmn",
+        json={"bpmn": exported, "key": "edited_incident", "name": "Edited Incident"},
+    )
+    assert saved.status_code == 201
+    body = saved.json()
+    assert body["key"] == "edited_incident"
+    assert body["valid"] is True
+    # It is now selectable in the editor's scheme list.
+    schemes = {s["key"] for s in client.get("/api/platform/itsm/schemes").json()["schemes"]}
+    assert "edited_incident" in schemes

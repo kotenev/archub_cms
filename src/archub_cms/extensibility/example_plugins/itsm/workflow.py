@@ -315,6 +315,48 @@ class WorkflowScheme:
             "problems": self.validate(),
         }
 
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> WorkflowScheme:
+        """Rebuild a scheme from the :meth:`as_dict` shape (the editor's save format).
+
+        Malformed status/transition entries are skipped rather than raised — the
+        resulting scheme is then run through :meth:`validate` by the caller.
+        """
+
+        scheme = cls(
+            key=str(payload.get("key") or ""),
+            name=str(payload.get("name") or payload.get("key") or ""),
+            description=str(payload.get("description") or ""),
+        )
+        for entry in payload.get("statuses") or ():
+            if not isinstance(entry, Mapping) or not entry.get("id"):
+                continue
+            try:
+                category = StatusCategory(str(entry.get("category") or "todo"))
+            except ValueError:
+                category = StatusCategory.TODO
+            scheme.add_status(str(entry["id"]), str(entry.get("name") or entry["id"]), category)
+        scheme.initial_status_id = str(payload.get("initial_status_id") or "")
+        if not scheme.initial_status_id and scheme.statuses:
+            scheme.initial_status_id = next(iter(scheme.statuses))
+        for entry in payload.get("transitions") or ():
+            if not isinstance(entry, Mapping) or not entry.get("id") or not entry.get("to_status"):
+                continue
+            from_statuses = (
+                ()
+                if entry.get("global")
+                else tuple(str(item) for item in (entry.get("from_statuses") or ()) if str(item))
+            )
+            scheme.add_transition(
+                str(entry["id"]),
+                str(entry.get("name") or entry["id"]),
+                str(entry["to_status"]),
+                from_statuses,
+                conditions=tuple(str(c) for c in (entry.get("conditions") or ()) if str(c)),
+                post_functions=tuple(str(p) for p in (entry.get("post_functions") or ()) if str(p)),
+            )
+        return scheme
+
 
 def resolved_edges(scheme: WorkflowScheme) -> list[tuple[str, WorkflowTransition, str]]:
     """Expand global transitions to concrete ``(from, transition, to)`` triples.

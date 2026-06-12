@@ -1,0 +1,13 @@
+{
+  "id": "archub.bpmn.editor",
+  "name": "Offline BPMN Workflow Editor",
+  "version": "1.0.0",
+  "capability": "editor",
+  "runtime": "python",
+  "entrypoint": "archub_cms.extensibility.example_plugins.bpmn_editor.plugin:BpmnEditorPlugin",
+  "description": "Self-contained, dependency-free SVG workflow editor for ITSM BPMN schemes — works fully offline (no CDN). Registers an EditorExt and ships its own static assets.",
+  "provider": "archub",
+  "permissions": ["workflow:read", "workflow:write"],
+  "tags": ["itsm", "bpmn", "editor", "offline", "workflow"],
+  "enabled_by_default": true
+}

@@ -60,6 +60,8 @@ archub_cms = [
     "templates/*.html",
     "static/*.css",
     "static/js/*.js",
+    "extensibility/example_plugins/bpmn_editor/static/*.js",
+    "extensibility/example_plugins/bpmn_editor/static/*.css",
 ]
 
 [tool.ruff]

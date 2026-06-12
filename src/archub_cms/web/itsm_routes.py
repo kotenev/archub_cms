@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, Response
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 
 from archub_cms.extensibility.example_plugins.itsm.bpmn import to_bpmn_xml, to_mermaid
 from archub_cms.extensibility.example_plugins.itsm.catalog import ServiceCatalogError
@@ -631,6 +631,30 @@ def delete_cmdb_relationship(
 # -- BPMN workflow engine (import / customize schemes) ------------------------
 
 
+@itsm_router.post("/schemes", status_code=201)
+def create_scheme(
+    payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
+    identity: ITSMIdentity = _ITSM_ADMIN,
+) -> dict[str, Any]:
+    """Register a workflow scheme from its JSON form (the offline editor's save).
+
+    The scheme is rebuilt via the engine, validated and persisted as BPMN — so the
+    offline SVG editor and the BPMN import path converge on the same stored artifact.
+    """
+
+    key = str(payload.get("key") or "").strip()
+    if not key:
+        raise HTTPException(status_code=422, detail="scheme key is required")
+    try:
+        scheme = WorkflowScheme.from_dict(payload)
+        saved = _itsm_service().save_scheme(scheme, actor=identity.username)
+    except SchemeValidationError as exc:
+        raise HTTPException(status_code=422, detail={"problems": exc.problems}) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return saved.as_dict()
+
+
 @itsm_router.post("/schemes/import-bpmn", status_code=201)
 def import_bpmn_scheme(
     payload: dict[str, Any] = Body(default_factory=dict),  # noqa: B008 - FastAPI body marker
@@ -743,5 +767,61 @@ def itsm_dashboard(
             "can_create": identity.can(ITSMPermission.CREATE_REQUEST),
             "can_assign": identity.can(ITSMPermission.ASSIGN),
             "can_approve": identity.can(ITSMPermission.APPROVE),
+            "workflow_editor_url": str(request.url_for("itsm_workflow_editor")),
         },
     )
+
+
+_OFFLINE_EDITOR_ID = "bpmn-offline"
+
+
+def _offline_editor(request: Request) -> dict[str, Any] | None:
+    """Describe the offline editor plugin if it is loaded (else None → CDN bpmn-js)."""
+
+    editor = get_plugin_host().editors.get(_OFFLINE_EDITOR_ID)
+    if editor is None:
+        return None
+    return {
+        "js": str(request.url_for("itsm_workflow_asset", name="bpmn_editor.js")),
+        "css": str(request.url_for("itsm_workflow_asset", name="bpmn_editor.css")),
+        "info": editor.initialize({}),
+    }
+
+
+@itsm_web_router.get(
+    "/admin/itsm/workflow", response_class=HTMLResponse, name="itsm_workflow_editor"
+)
+def itsm_workflow_editor(
+    request: Request,
+    identity: ITSMIdentity = _ITSM_READ,
+) -> HTMLResponse:
+    """Visual workflow editor — offline plugin editor when loaded, else bpmn-js."""
+
+    desk = _service_desk()
+    itsm = _itsm_service()
+    schemes = [scheme.as_dict() for scheme in desk.schemes.values()]
+    return _TEMPLATES.TemplateResponse(
+        request,
+        "archub_itsm_workflow.html",
+        {
+            "title": "ArcHub ITSM · Workflow Editor",
+            "current_user": identity.as_dict(),
+            "schemes": schemes,
+            "custom_scheme_keys": itsm.custom_scheme_keys(),
+            "can_edit": identity.can(ITSMPermission.ADMIN),
+            "offline_editor": _offline_editor(request),
+        },
+    )
+
+
+@itsm_web_router.get("/admin/itsm/workflow/assets/{name}", name="itsm_workflow_asset")
+def itsm_workflow_asset(name: str) -> FileResponse:
+    """Serve the offline BPMN editor plugin's bundled static assets (no CDN)."""
+
+    editor = get_plugin_host().editors.get(_OFFLINE_EDITOR_ID)
+    path = getattr(editor, "asset_path", None)
+    resolved = path(name) if callable(path) else None
+    if resolved is None:
+        raise HTTPException(status_code=404, detail=f"unknown editor asset {name!r}")
+    media = getattr(editor, "asset_media_type", lambda _n: None)(name) or "application/octet-stream"
+    return FileResponse(resolved, media_type=media)
