@@ -13,6 +13,11 @@ RUN apk add --no-cache git unzip sqlite-libs \
     && rm composer-setup.php \
     && composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader
 
+RUN adduser -D -u 10001 archub \
+    && mkdir -p /data \
+    && chown -R archub:archub /data /app
+USER archub
+
 EXPOSE 8098
 
 CMD ["php", "-S", "0.0.0.0:8098", "-t", "public"]
