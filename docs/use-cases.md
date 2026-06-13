@@ -34,7 +34,7 @@ uvicorn archub_cms.app:create_archub_app --factory --host 0.0.0.0 --port 8088
 
 **Key capabilities:** offline-extractive LLM · FTS5 hybrid search · backlinks/graph ·
 vault export · `AuditSink` for governance · non-root container. See
-[Deployment Scenarios → Air-gapped](deployment/scenarios.md#5-air-gapped-offline).
+[Deployment Map → Air-Gapped Operations](deployment/scenarios.md#air-gapped-operations).
 
 ---
 
@@ -113,7 +113,7 @@ app.include_router(itsm_router)     # + ITSM API (optional)
 ```
 
 **Key capabilities:** router-level embedding · ports/adapters · plugin host · shared
-auth boundary. See [Local Deployment → Embed](deployment/local.md#4-embed-in-an-existing-fastapi-app).
+auth boundary. See [Local Deployment → Embed](deployment/local.md#embed-in-another-fastapi-app).
 
 ---
 

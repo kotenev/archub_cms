@@ -1,7 +1,16 @@
+---
+tags:
+  - SDK
+  - Plugins
+---
+
 # ArcHub Platform SDK Release
 
 ArcHub Platform SDK 1.0.0 is a beta developer kit for integrating with ArcHub
 platform APIs, creating plugins and automating marketplace/module workflows.
+Pair it with [Release Artifacts](../deployment/release-artifacts.md) and
+[Plugin Release Distributions](../plugins/release-distributions.md) for CI/CD
+promotion flows.
 
 ## Release Artifacts
 

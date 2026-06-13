@@ -1,4 +1,18 @@
+---
+tags:
+  - Deployment
+  - SDK
+---
+
 # Release Notes
+
+## Documentation Wiki Refresh
+
+- Reorganized MkDocs into a task-first Docs-as-Code wiki.
+- Added release artifact, marketplace, Docker, Kubernetes and plugin deployment guides.
+- Enabled search, tags, lightbox, revision dates, redirects, macros and minify
+  plugins in the docs profile.
+- Added a Kubernetes baseline manifest under `deploy/kubernetes/`.
 
 ## SDK 1.0.0
 

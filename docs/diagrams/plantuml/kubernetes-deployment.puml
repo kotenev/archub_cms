@@ -1,0 +1,41 @@
+@startuml
+title ArcHub Kubernetes Deployment
+
+skinparam componentStyle rectangle
+skinparam shadowing false
+
+actor "Editor / Agent / Visitor" as User
+node "Kubernetes Cluster" as Cluster {
+  node "Ingress Controller" as Ingress
+  node "Namespace: archub" as Namespace {
+    component "Service\narchub-platform:80" as Service
+    component "Deployment\narchub-platform\nreplicas: 1+" as Deployment
+    component "ConfigMap\nARCHUB_*" as Config
+    component "Secret\nLLM / DSN" as Secret
+    database "PVC\n/data" as PVC
+  }
+  component "External PHP Plugin\nwiki / OLO" as PHP
+}
+
+database "Managed PostgreSQL\noptional ITSM/plugin data" as PG
+cloud "OpenAI-compatible LLM\noptional" as LLM
+folder "Marketplace Repository\nmodule ZIPs + marketplace.json" as Marketplace
+
+User --> Ingress : HTTPS
+Ingress --> Service : route /, /cms, /admin, /api
+Service --> Deployment : HTTP :8000
+Deployment --> PVC : SQLite + runtime export + installed plugins
+Deployment --> Config : envFrom
+Deployment --> Secret : envFrom
+Deployment --> PG : ARCHUB_ITSM_PG_DSN
+Deployment --> LLM : online provider with breaker
+Deployment --> PHP : HTTP plugin bridge
+Marketplace --> Deployment : install modules via API
+
+note right of Deployment
+Run ARCHUB_BACKGROUND_JOBS=true
+on exactly one worker deployment
+when scaling replicas.
+end note
+
+@enduml

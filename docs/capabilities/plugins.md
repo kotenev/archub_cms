@@ -5,8 +5,10 @@ permission-checks, loads and wires plugins, then fans domain events and host cal
 to their extensions. This is the seam the ITSM suite, the offline BPMN editor and the
 example plugins all use.
 
+Start with the [Plugin Catalog](../plugins/index.md) for bundled modules and
+[Plugin Release Distributions](../plugins/release-distributions.md) for packaging.
 See the [plugin system diagrams](../architecture/plugin-platform-adapter.md) and the
-[Platform SDK](../sdk/platform-sdk.md).
+[Platform SDK](../sdk/platform-sdk.md) for automation.
 
 ## Two runtimes, chosen per plugin
 
@@ -121,3 +123,13 @@ plugins. They are the executable documentation for the SPI.
    directory).
 4. Restart — the host discovers, permission-checks and loads it; events and host calls
    start flowing to your extensions.
+
+## Releasing a plugin
+
+```bash
+archub-marketplace-build --output dist/archub-marketplace --plugin-dir plugins
+```
+
+Then install from `/api/platform/plugins/install/file` or
+`/api/platform/modules/marketplace/install`. External plugins should ship a Dockerfile,
+`openapi.yaml`, `/health`, and `POST /api/arc-tool`.

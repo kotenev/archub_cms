@@ -185,7 +185,7 @@ export ARCHUB_ITSM_PG_DSN=postgresql://archub:archub@localhost:5432/archub_itsm
 ```
 
 Requests **and** all reference data (catalog, SLA, CMDB, persisted BPMN schemes) then
-live in PostgreSQL. See [Docker deployment](../deployment/docker.md#with-postgresql-for-the-itsm-plugin).
+live in PostgreSQL. See [Docker deployment](../deployment/docker.md#compose-itsm-on-postgresql).
 
 ## End-to-end example
 

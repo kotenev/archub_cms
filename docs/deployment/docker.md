@@ -1,38 +1,38 @@
+---
+tags:
+  - Deployment
+  - Plugins
+---
+
 # Docker & Compose Deployment
 
-The repository ships a `Dockerfile`, `.dockerignore` and `docker-compose.yml` at the
-root. The image is a single stage on `python:3.12-slim`, installs ArcHub with the
-`server` + `postgres` extras, runs as a **non-root** user (`uid 10001`), persists data
-in a `/data` volume, and includes a container `HEALTHCHECK`.
+The root `Dockerfile` builds the standalone FastAPI platform on `python:3.12-slim`.
+It installs `.[server,postgres]`, runs as non-root `uid 10001`, persists `/data`, and
+exposes a health check at `/api/docs`.
 
-## Quick start — app only (SQLite)
+## Compose: SQLite Single Node
 
 ```bash
 docker compose up --build
 ```
 
-Then open:
+Open `http://127.0.0.1:8088/admin/archub`, `/admin/platform`, `/admin/itsm`,
+`/cms`, and `/api/docs`.
 
-| URL | What |
-|---|---|
-| `http://127.0.0.1:8088/admin/archub` | CMS backoffice |
-| `http://127.0.0.1:8088/admin/itsm` | ITSM Service Desk |
-| `http://127.0.0.1:8088/admin/itsm/workflow` | Offline BPMN editor |
-| `http://127.0.0.1:8088/api/docs` | OpenAPI |
+Data is stored in the `archub-data` named volume:
 
-Data (SQLite DB + runtime exports) lives in the named volume `archub-data`, so it
-survives `docker compose down` / `up`. Remove it with `docker compose down -v`.
+```bash
+docker compose down      # keep data
+docker compose down -v   # remove data
+```
 
-## With PostgreSQL for the ITSM plugin
-
-A Compose **profile** starts a PostgreSQL service alongside the app:
+## Compose: ITSM on PostgreSQL
 
 ```bash
 docker compose --profile itsm-postgres up --build
 ```
 
-Then point the ITSM plugin at it by uncommenting the env var in `docker-compose.yml`
-(or set it inline):
+Uncomment or set:
 
 ```yaml
 services:
@@ -41,65 +41,59 @@ services:
       ARCHUB_ITSM_PG_DSN: postgresql://archub:archub@postgres:5432/archub_itsm
 ```
 
-The plugin's request store **and** all ITIL reference data (catalog, SLA, CMDB,
-persisted BPMN schemes) then live in PostgreSQL; the rest of the CMS stays on SQLite.
-The Postgres tables are created automatically on first use.
+Use this mode when several agents work ITSM tickets concurrently.
 
-## Run with plain `docker` (no Compose)
+## Plain Docker
 
 ```bash
 docker build -t archub-platform:local .
 
 docker run --rm -p 8088:8000 \
   -e ARCHUB_BACKGROUND_JOBS=true \
+  -e ARCHUB_PLUGIN_DIRS=/data/plugins \
   -v archub-data:/data \
   archub-platform:local
 ```
 
-## The Dockerfile
+## Plugin Images
 
-```dockerfile
-# syntax=docker/dockerfile:1
-FROM python:3.12-slim AS runtime
+External PHP plugins run as separate containers:
 
-ENV PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    ARCHUB_CMS_DB=/data/archub_cms.db \
-    ARCHUB_RUNTIME_EXPORT_DIR=/data/archub_runtime \
-    ARCHUB_PLUGIN_DIRS=/app/plugins
+```bash
+docker build -t archub-ru-wiki-php plugins/archub_ru_wiki_php
+docker run --rm -p 8097:8097 archub-ru-wiki-php
 
-WORKDIR /app
-COPY pyproject.toml README.md LICENSE ./
-COPY src ./src
-COPY plugins ./plugins
-RUN python -m pip install --upgrade pip && python -m pip install ".[server,postgres]"
-
-RUN useradd --create-home --uid 10001 archub && mkdir -p /data && chown -R archub:archub /data /app
-USER archub
-VOLUME ["/data"]
-EXPOSE 8000
-CMD ["uvicorn", "archub_cms.app:create_archub_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+docker build -t archub-olo-php plugins/archub_olo_php
+docker run --rm -p 8098:8098 archub-olo-php
 ```
+
+Install their manifests through the marketplace, then enable them after health checks
+pass. See [Plugin Release Distributions](../plugins/release-distributions.md).
+
+## Build a Release Image
+
+```bash
+docker build -t registry.example.com/archub-platform:0.1.0 .
+docker push registry.example.com/archub-platform:0.1.0
+```
+
+Use that tag in Kubernetes or Compose rather than `:local`.
 
 ## Environment
 
-The container honours every variable in [Configuration](../reference/configuration.md).
-The image presets sensible container defaults:
-
-| Variable | Image default | Note |
+| Variable | Container default | Purpose |
 |---|---|---|
-| `ARCHUB_CMS_DB` | `/data/archub_cms.db` | on the persistent volume |
-| `ARCHUB_RUNTIME_EXPORT_DIR` | `/data/archub_runtime` | on the persistent volume |
+| `ARCHUB_CMS_DB` | `/data/archub_cms.db` | SQLite database |
+| `ARCHUB_RUNTIME_EXPORT_DIR` | `/data/archub_runtime` | runtime/RAG export |
 | `ARCHUB_PLUGIN_DIRS` | `/app/plugins` | bundled plugin manifests |
+| `ARCHUB_BACKGROUND_JOBS` | unset | scheduled jobs and webhook dispatch |
+| `ARCHUB_ITSM_PG_DSN` | unset | optional PostgreSQL for ITSM |
 
-## Production hardening
+## Production Notes
 
-- Put a TLS-terminating reverse proxy (Traefik/nginx/Caddy) in front; the app speaks
-  plain HTTP on `:8000`.
-- Build a release tag instead of `:local`, and pin the base image by digest.
-- For multiple replicas, use `ARCHUB_ITSM_PG_DSN` (shared Postgres) and an external
-  database for the CMS rather than the per-container SQLite volume.
-- Disable demo seeding for a clean instance by running the app factory with
-  `seed_demo=False` (e.g. a thin wrapper module) — see [Local Deployment](local.md).
-- The built-in `HEALTHCHECK` probes `/api/docs`; wire it to your orchestrator's
-  readiness checks.
+- Terminate TLS at nginx, Caddy, Traefik or an ingress controller.
+- Run exactly one background worker when multiple replicas share state.
+- Keep external plugins on their own services and enable manifests only after readiness.
+- Store release marketplace archives outside the image and install them into
+  `ARCHUB_PLUGIN_DIRS`.
+- For clusters, continue with [Kubernetes Deployment](kubernetes.md).

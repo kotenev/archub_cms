@@ -25,7 +25,7 @@ pytest tests/test_delivery.py -q                       # run a single test file
 ruff check src tests                                   # lint
 ruff format src tests                                  # format
 python -m compileall -q src                            # syntax check
-mkdocs build --site-dir site                           # build docs
+properdocs build --site-dir site                       # build docs
 ```
 
 CI gate runs in this order: **lint → syntax check → test** (see `.github/workflows/ci.yml`). CI tests on Python 3.11 and 3.12.

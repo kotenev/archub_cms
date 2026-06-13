@@ -1,37 +1,78 @@
+---
+tags:
+  - CMS
+  - SDK
+---
+
 # Delivery API
 
-ArcHub separates draft editing from published delivery.
+ArcHub separates draft editing from published delivery. Public endpoints serve the
+published projection only; preview endpoints require generated tokens and return
+private no-store headers.
 
-## Published HTML
+## Public Endpoints
 
-- `GET /cms`
-- `GET /cms/{path}`
+| Endpoint | Purpose |
+|---|---|
+| `GET /cms` | published site root |
+| `GET /cms/{path}` | published HTML page |
+| `GET /cms/api/tree` | navigation tree |
+| `GET /cms/api/content` | root content |
+| `GET /cms/api/content/{path}` | content by route |
+| `GET /cms/api/search?q=...` | published search |
+| `GET /cms/api/tags` | tag index |
+| `GET /cms/api/tags/{tag}` | tagged content |
+| `GET /cms/feed.xml` | RSS feed |
+| `GET /cms/sitemap.xml` | sitemap |
+| `GET /cms/robots.txt` | crawler rules |
 
-## Headless JSON
+## Preview Endpoints
 
-- `GET /cms/api/tree`
-- `GET /cms/api/content`
-- `GET /cms/api/content/{path}`
-- `GET /cms/api/search?q=...`
-- `GET /cms/api/tags`
-- `GET /cms/api/tags/{tag}`
+```http
+POST /admin/archub/content/{node_id}/preview-tokens
+GET /cms/api/preview/{token}
+```
 
-## Feeds
+Preview responses use:
 
-- `GET /cms/feed.xml`
-- `GET /cms/sitemap.xml`
+```http
+Cache-Control: private, no-store
+```
 
-## Preview
+Published delivery uses deterministic `ETag`, `Last-Modified`, public max-age and
+stale-while-revalidate settings.
 
-- `POST /admin/archub/content/{node_id}/preview-tokens`
-- `GET /cms/api/preview/{token}`
+## Query Contract
 
-Preview responses use `Cache-Control: private, no-store`; published delivery
-uses deterministic `ETag` and `Last-Modified` headers.
+The delivery service supports:
 
-## Advanced query contract
+- `fields` projection for JSON payloads;
+- `expand` for nested properties;
+- `Start-Item` header for subtree delivery;
+- culture, segment and host-domain routing;
+- public access checks and protected content handling.
 
-The JSON delivery endpoints are now routed through
-`archub_cms.application.delivery.ArcHubDeliveryService`. Use
-[Delivery Contracts](architecture/delivery-contracts.md) for `fields`, `expand`,
-`Start-Item`, culture, segment, and projection details.
+See [Delivery Contracts](architecture/delivery-contracts.md) for the full contract.
+
+## SDK Access
+
+```python
+from archub_platform_sdk import ArcHubClient
+
+client = ArcHubClient("http://127.0.0.1:8088")
+tree = client.delivery_tree(start_item="/")
+page = client.delivery_content("welcome")
+results = client.delivery_search("architecture")
+```
+
+## Frontend Integration
+
+```http
+GET /cms/api/tree
+GET /cms/api/content/product/pricing
+GET /cms/api/search?q=onboarding
+```
+
+Use server-side caching for public responses and revalidate on publish/webhook events.
+For static site builds, consume the API during build and keep `/cms/sitemap.xml` as the
+canonical SEO index.

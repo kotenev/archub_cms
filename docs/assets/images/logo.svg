@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="ArcHub">
+  <rect width="64" height="64" rx="12" fill="#0f766e"/>
+  <path d="M16 42 32 14l16 28h-9l-7-13-7 13z" fill="#f59e0b"/>
+  <path d="M16 46h32v5H16z" fill="#ffffff"/>
+</svg>

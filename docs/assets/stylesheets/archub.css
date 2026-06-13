@@ -1,0 +1,37 @@
+:root {
+  --archub-accent: #f59e0b;
+  --archub-border: rgba(15, 118, 110, 0.18);
+}
+
+.md-typeset .grid.cards > ul > li,
+.md-typeset .grid.cards > .card {
+  border-color: var(--archub-border);
+}
+
+.md-typeset .grid.cards > ul > li:hover {
+  border-color: var(--archub-accent);
+}
+
+.md-typeset table:not([class]) {
+  font-size: 0.78rem;
+}
+
+.md-typeset .admonition,
+.md-typeset details {
+  border-radius: 6px;
+}
+
+.md-typeset code {
+  border-radius: 4px;
+}
+
+.md-typeset .doc-status {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--archub-border);
+  border-radius: 999px;
+  color: var(--md-primary-fg-color);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}

@@ -1,0 +1,195 @@
+site_name: ArcHub Docs
+site_description: "Docs-as-Code knowledge base for the ArcHub platform: FastAPI, headless CMS, ITSM/ITIL, plugin marketplace, SDK, Docker and Kubernetes operations."
+site_url: https://kotenev.github.io/archub_cms/
+repo_url: https://github.com/kotenev/archub_cms
+repo_name: kotenev/archub_cms
+edit_uri: edit/main/docs/
+copyright: Copyright &copy; 2026 ArcHub contributors
+
+theme:
+  name: material
+  language: en
+  logo: assets/images/logo.svg
+  favicon: assets/images/favicon.svg
+  font: false
+  palette:
+    - scheme: default
+      primary: teal
+      accent: amber
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      primary: teal
+      accent: amber
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - announce.dismiss
+    - content.action.edit
+    - content.action.view
+    - content.code.copy
+    - content.code.annotate
+    - content.code.select
+    - content.tabs.link
+    - content.tooltips
+    - navigation.footer
+    - navigation.indexes
+    - navigation.instant
+    - navigation.instant.progress
+    - navigation.path
+    - navigation.prune
+    - navigation.sections
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.top
+    - navigation.tracking
+    - toc.follow
+    - toc.integrate
+    - search.share
+    - search.suggest
+    - search.highlight
+
+nav:
+  - Overview:
+      - ArcHub Platform: index.md
+      - Getting Started: getting-started.md
+      - Use Cases: use-cases.md
+      - Platform Comparison: comparison.md
+      - Release Notes: release-notes.md
+  - Run & Deploy:
+      - Deployment Map: deployment/scenarios.md
+      - Local (no Docker): deployment/local.md
+      - Release Artifacts: deployment/release-artifacts.md
+      - Docker & Compose: deployment/docker.md
+      - Kubernetes: deployment/kubernetes.md
+      - GitHub Pages Docs: deployment/github-pages.md
+  - Product:
+      - Capability Catalog: capabilities/index.md
+      - ITSM / ITIL: capabilities/itsm.md
+      - Plugins & Extensibility: capabilities/plugins.md
+      - Content Builder: content-builder.md
+      - Delivery API: delivery-api.md
+  - Plugins & Marketplace:
+      - Plugin Catalog: plugins/index.md
+      - Release Distributions: plugins/release-distributions.md
+      - PHP Wiki Plugin: plugins/archub-ru-wiki-php.md
+      - PHP OurLifeOrganized Plugin: plugins/archub-olo-php.md
+  - Architecture:
+      - Overview: architecture.md
+      - C4 Model: architecture/c4-model.md
+      - Bounded Contexts: architecture/contexts.md
+      - Advanced CMS Refactor: architecture/advanced-cms-refactor.md
+      - CMS Capability Matrix: architecture/capability-matrix.md
+      - Enterprise Knowledge Platform: architecture/enterprise-knowledge-platform.md
+      - ArcHub Core Platform: architecture/archub-core-platform.md
+      - Plugin Platform Adapter: architecture/plugin-platform-adapter.md
+      - Module Marketplace: architecture/module-marketplace.md
+      - Content Modeling: architecture/content-modeling.md
+      - Versioning & Cleanup: architecture/versioning-cleanup.md
+      - Publishing & Workflow: architecture/publishing-workflow.md
+      - Media & DAM: architecture/media-dam.md
+      - Package Promotion: architecture/package-promotion.md
+      - Webhook Integrations: architecture/webhook-integrations.md
+      - Governance & Access: architecture/governance-access.md
+      - Runtime & Data: architecture/runtime-and-data.md
+      - Delivery Contracts: architecture/delivery-contracts.md
+      - Diagrams & Models: architecture/diagrams.md
+  - SDK & API:
+      - Platform SDK: sdk/platform-sdk.md
+      - HTTP API: reference/api.md
+      - Configuration: reference/configuration.md
+  - Docs as Code:
+      - Documentation System: handbook/docs-as-code.md
+      - Tags: reference/tags.md
+      - Static Demo Site: demo-site.md
+
+markdown_extensions:
+  - admonition
+  - abbr
+  - attr_list
+  - def_list
+  - md_in_html
+  - sane_lists
+  - tables
+  - footnotes
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+  # PlantUML (including the C4 model) rendered via the public PlantUML server.
+  # Self-host by pointing `server` at your own instance, or render the `.puml`
+  # sources under docs/diagrams/ with the `plantuml` CLI for fully-offline builds.
+  - plantuml_markdown:
+      server: https://www.plantuml.com/plantuml
+      format: svg
+      cachedir: /tmp/archub-plantuml-cache
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+plugins:
+  - search:
+      lang:
+        - en
+        - ru
+      separator: '[\s\-\.]+'
+  - tags
+  - glightbox:
+      touchNavigation: true
+      loop: false
+      effect: zoom
+      slide_effect: slide
+      width: "100%"
+      height: auto
+      zoomable: true
+      draggable: true
+      skip_classes:
+        - mermaid
+  - git-revision-date-localized:
+      enable_creation_date: false
+      enable_git_follow: false
+      type: date
+      timezone: Europe/Moscow
+      fallback_to_build_date: true
+  - macros
+  - redirects:
+      redirect_maps:
+        "deployment/index.md": "deployment/scenarios.md"
+        "reference/platform-sdk.md": "sdk/platform-sdk.md"
+        "plugins/php-wiki.md": "plugins/archub-ru-wiki-php.md"
+        "plugins/olo.md": "plugins/archub-olo-php.md"
+  - minify:
+      minify_html: true
+      minify_js: true
+      minify_css: true
+
+extra_css:
+  - assets/stylesheets/archub.css
+
+extra:
+  generator: false
+  tags:
+    Knowledge: knowledge
+    CMS: cms
+    ITSM: itsm
+    Plugins: plugins
+    SDK: sdk
+    Deployment: deployment
+    Architecture: architecture

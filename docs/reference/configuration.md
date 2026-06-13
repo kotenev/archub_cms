@@ -75,6 +75,7 @@ settings = ArcHubSettings.from_env({"ARCHUB_CMS_DB": "/tmp/test.db"})
 |---|---|---|
 | `server` | `uvicorn[standard]` | Running the ASGI app |
 | `postgres` | `psycopg[binary]` | ITSM PostgreSQL backend |
-| `docs` | `mkdocs`, `mkdocs-material`, `plantuml-markdown` | Building this site |
+| `docs` | ProperDocs, MkDocs Material, PlantUML, PyMdown, tags/search, glightbox, macros, redirects, minify, Git revision dates | Building this Docs-as-Code wiki |
 | `test` | `httpx`, `pytest` | Running the test suite |
 | `yaml` | `pyyaml` | YAML helpers |
+| `release` | `build` | Building Python release artifacts |

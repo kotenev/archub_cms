@@ -1,6 +1,6 @@
 name: Publish GitHub Pages
 
-# Builds the MkDocs site and deploys it to GitHub Pages using the modern
+# Builds the ProperDocs/MkDocs site and deploys it to GitHub Pages using the modern
 # "GitHub Actions" Pages source (no gh-pages branch needed).
 #
 # One-time setup: repo Settings -> Pages -> Build and deployment -> Source: GitHub Actions.
@@ -11,6 +11,7 @@ on:
     paths:
       - "docs/**"
       - "mkdocs.yml"
+      - "properdocs.yml"
       - "pyproject.toml"
       - "demo_site/**"
       - ".github/workflows/pages.yml"
@@ -44,10 +45,10 @@ jobs:
           python -m pip install -e .[docs]
 
       - name: Build docs
-        # PlantUML (C4) diagrams render via the server configured in mkdocs.yml
+        # PlantUML (C4) diagrams render via the server configured in properdocs.yml
         # (the public plantuml.com instance by default). GitHub runners have
         # outbound network access; self-host PlantUML for fully reproducible builds.
-        run: mkdocs build --strict --site-dir site
+        run: properdocs build --strict --site-dir site
 
       - name: Add static demo
         run: |

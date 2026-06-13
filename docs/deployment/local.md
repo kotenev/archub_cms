@@ -1,120 +1,127 @@
-# Local Deployment (without Docker)
+---
+tags:
+  - Deployment
+  - Plugins
+---
 
-ArcHub is a single Python package with **zero required services** — it runs on an
-embedded SQLite database and an offline LLM by default, so a laptop with Python is
-enough. PostgreSQL and an online LLM are optional upgrades.
+# Local Deployment
+
+Local deployment is the fastest way to run ArcHub without Docker. It uses SQLite and
+the offline-extractive LLM by default; PostgreSQL and online LLMs are optional.
 
 ## Requirements
 
-- Python **3.11+** (CI targets 3.11; the repo is developed on 3.14).
-- `pip` / `venv`. No Node, no database server required for the default setup.
+- Python 3.11+.
+- `pip` and `venv`.
+- Optional: PostgreSQL for ITSM concurrency.
+- Optional: Composer/PHP 8.4 for external PHP plugin demos.
 
-## 1. Create a virtualenv and install
+## Source Checkout
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate            # Windows: .venv\Scripts\activate
+source .venv/bin/activate
 python -m pip install --upgrade pip
-
-# Editable install with the ASGI server extra:
-python -m pip install -e ".[server]"
-
-# Optional extras:
-#   .[postgres]  PostgreSQL backend for the ITSM plugin (psycopg)
-#   .[docs]      build the documentation site (mkdocs + PlantUML)
-#   .[test]      run the test suite (pytest + httpx)
-python -m pip install -e ".[server,postgres]"
+python -m pip install -e ".[server,postgres,docs,test]"
 ```
 
-## 2. Run the standalone app
+Run:
 
 ```bash
+export ARCHUB_CMS_DB=data/archub_cms.db
+export ARCHUB_RUNTIME_EXPORT_DIR=data/archub_runtime
+export ARCHUB_PLUGIN_DIRS=plugins
+export ARCHUB_BACKGROUND_JOBS=true
+
 uvicorn archub_cms.app:create_archub_app --factory --host 127.0.0.1 --port 8088
 ```
 
-`create_archub_app()` boots the plugin runtime, seeds demo content into a SQLite
-database (`data/archub_cms.db` by default), and mounts every router.
-
-Open:
-
-| URL | What |
-|---|---|
-| `http://127.0.0.1:8088/admin/archub` | CMS backoffice |
-| `http://127.0.0.1:8088/admin/platform` | Platform dashboard |
-| `http://127.0.0.1:8088/admin/itsm` | ITSM Service Desk dashboard |
-| `http://127.0.0.1:8088/admin/itsm/workflow` | Visual BPMN workflow editor (offline) |
-| `http://127.0.0.1:8088/cms` | Published site |
-| `http://127.0.0.1:8088/api/docs` | OpenAPI / Swagger UI |
-| `http://127.0.0.1:8088/api/platform/itsm/schemes` | ITIL workflow scheme library (JSON) |
-
-!!! tip "Run it without installing"
-    From a checkout you can use the `!` prefix in tooling shells, or simply run the
-    module directly after `pip install -e .[server]`. The factory string
-    `archub_cms.app:create_archub_app` is all uvicorn needs.
-
-## 3. Configure (optional)
-
-All configuration is environment-driven (see the full table in
-[Configuration](../reference/configuration.md)). A few common ones:
+## Release Wheelhouse
 
 ```bash
-# Persist data outside the repo:
-export ARCHUB_CMS_DB=/var/lib/archub/archub_cms.db
-export ARCHUB_RUNTIME_EXPORT_DIR=/var/lib/archub/runtime
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --no-index --find-links ./wheelhouse \
+  "archub-cms[server,postgres]==0.1.0"
 
-# Enable the maintenance worker (scheduled jobs, webhook dispatch):
-export ARCHUB_BACKGROUND_JOBS=true
+export ARCHUB_PLUGIN_DIRS=/var/lib/archub/plugins
+uvicorn archub_cms.app:create_archub_app --factory --host 0.0.0.0 --port 8088
+```
 
-# Online LLM (OpenAI-compatible). Omit for the offline-extractive default:
-export ARCHUB_LLM_PROVIDER=openai-compatible
-export ARCHUB_LLM_BASE_URL=https://api.openai.com/v1
-export ARCHUB_LLM_API_KEY=sk-...
-export ARCHUB_LLM_MODEL=gpt-4o-mini
+For release modules, use [Release Artifacts](release-artifacts.md).
 
-# Route the ITSM plugin to PostgreSQL instead of SQLite:
+## Useful URLs
+
+| URL | Purpose |
+|---|---|
+| `/admin/archub` | CMS backoffice |
+| `/admin/platform` | platform, core plugins and marketplace controls |
+| `/admin/itsm` | ITIL Service Desk |
+| `/admin/itsm/workflow` | offline BPMN editor |
+| `/cms` | published delivery site |
+| `/api/docs` | OpenAPI |
+| `/api/platform/report` | runtime platform report |
+
+## Optional PostgreSQL for ITSM
+
+```bash
 export ARCHUB_ITSM_PG_DSN=postgresql://archub:archub@localhost:5432/archub_itsm
 ```
 
-## 4. Embed in an existing FastAPI app
+The ITSM plugin will create request, catalog, SLA, CMDB and workflow tables on first
+use. CMS content still uses the configured `ARCHUB_CMS_DB`.
 
-ArcHub is designed to be embedded. Mount only what you need:
+## Optional Online LLM
+
+```bash
+export ARCHUB_LLM_PROVIDER=openai-compatible
+export ARCHUB_LLM_BASE_URL=https://llm.internal/v1
+export ARCHUB_LLM_API_KEY=...
+export ARCHUB_LLM_MODEL=gpt-4o-mini
+```
+
+If the provider fails, the circuit breaker falls back to offline-extractive answers.
+
+## Run External PHP Plugins
+
+```bash
+cd plugins/archub_ru_wiki_php
+composer install
+composer serve
+
+cd ../archub_olo_php
+composer install
+composer serve
+```
+
+The wiki listens on `8097`, OLO on `8098`. Enable their manifests only after
+`/health` responds.
+
+## Embed in Another FastAPI App
 
 ```python
 from fastapi import FastAPI
 from archub_cms.web.routes import router as archub_router
 from archub_cms.web.platform_routes import platform_router
-from archub_cms.web.itsm_routes import itsm_router, itsm_web_router
 
 app = FastAPI()
-app.include_router(archub_router)       # public + backoffice
-app.include_router(platform_router)     # /api/platform/*
-app.include_router(itsm_router)         # /api/platform/itsm/*
-app.include_router(itsm_web_router)     # /admin/itsm + workflow editor
+app.include_router(archub_router)
+app.include_router(platform_router)
 ```
 
-…or take the whole batteries-included app:
+For the full standalone app:
 
 ```python
 from archub_cms.app import create_archub_app
-app = create_archub_app(seed_demo=False)   # skip demo seeding in production
+
+app = create_archub_app(seed_demo=False)
 ```
 
-## 5. Run the tests
+## Local Verification
 
 ```bash
-python -m pip install -e ".[server,test]"
 ruff check src tests
-python -m pytest -q
+python -m compileall -q src
+pytest -q
+properdocs build --strict --site-dir site
 ```
-
-The PostgreSQL integration tests are skipped unless `ARCHUB_ITSM_PG_DSN` is set and
-`psycopg` is installed.
-
-## 6. Production notes
-
-- Put a process manager (systemd, supervisor) in front of uvicorn, or run
-  `gunicorn -k uvicorn.workers.UvicornWorker 'archub_cms.app:create_archub_app'`.
-- Use `seed_demo=False` and point `ARCHUB_CMS_DB` at a persistent path (or Postgres
-  for ITSM via `ARCHUB_ITSM_PG_DSN`).
-- Terminate TLS at a reverse proxy (nginx/Caddy/Traefik).
-- See [Docker & Compose](docker.md) for a containerized equivalent.

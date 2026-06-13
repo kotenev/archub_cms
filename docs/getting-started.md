@@ -1,60 +1,84 @@
+---
+tags:
+  - Deployment
+  - CMS
+  - ITSM
+  - Plugins
+---
+
 # Getting Started
 
-## Install
+This path gets a local ArcHub platform running with the CMS, knowledge APIs, ITSM
+service desk, plugin runtime and OpenAPI UI.
+
+## 1. Install for Development
 
 ```bash
-python -m pip install -e .[server]
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e ".[server,postgres,docs,test]"
 ```
 
-## Run the standalone demo
+For a release install, use the wheelhouse flow in
+[Release Artifacts](deployment/release-artifacts.md).
+
+## 2. Run the Platform
 
 ```bash
 uvicorn archub_cms.app:create_archub_app --factory --host 127.0.0.1 --port 8088
 ```
 
-The demo seeds a SQLite database at `data/archub_cms.db`.
-
 Open:
 
-- `http://127.0.0.1:8088/admin/archub` — CMS backoffice
-- `http://127.0.0.1:8088/admin/itsm` — ITSM Service Desk
-- `http://127.0.0.1:8088/admin/itsm/workflow` — visual BPMN workflow editor (offline)
-- `http://127.0.0.1:8088/cms` — published site
-- `http://127.0.0.1:8088/api/docs` — OpenAPI
+| URL | Surface |
+|---|---|
+| `http://127.0.0.1:8088/admin/archub` | CMS backoffice |
+| `http://127.0.0.1:8088/admin/platform` | platform and plugin dashboard |
+| `http://127.0.0.1:8088/admin/itsm` | ITSM Service Desk |
+| `http://127.0.0.1:8088/admin/itsm/workflow` | offline BPMN workflow editor |
+| `http://127.0.0.1:8088/cms` | published site |
+| `http://127.0.0.1:8088/api/docs` | OpenAPI / Swagger UI |
 
-!!! info "Deeper guides"
-    - [Local deployment](deployment/local.md) (embedding, production) and
-      [Docker & Compose](deployment/docker.md).
-    - The full [Configuration](reference/configuration.md) reference and
-      [HTTP API](reference/api.md) catalog.
-    - [Capabilities overview](capabilities/index.md) and the
-      [C4 architecture model](architecture/c4-model.md).
+Default state is written to `data/archub_cms.db` and `data/archub_runtime`.
 
-## Configuration
+## 3. Enable Release Plugins
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `ARCHUB_CMS_DB` | `data/archub_cms.db` | SQLite CMS database |
-| `ARCHUB_RUNTIME_EXPORT_DIR` | `data/archub_runtime` | Published runtime export directory |
-| `ARCHUB_PUBLIC_ROOT` | `/cms` | Public delivery root |
-| `ARCHUB_DELIVERY_CACHE_MAX_AGE` | `60` | Public max-age seconds |
-| `ARCHUB_DELIVERY_CACHE_STALE_REVALIDATE` | `300` | Public stale-while-revalidate seconds |
+Build a local marketplace and inspect it:
 
-## Embed in another FastAPI app
-
-```python
-from fastapi import FastAPI
-
-from archub_cms.web.routes import router as archub_router
-
-app = FastAPI()
-app.include_router(archub_router)
+```bash
+archub-marketplace-build --output dist/archub-marketplace --json
+curl 'http://127.0.0.1:8088/api/platform/modules/marketplace?repository=dist/archub-marketplace'
 ```
 
-For a full standalone app with static assets and seeded demo content:
+Install a module:
 
-```python
-from archub_cms.app import create_archub_app
-
-app = create_archub_app()
+```bash
+curl -X POST http://127.0.0.1:8088/api/platform/modules/marketplace/install \
+  -H 'Content-Type: application/json' \
+  -d '{"repository":"dist/archub-marketplace","module_id":"archub.ru.wiki.php","enable":false}'
 ```
+
+External plugins such as the PHP wiki and OLO demo must be running before you enable
+their manifests. See [Plugin Release Distributions](plugins/release-distributions.md).
+
+## 4. Choose a Deployment Mode
+
+| Need | Use |
+|---|---|
+| source checkout / single VM | [Local Deployment](deployment/local.md) |
+| release wheelhouse and module archives | [Release Artifacts](deployment/release-artifacts.md) |
+| local container or Compose profile | [Docker & Compose](deployment/docker.md) |
+| cluster with PVC/probes/Ingress | [Kubernetes](deployment/kubernetes.md) |
+| documentation publishing | [GitHub Pages Docs](deployment/github-pages.md) |
+
+## 5. Build the Documentation
+
+```bash
+properdocs serve --dev-addr 127.0.0.1:8001
+properdocs build --strict --site-dir site
+```
+
+The canonical config is `properdocs.yml`; `mkdocs.yml` remains a compatibility shim.
+The toolchain uses Material, search, tags, revision dates, lightbox, minification,
+PlantUML and Mermaid. See [Documentation System](handbook/docs-as-code.md).

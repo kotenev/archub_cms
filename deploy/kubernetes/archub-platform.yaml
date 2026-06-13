@@ -1,0 +1,101 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: archub
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: archub-platform-config
+  namespace: archub
+data:
+  ARCHUB_CMS_DB: /data/archub_cms.db
+  ARCHUB_RUNTIME_EXPORT_DIR: /data/archub_runtime
+  ARCHUB_PLUGIN_DIRS: /data/plugins
+  ARCHUB_BACKGROUND_JOBS: "true"
+  ARCHUB_LLM_PROVIDER: offline-extractive
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: archub-data
+  namespace: archub
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: archub-platform
+  namespace: archub
+  labels:
+    app.kubernetes.io/name: archub-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: archub-platform
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: archub-platform
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: archub
+          image: archub-platform:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: archub-platform-config
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /api/docs
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/docs
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: archub-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: archub-platform
+  namespace: archub
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: archub-platform
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

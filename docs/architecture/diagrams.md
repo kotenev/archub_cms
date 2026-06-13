@@ -275,6 +275,9 @@ point, or render the ArchiMate PlantUML source directly.
   SQLite/PostgreSQL adapter selection, SQL repository calls, and audit logging.
 - `core-plugin-distribution.puml`: Rust core plugin manifest, workspace
   coverage, marketplace packaging, and install flow.
+- `kubernetes-deployment.puml`: Kubernetes namespace, service, deployment,
+  PVC, ConfigMap, Secret, optional PostgreSQL/LLM, external plugins, and
+  marketplace promotion.
 - `php-wiki-plugin.puml`: ArcHub.ru external PHP wiki plugin, Symfony service
   boundary, Draw.io-compatible diagram surface, and ArcHub plugin bridge.
 - `sdk-release-architecture.puml`: ArcHub SDK release artifacts, Python client,

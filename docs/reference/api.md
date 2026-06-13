@@ -23,6 +23,11 @@ page summarizes the route catalog. All paths are relative to the app root.
 | GET | `/api/platform/plugins` | Loaded plugins + classified extensions |
 | GET | `/api/platform/plugins/catalog` | Manifest catalog |
 | POST | `/api/platform/plugins/{id}/enable` · `/disable` · `/settings` | Manage a plugin |
+| POST | `/api/platform/plugins/install/file` | Install a plugin/module from directory, manifest, ZIP or TAR |
+| GET | `/api/platform/plugins/marketplace` | Read a marketplace repository |
+| POST | `/api/platform/plugins/marketplace/install` | Install from a marketplace repository |
+| GET | `/api/platform/modules/marketplace` | Module marketplace catalog alias |
+| POST | `/api/platform/modules/marketplace/install` | Module marketplace install alias |
 | GET | `/api/platform/extensions` | Macros, renderers, importers, tools, … |
 | POST | `/api/platform/render` | Run renderers + expand macros |
 | POST | `/api/platform/tools/{name}/run` | Invoke an LLM tool |
