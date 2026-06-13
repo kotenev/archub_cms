@@ -17,7 +17,7 @@ final readonly class ArcHubOloApplication
     private TaskService $tasks;
     private TaskRenderer $renderer;
 
-    public function __construct(private string $rootPath /** @phpstan-ignore property.onlyWritten */, ?DateTimeImmutable $now = null)
+    public function __construct(?DateTimeImmutable $now = null)
     {
         $clock = $now ?? new DateTimeImmutable('2026-06-13T09:00:00Z');
         $this->tasks = new TaskService(new SeedTaskRepository(), $clock);

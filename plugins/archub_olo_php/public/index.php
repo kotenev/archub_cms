@@ -7,6 +7,6 @@ use Symfony\Component\HttpFoundation\Request;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 
-$application = new ArcHubOloApplication(dirname(__DIR__));
+$application = new ArcHubOloApplication();
 $response = $application->handle(Request::createFromGlobals());
 $response->send();

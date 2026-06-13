@@ -11,9 +11,8 @@ RUN apk add --no-cache git unzip sqlite-libs \
     && php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');" \
     && php composer-setup.php --install-dir=/usr/local/bin --filename=composer \
     && rm composer-setup.php \
-    && composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader
-
-RUN adduser -D -u 10001 archub \
+    && composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader \
+    && adduser -D -u 10001 archub \
     && mkdir -p /data \
     && chown -R archub:archub /data /app
 USER archub
