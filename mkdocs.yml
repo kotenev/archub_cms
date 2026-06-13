@@ -1,5 +1,5 @@
 site_name: ArcHub
-site_description: Modular knowledge & ITSM platform — CMS, plugins, hexagonal adapters, RAG and delivery APIs.
+site_description: Self-hosted, embeddable knowledge + headless CMS + ITSM/ITIL platform for FastAPI — one Apache-2.0 package with offline & online RAG, a BPMN workflow engine and a real plugin runtime.
 site_url: https://kotenev.github.io/archub_cms/
 repo_url: https://github.com/kotenev/archub_cms
 repo_name: kotenev/archub_cms
@@ -36,7 +36,11 @@ theme:
 nav:
   - Overview: index.md
   - Getting Started: getting-started.md
+  - Why ArcHub:
+      - Use Cases: use-cases.md
+      - Platform Comparison: comparison.md
   - Deployment:
+      - Scenarios: deployment/scenarios.md
       - Local (no Docker): deployment/local.md
       - Docker & Compose: deployment/docker.md
       - GitHub Pages (docs): deployment/github-pages.md
@@ -71,6 +75,7 @@ nav:
       - HTTP API: reference/api.md
       - Platform SDK: sdk/platform-sdk.md
       - PHP Wiki Plugin: plugins/archub-ru-wiki-php.md
+      - PHP OurLifeOrganized Plugin: plugins/archub-olo-php.md
   - GitHub Demo: demo-site.md
   - Release Notes: release-notes.md
 

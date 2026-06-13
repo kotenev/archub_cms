@@ -1,0 +1,159 @@
+openapi: 3.1.0
+info:
+  title: ArcHub OurLifeOrganized PHP Plugin
+  version: 1.0.0
+  description: >-
+    External ArcHub productivity plugin exposing a MyLifeOrganized-style GTD task
+    outline: hierarchical tasks, computed star priority, GTD contexts, due/start
+    dates, RRULE recurrence, smart views, operator reports and an event-sourced
+    audit feed.
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        "200":
+          description: OK
+  /api/arc-tool:
+    post:
+      summary: ArcHub external plugin tool bridge
+      responses:
+        "200":
+          description: Tool response (overview + To-Do, or search results)
+  /api/olo/overview:
+    get:
+      summary: Task management capability overview
+      responses:
+        "200":
+          description: Overview with feature flags and counts
+  /api/olo/tasks:
+    get:
+      summary: List all tasks with computed priority
+      responses:
+        "200":
+          description: Flat task list
+  /api/olo/tasks/{id}:
+    get:
+      summary: Get a single task with sub-tasks
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Task detail
+        "404":
+          description: Task not found
+  /api/olo/outline:
+    get:
+      summary: Nested project outline (tree)
+      responses:
+        "200":
+          description: Hierarchical task outline
+  /api/olo/todo:
+    get:
+      summary: Smart To-Do list ordered by computed priority
+      responses:
+        "200":
+          description: Priority-ranked actionable tasks
+  /api/olo/next-actions:
+    get:
+      summary: GTD Next Actions
+      responses:
+        "200":
+          description: Started, actionable tasks
+  /api/olo/inbox:
+    get:
+      summary: Unfiled inbox tasks
+      responses:
+        "200":
+          description: Inbox task list
+  /api/olo/today:
+    get:
+      summary: Tasks due today
+      responses:
+        "200":
+          description: Tasks due today
+  /api/olo/overdue:
+    get:
+      summary: Overdue tasks
+      responses:
+        "200":
+          description: Overdue task list
+  /api/olo/due-soon:
+    get:
+      summary: Tasks due within N days
+      parameters:
+        - name: days
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 7
+      responses:
+        "200":
+          description: Upcoming task list
+  /api/olo/starred:
+    get:
+      summary: Starred (flagged) tasks
+      responses:
+        "200":
+          description: Starred task list
+  /api/olo/contexts:
+    get:
+      summary: GTD contexts with active task counts
+      responses:
+        "200":
+          description: Context list
+  /api/olo/contexts/{key}:
+    get:
+      summary: Active tasks in a GTD context
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Tasks in the context
+  /api/olo/recurrence/{id}:
+    get:
+      summary: Preview the next occurrences of a recurring task
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Recurrence rule + upcoming occurrences
+        "404":
+          description: Task not found
+  /api/olo/reports/summary:
+    get:
+      summary: Operator summary report (per user)
+      responses:
+        "200":
+          description: Summary rows mirroring admin-cli reports summary
+  /api/olo/events:
+    get:
+      summary: Event-sourced audit feed
+      responses:
+        "200":
+          description: Domain event stream (TaskCreated, TaskCompleted, ...)
+  /api/olo/search:
+    get:
+      summary: Search tasks by title, notes and context
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Search results
