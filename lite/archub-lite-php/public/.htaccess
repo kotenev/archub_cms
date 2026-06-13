@@ -1,0 +1,15 @@
+# Apache fallback for hosts without nginx. Routes everything to the front
+# controller and blocks direct access to dotfiles. (nginx users: see
+# deploy/nginx.conf.example instead.)
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+    RewriteRule ^ index.php [L]
+</IfModule>
+
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>

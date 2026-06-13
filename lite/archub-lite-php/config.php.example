@@ -1,0 +1,45 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * ArcHub Lite configuration.
+ *
+ * Copy this file to `config.php` and fill in your values. Every key can also be
+ * supplied as an environment variable (ARCHUB_LITE_*) if your host exposes env —
+ * env wins over this file.
+ *
+ * Generate the admin password hash with:
+ *   php -r "echo password_hash('your-password', PASSWORD_DEFAULT), PHP_EOL;"
+ */
+
+return [
+    'site_name' => 'ArcHub Lite',
+
+    // Serve from a subfolder? e.g. https://example.com/kb  -> 'base_path' => '/kb'
+    'base_path' => '',
+
+    // Storage: 'pgsql' (production) or 'memory' (no-database trial, non-persistent).
+    'storage' => 'pgsql',
+
+    // --- PostgreSQL (typical shared-hosting credentials) ---
+    'db_host' => '127.0.0.1',
+    'db_port' => '5432',
+    'db_name' => 'archub_lite',
+    'db_user' => 'archub',
+    'db_password' => 'change-me',
+    // Or provide a full DSN instead of host/port/name:
+    // 'db_dsn' => 'pgsql:host=127.0.0.1;port=5432;dbname=archub_lite',
+
+    // --- Admin access ---
+    // password_hash() output of your admin password (NOT the plain password):
+    'admin_password_hash' => '',
+    // Shared secret for the headless write API (X-Admin-Token header):
+    'admin_token' => '',
+
+    // Seed demo content on first run (set false for a clean instance):
+    'seed_demo' => true,
+
+    // Set true to surface error messages (development only):
+    'debug' => false,
+];
