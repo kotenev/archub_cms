@@ -1,0 +1,47 @@
+{
+  "id": "archub.olo.php",
+  "name": "OurLifeOrganized Tasks PHP",
+  "version": "1.0.0",
+  "capability": "platform_module",
+  "runtime": "external",
+  "entrypoint": "http://127.0.0.1:8098/api/arc-tool",
+  "description": "Symfony 8 / PHP 8.4 external OurLifeOrganized (MyLifeOrganized-style) GTD task module for ArcHub: hierarchical task outline, computed star priority from importance and urgency, GTD contexts, due/start dates, RRULE recurrence (from-due/from-complete), reminders, smart views, operator reports and an event-sourced audit feed.",
+  "provider": "archub",
+  "permissions": [
+    "content:read",
+    "content:write",
+    "tasks:read",
+    "tasks:write",
+    "search:read",
+    "events:subscribe"
+  ],
+  "tags": [
+    "php",
+    "symfony",
+    "gtd",
+    "tasks",
+    "outliner",
+    "mylifeorganized",
+    "olo",
+    "recurrence",
+    "productivity"
+  ],
+  "settings_schema": {
+    "base_url": "http://127.0.0.1:8098",
+    "shared_secret_env": "ARCHUB_OLO_SHARED_SECRET",
+    "storage": "sqlite",
+    "recurrence_mode": "from-due"
+  },
+  "enabled_by_default": false,
+  "language": "php",
+  "provides": [
+    "olo.tasks",
+    "olo.outline",
+    "olo.contexts",
+    "olo.priority",
+    "olo.recurrence",
+    "olo.views",
+    "olo.reports",
+    "olo.events"
+  ]
+}
