@@ -1,0 +1,39 @@
+# ArcHub Lite — nginx + PHP-FPM virtual host (typical shared/VPS hosting).
+#
+# The document root is the application's public/ directory. All requests that
+# don't map to a real file are routed to the single front controller index.php.
+
+server {
+    listen 80;
+    server_name kb.example.com;
+
+    root /var/www/archub-lite/public;
+    index index.php;
+
+    # Pretty URLs: try the file, then the directory, then the front controller.
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    # Serve static assets directly.
+    location /assets/ {
+        try_files $uri =404;
+        expires 7d;
+        access_log off;
+    }
+
+    # PHP-FPM.
+    location ~ \.php$ {
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        # Adjust to your PHP-FPM socket or TCP address:
+        fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+        # fastcgi_pass 127.0.0.1:9000;
+    }
+
+    # Never serve the app source, config or vcs metadata.
+    location ~ ^/(src|deploy|bin|tests)/ { deny all; }
+    location ~ /(config\.php|composer\.(json|lock)|\.git) { deny all; }
+
+    client_max_body_size 8m;
+}

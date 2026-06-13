@@ -1,0 +1,10 @@
+# Local configuration with real credentials — never commit it.
+config.php
+
+# PHP build artifacts (Composer is optional and not required to run).
+/vendor/
+composer.lock
+
+# OS / editor cruft
+.DS_Store
+*.log
