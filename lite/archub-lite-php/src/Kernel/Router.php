@@ -17,7 +17,7 @@ final class Router
     {
         $params = [];
         $regex = preg_replace_callback(
-            '/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/',
+            '/\{([a-zA-Z_][a-zA-Z0-9_]*)}/',
             static function (array $m) use (&$params): string {
                 $params[] = $m[1];
                 return '([^/]+)';
